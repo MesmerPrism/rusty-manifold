@@ -93,6 +93,28 @@ impl ManifoldGraphManifest {
 
         Ok(())
     }
+
+    /// Returns a structural diff from an earlier graph revision to this graph.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the built-in graph-diff schema id literal is invalid.
+    #[must_use]
+    pub fn diff_from(&self, previous: &Self) -> ManifoldGraphDiff {
+        ManifoldGraphDiff {
+            schema_id: SchemaId::new("rusty.manifold.graph.diff.v1")
+                .expect("schema literal is valid"),
+            graph_id: self.graph_id.clone(),
+            from_revision: previous.graph_revision,
+            to_revision: self.graph_revision,
+            added_nodes: added_by_key(&self.nodes, &previous.nodes, |node| &node.node_id),
+            removed_nodes: added_by_key(&previous.nodes, &self.nodes, |node| &node.node_id),
+            changed_nodes: changed_graph_nodes(previous, self),
+            added_edges: added_by_key(&self.edges, &previous.edges, |edge| &edge.edge_id),
+            removed_edges: added_by_key(&previous.edges, &self.edges, |edge| &edge.edge_id),
+            changed_edges: changed_graph_edges(previous, self),
+        }
+    }
 }
 
 /// A module node in a graph manifest.
@@ -119,6 +141,57 @@ pub struct ManifoldGraphEdge {
     pub target_node_id: DottedId,
     /// Target input id or stream id consumed by the target.
     pub target_input_id: DottedId,
+}
+
+/// Structural graph diff between two graph revisions.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldGraphDiff {
+    /// Schema identifier for this diff.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Graph being compared.
+    pub graph_id: DottedId,
+    /// Earlier graph revision.
+    pub from_revision: Revision,
+    /// Later graph revision.
+    pub to_revision: Revision,
+    /// Nodes present only in the later graph.
+    pub added_nodes: Vec<ManifoldGraphNode>,
+    /// Nodes present only in the earlier graph.
+    pub removed_nodes: Vec<ManifoldGraphNode>,
+    /// Nodes with the same id but changed module binding.
+    pub changed_nodes: Vec<ManifoldGraphNodeChange>,
+    /// Edges present only in the later graph.
+    pub added_edges: Vec<ManifoldGraphEdge>,
+    /// Edges present only in the earlier graph.
+    pub removed_edges: Vec<ManifoldGraphEdge>,
+    /// Edges with the same id but changed endpoints or stream ids.
+    pub changed_edges: Vec<ManifoldGraphEdgeChange>,
+}
+
+/// Changed graph-node binding.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldGraphNodeChange {
+    /// Stable graph-local node id.
+    pub node_id: DottedId,
+    /// Earlier module id.
+    pub before_module_id: DottedId,
+    /// Later module id.
+    pub after_module_id: DottedId,
+}
+
+/// Changed graph-edge binding.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldGraphEdgeChange {
+    /// Stable graph-local edge id.
+    pub edge_id: DottedId,
+    /// Earlier edge descriptor.
+    pub before: ManifoldGraphEdge,
+    /// Later edge descriptor.
+    pub after: ManifoldGraphEdge,
 }
 
 /// Exported ids in a package manifest.
@@ -222,6 +295,111 @@ pub struct ManifoldModuleRuntimeState {
     pub issues: Vec<ManifoldIssue>,
 }
 
+impl ManifoldModuleRuntimeState {
+    /// Returns the state transition from an earlier runtime snapshot to this snapshot.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the built-in runtime-transition schema id literal is invalid.
+    #[must_use]
+    pub fn transition_from(&self, previous: &Self) -> ManifoldModuleRuntimeTransition {
+        ManifoldModuleRuntimeTransition {
+            schema_id: SchemaId::new("rusty.manifold.module.runtime_transition.v1")
+                .expect("schema literal is valid"),
+            module_id: self.module_id.clone(),
+            from_revision: previous.runtime_revision,
+            to_revision: self.runtime_revision,
+            lifecycle_change: (previous.lifecycle != self.lifecycle).then_some(
+                ModuleLifecycleChange {
+                    from: previous.lifecycle,
+                    to: self.lifecycle,
+                },
+            ),
+            health_change: (previous.health != self.health).then_some(ModuleHealthChange {
+                from: previous.health,
+                to: self.health,
+            }),
+            backend_change: (previous.selected_backend != self.selected_backend).then_some(
+                ModuleBackendChange {
+                    from: previous.selected_backend.clone(),
+                    to: self.selected_backend.clone(),
+                },
+            ),
+            activated_streams: added_ids(&self.active_streams, &previous.active_streams),
+            deactivated_streams: added_ids(&previous.active_streams, &self.active_streams),
+            activated_commands: added_ids(&self.active_commands, &previous.active_commands),
+            deactivated_commands: added_ids(&previous.active_commands, &self.active_commands),
+            added_issues: added_by_key(&self.issues, &previous.issues, |issue| &issue.issue_code),
+            resolved_issues: added_by_key(&previous.issues, &self.issues, |issue| {
+                &issue.issue_code
+            }),
+        }
+    }
+}
+
+/// Runtime-state transition for one module.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldModuleRuntimeTransition {
+    /// Schema identifier for this transition.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Module being compared.
+    pub module_id: DottedId,
+    /// Earlier runtime revision.
+    pub from_revision: Revision,
+    /// Later runtime revision.
+    pub to_revision: Revision,
+    /// Lifecycle change, if any.
+    pub lifecycle_change: Option<ModuleLifecycleChange>,
+    /// Health change, if any.
+    pub health_change: Option<ModuleHealthChange>,
+    /// Selected backend change, if any.
+    pub backend_change: Option<ModuleBackendChange>,
+    /// Streams active only in the later snapshot.
+    pub activated_streams: Vec<DottedId>,
+    /// Streams active only in the earlier snapshot.
+    pub deactivated_streams: Vec<DottedId>,
+    /// Commands active only in the later snapshot.
+    pub activated_commands: Vec<DottedId>,
+    /// Commands active only in the earlier snapshot.
+    pub deactivated_commands: Vec<DottedId>,
+    /// Issues present only in the later snapshot.
+    pub added_issues: Vec<ManifoldIssue>,
+    /// Issues present only in the earlier snapshot.
+    pub resolved_issues: Vec<ManifoldIssue>,
+}
+
+/// Lifecycle field change.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ModuleLifecycleChange {
+    /// Earlier lifecycle.
+    pub from: ModuleLifecycleState,
+    /// Later lifecycle.
+    pub to: ModuleLifecycleState,
+}
+
+/// Health field change.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ModuleHealthChange {
+    /// Earlier health.
+    pub from: HealthLevel,
+    /// Later health.
+    pub to: HealthLevel,
+}
+
+/// Selected backend field change.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ModuleBackendChange {
+    /// Earlier selected backend.
+    pub from: Option<DottedId>,
+    /// Later selected backend.
+    pub to: Option<DottedId>,
+}
+
 /// Stream descriptor.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -290,6 +468,59 @@ impl ManifoldStreamRegistrySnapshot {
 
         Ok(())
     }
+
+    /// Returns a stream-registry diff from an earlier snapshot to this snapshot.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the built-in stream-registry-diff schema id literal is invalid.
+    #[must_use]
+    pub fn diff_from(&self, previous: &Self) -> ManifoldStreamRegistryDiff {
+        ManifoldStreamRegistryDiff {
+            schema_id: SchemaId::new("rusty.manifold.stream.registry_diff.v1")
+                .expect("schema literal is valid"),
+            from_revision: previous.registry_revision,
+            to_revision: self.registry_revision,
+            added_streams: added_by_key(&self.streams, &previous.streams, |stream| {
+                &stream.stream_id
+            }),
+            removed_streams: added_by_key(&previous.streams, &self.streams, |stream| {
+                &stream.stream_id
+            }),
+            changed_streams: changed_streams(previous, self),
+        }
+    }
+}
+
+/// Stream-registry diff between two registry revisions.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamRegistryDiff {
+    /// Schema identifier for this diff.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Earlier registry revision.
+    pub from_revision: Revision,
+    /// Later registry revision.
+    pub to_revision: Revision,
+    /// Streams present only in the later snapshot.
+    pub added_streams: Vec<ManifoldStreamManifest>,
+    /// Streams present only in the earlier snapshot.
+    pub removed_streams: Vec<ManifoldStreamManifest>,
+    /// Streams with the same id but changed metadata.
+    pub changed_streams: Vec<ManifoldStreamChange>,
+}
+
+/// Changed stream descriptor.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamChange {
+    /// Stable stream id.
+    pub stream_id: DottedId,
+    /// Earlier stream descriptor.
+    pub before: ManifoldStreamManifest,
+    /// Later stream descriptor.
+    pub after: ManifoldStreamManifest,
 }
 
 /// Mutating command descriptor.
@@ -588,6 +819,9 @@ pub struct ManifoldDeploymentManifest {
     pub package_id: DottedId,
     /// Selected module ids.
     pub selected_modules: Vec<DottedId>,
+    /// Selected backend for each module, if pinned by the deployment.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub selected_backends: Vec<SelectedModuleBackend>,
     /// Selected endpoint id.
     pub endpoint_id: DottedId,
     /// Security policy id.
@@ -596,6 +830,246 @@ pub struct ManifoldDeploymentManifest {
     pub artifact_policy: DottedId,
     /// Session output policy id.
     pub session_output_policy: DottedId,
+}
+
+impl ManifoldDeploymentManifest {
+    /// Computes the host/module availability snapshot for this deployment.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DeploymentSelectionError`] when the deployment points at the
+    /// wrong host/package, an unknown endpoint, or an unknown selected module.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the built-in deployment-selection schema id literal is invalid.
+    pub fn selection_snapshot(
+        &self,
+        package: &ManifoldPackageManifest,
+        modules: &[ManifoldModuleManifest],
+        host: &ManifoldHostManifest,
+    ) -> Result<ManifoldDeploymentSelectionSnapshot, DeploymentSelectionError> {
+        if self.target_host_id != host.host_id {
+            return Err(DeploymentSelectionError::new(
+                self.deployment_id.clone(),
+                self.target_host_id.clone(),
+                DeploymentSelectionErrorKind::HostMismatch,
+            ));
+        }
+
+        if self.package_id != package.package_id {
+            return Err(DeploymentSelectionError::new(
+                self.deployment_id.clone(),
+                self.package_id.clone(),
+                DeploymentSelectionErrorKind::PackageMismatch,
+            ));
+        }
+
+        if !host
+            .endpoints
+            .iter()
+            .any(|endpoint| endpoint.endpoint_id == self.endpoint_id)
+        {
+            return Err(DeploymentSelectionError::new(
+                self.deployment_id.clone(),
+                self.endpoint_id.clone(),
+                DeploymentSelectionErrorKind::UnknownEndpoint,
+            ));
+        }
+
+        let mut module_availability = Vec::new();
+        for module_id in &self.selected_modules {
+            let Some(module) = modules.iter().find(|module| module.module_id == *module_id) else {
+                return Err(DeploymentSelectionError::new(
+                    self.deployment_id.clone(),
+                    module_id.clone(),
+                    DeploymentSelectionErrorKind::UnknownModule,
+                ));
+            };
+
+            if !package
+                .exports
+                .modules
+                .iter()
+                .any(|exported| exported == module_id)
+            {
+                return Err(DeploymentSelectionError::new(
+                    self.deployment_id.clone(),
+                    module_id.clone(),
+                    DeploymentSelectionErrorKind::UnknownModule,
+                ));
+            }
+
+            module_availability.push(self.module_availability(module, host));
+        }
+
+        let status = if module_availability
+            .iter()
+            .all(|module| module.status == ModuleAvailabilityStatus::Available)
+        {
+            ValidationStatus::Pass
+        } else {
+            ValidationStatus::Fail
+        };
+
+        Ok(ManifoldDeploymentSelectionSnapshot {
+            schema_id: SchemaId::new("rusty.manifold.deployment.selection_snapshot.v1")
+                .expect("schema literal is valid"),
+            deployment_id: self.deployment_id.clone(),
+            host_id: host.host_id.clone(),
+            package_id: package.package_id.clone(),
+            status,
+            modules: module_availability,
+        })
+    }
+
+    /// Validates that all selected modules are currently available on the host.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DeploymentSelectionError`] when deployment selection is invalid
+    /// or at least one selected module cannot run on the host.
+    pub fn validate_selection(
+        &self,
+        package: &ManifoldPackageManifest,
+        modules: &[ManifoldModuleManifest],
+        host: &ManifoldHostManifest,
+    ) -> Result<ManifoldDeploymentSelectionSnapshot, DeploymentSelectionError> {
+        let snapshot = self.selection_snapshot(package, modules, host)?;
+        if let Some(module) = snapshot
+            .modules
+            .iter()
+            .find(|module| module.status == ModuleAvailabilityStatus::Unavailable)
+        {
+            let kind = if !module.missing_capabilities.is_empty() {
+                DeploymentSelectionErrorKind::MissingCapability
+            } else if !module.missing_backends.is_empty() {
+                DeploymentSelectionErrorKind::MissingBackend
+            } else {
+                DeploymentSelectionErrorKind::MissingRequirement
+            };
+            return Err(DeploymentSelectionError::new(
+                self.deployment_id.clone(),
+                module.module_id.clone(),
+                kind,
+            ));
+        }
+
+        Ok(snapshot)
+    }
+
+    fn module_availability(
+        &self,
+        module: &ManifoldModuleManifest,
+        host: &ManifoldHostManifest,
+    ) -> ManifoldModuleAvailability {
+        let selected_backend = self.selected_backend(module, host);
+        let missing_capabilities = added_ids(&module.required_capabilities, &host.capabilities);
+        let missing_backends = match &selected_backend {
+            Some(backend)
+                if host.supported_backends.iter().any(|item| item == backend)
+                    && module.platform_support.iter().any(|item| item == backend) =>
+            {
+                Vec::new()
+            }
+            Some(backend) => vec![backend.clone()],
+            None => module.platform_support.clone(),
+        };
+        let missing_requirements = module
+            .required_capabilities
+            .iter()
+            .chain(selected_backend.iter())
+            .filter(|requirement| {
+                host.missing_requirements
+                    .iter()
+                    .any(|item| item == *requirement)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        let available = missing_capabilities.is_empty()
+            && missing_backends.is_empty()
+            && missing_requirements.is_empty();
+
+        ManifoldModuleAvailability {
+            module_id: module.module_id.clone(),
+            status: if available {
+                ModuleAvailabilityStatus::Available
+            } else {
+                ModuleAvailabilityStatus::Unavailable
+            },
+            selected_backend,
+            missing_capabilities,
+            missing_backends,
+            missing_requirements,
+        }
+    }
+
+    fn selected_backend(
+        &self,
+        module: &ManifoldModuleManifest,
+        host: &ManifoldHostManifest,
+    ) -> Option<DottedId> {
+        if let Some(selection) = self
+            .selected_backends
+            .iter()
+            .find(|selection| selection.module_id == module.module_id)
+        {
+            return Some(selection.backend_id.clone());
+        }
+
+        module
+            .platform_support
+            .iter()
+            .find(|backend| host.supported_backends.iter().any(|item| item == *backend))
+            .cloned()
+    }
+}
+
+/// Selected backend binding for one deployed module.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SelectedModuleBackend {
+    /// Selected module id.
+    pub module_id: DottedId,
+    /// Backend selected for the module.
+    pub backend_id: DottedId,
+}
+
+/// Snapshot answering which selected modules can run on a host now.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldDeploymentSelectionSnapshot {
+    /// Schema identifier for this snapshot.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Deployment being evaluated.
+    pub deployment_id: DottedId,
+    /// Host being evaluated.
+    pub host_id: DottedId,
+    /// Package being evaluated.
+    pub package_id: DottedId,
+    /// Overall selection status.
+    pub status: ValidationStatus,
+    /// Per-module availability rows.
+    pub modules: Vec<ManifoldModuleAvailability>,
+}
+
+/// Availability row for a selected module.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldModuleAvailability {
+    /// Selected module id.
+    pub module_id: DottedId,
+    /// Module availability status.
+    pub status: ModuleAvailabilityStatus,
+    /// Backend selected or inferred for this module.
+    pub selected_backend: Option<DottedId>,
+    /// Required capabilities absent from the host manifest.
+    pub missing_capabilities: Vec<DottedId>,
+    /// Required or selected backends absent from the host manifest.
+    pub missing_backends: Vec<DottedId>,
+    /// Requirements the host explicitly reports as missing.
+    pub missing_requirements: Vec<DottedId>,
 }
 
 /// Clock snapshot at one read.
@@ -1035,6 +1509,20 @@ pub enum ValidationStatus {
     Fail,
 }
 
+/// Module availability status for deployment selection.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ModuleAvailabilityStatus {
+    /// The selected module can run on the host now.
+    Available,
+    /// The selected module is declared but cannot run on the host now.
+    Unavailable,
+}
+
 /// Issue severity.
 #[cfg_attr(
     feature = "serde",
@@ -1210,6 +1698,91 @@ pub enum StreamRegistryValidationErrorKind {
     UnknownModuleLink,
 }
 
+/// Deployment selection validation failure.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DeploymentSelectionError {
+    deployment_id: DottedId,
+    rejected_id: DottedId,
+    kind: DeploymentSelectionErrorKind,
+}
+
+impl DeploymentSelectionError {
+    fn new(
+        deployment_id: DottedId,
+        rejected_id: DottedId,
+        kind: DeploymentSelectionErrorKind,
+    ) -> Self {
+        Self {
+            deployment_id,
+            rejected_id,
+            kind,
+        }
+    }
+
+    /// Returns the affected deployment id.
+    #[must_use]
+    pub fn deployment_id(&self) -> &DottedId {
+        &self.deployment_id
+    }
+
+    /// Returns the rejected id.
+    #[must_use]
+    pub fn rejected_id(&self) -> &DottedId {
+        &self.rejected_id
+    }
+
+    /// Returns the failure kind.
+    #[must_use]
+    pub const fn kind(&self) -> DeploymentSelectionErrorKind {
+        self.kind
+    }
+
+    /// Returns a stable rejection code.
+    #[must_use]
+    pub const fn rejection_code(&self) -> &'static str {
+        match self.kind {
+            DeploymentSelectionErrorKind::HostMismatch => "host_mismatch",
+            DeploymentSelectionErrorKind::PackageMismatch => "package_mismatch",
+            DeploymentSelectionErrorKind::UnknownEndpoint => "unknown_endpoint",
+            DeploymentSelectionErrorKind::UnknownModule => "unknown_module",
+            DeploymentSelectionErrorKind::MissingCapability => "missing_capability",
+            DeploymentSelectionErrorKind::MissingBackend => "missing_backend",
+            DeploymentSelectionErrorKind::MissingRequirement => "missing_requirement",
+        }
+    }
+}
+
+impl fmt::Display for DeploymentSelectionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "deployment {} rejected {}: {:?}",
+            self.deployment_id, self.rejected_id, self.kind
+        )
+    }
+}
+
+impl std::error::Error for DeploymentSelectionError {}
+
+/// Deployment selection validation failure kind.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DeploymentSelectionErrorKind {
+    /// Deployment targets a different host.
+    HostMismatch,
+    /// Deployment targets a different package.
+    PackageMismatch,
+    /// Deployment selects an endpoint not advertised by the host.
+    UnknownEndpoint,
+    /// Deployment selects a module not exported by the package.
+    UnknownModule,
+    /// Host lacks a capability required by the selected module.
+    MissingCapability,
+    /// Host lacks a backend required by the selected module.
+    MissingBackend,
+    /// Host explicitly reports a required item as missing.
+    MissingRequirement,
+}
+
 /// Command request validation failure.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CommandValidationError {
@@ -1283,6 +1856,89 @@ pub enum CommandValidationErrorKind {
     LeaseHolderMismatch,
     /// The lease revision does not match.
     LeaseRevisionMismatch,
+}
+
+fn added_ids(current: &[DottedId], previous: &[DottedId]) -> Vec<DottedId> {
+    added_by_key(current, previous, |id| id)
+}
+
+fn added_by_key<T, F>(current: &[T], previous: &[T], key: F) -> Vec<T>
+where
+    T: Clone,
+    F: Fn(&T) -> &DottedId,
+{
+    current
+        .iter()
+        .filter(|item| {
+            !previous
+                .iter()
+                .any(|previous_item| key(previous_item) == key(item))
+        })
+        .cloned()
+        .collect()
+}
+
+fn changed_graph_nodes(
+    previous: &ManifoldGraphManifest,
+    current: &ManifoldGraphManifest,
+) -> Vec<ManifoldGraphNodeChange> {
+    current
+        .nodes
+        .iter()
+        .filter_map(|node| {
+            let previous_node = previous
+                .nodes
+                .iter()
+                .find(|previous_node| previous_node.node_id == node.node_id)?;
+            (previous_node.module_id != node.module_id).then(|| ManifoldGraphNodeChange {
+                node_id: node.node_id.clone(),
+                before_module_id: previous_node.module_id.clone(),
+                after_module_id: node.module_id.clone(),
+            })
+        })
+        .collect()
+}
+
+fn changed_graph_edges(
+    previous: &ManifoldGraphManifest,
+    current: &ManifoldGraphManifest,
+) -> Vec<ManifoldGraphEdgeChange> {
+    current
+        .edges
+        .iter()
+        .filter_map(|edge| {
+            let previous_edge = previous
+                .edges
+                .iter()
+                .find(|previous_edge| previous_edge.edge_id == edge.edge_id)?;
+            (previous_edge != edge).then(|| ManifoldGraphEdgeChange {
+                edge_id: edge.edge_id.clone(),
+                before: previous_edge.clone(),
+                after: edge.clone(),
+            })
+        })
+        .collect()
+}
+
+fn changed_streams(
+    previous: &ManifoldStreamRegistrySnapshot,
+    current: &ManifoldStreamRegistrySnapshot,
+) -> Vec<ManifoldStreamChange> {
+    current
+        .streams
+        .iter()
+        .filter_map(|stream| {
+            let previous_stream = previous
+                .streams
+                .iter()
+                .find(|previous_stream| previous_stream.stream_id == stream.stream_id)?;
+            (previous_stream != stream).then(|| ManifoldStreamChange {
+                stream_id: stream.stream_id.clone(),
+                before: previous_stream.clone(),
+                after: stream.clone(),
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]

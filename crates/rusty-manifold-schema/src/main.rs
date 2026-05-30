@@ -123,7 +123,15 @@ fn package_and_graph_entries() -> Vec<SchemaEntry> {
         entry(
             "rusty.manifold.graph.manifest.v1",
             "ManifoldGraphManifest",
-            &["fixtures/graph/synthetic-wave-pipeline.json"],
+            &[
+                "fixtures/graph/synthetic-wave-pipeline.json",
+                "fixtures/graph/synthetic-wave-pipeline-v2.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.graph.diff.v1",
+            "ManifoldGraphDiff",
+            &["fixtures/diff/synthetic-contract-diff.json"],
         ),
     ]
 }
@@ -144,7 +152,13 @@ fn module_and_stream_entries() -> Vec<SchemaEntry> {
             &[
                 "fixtures/module/synthetic-wave-runtime-state.json",
                 "fixtures/module/synthetic-processor-runtime-state.json",
+                "fixtures/module/synthetic-wave-runtime-state-v2.json",
             ],
+        ),
+        entry(
+            "rusty.manifold.module.runtime_transition.v1",
+            "ManifoldModuleRuntimeTransition",
+            &["fixtures/diff/synthetic-contract-diff.json"],
         ),
         entry(
             "rusty.manifold.stream.manifest.v1",
@@ -157,7 +171,15 @@ fn module_and_stream_entries() -> Vec<SchemaEntry> {
         entry(
             "rusty.manifold.stream.registry_snapshot.v1",
             "ManifoldStreamRegistrySnapshot",
-            &["fixtures/stream/synthetic-stream-registry.json"],
+            &[
+                "fixtures/stream/synthetic-stream-registry.json",
+                "fixtures/stream/synthetic-stream-registry-v2.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.stream.registry_diff.v1",
+            "ManifoldStreamRegistryDiff",
+            &["fixtures/diff/synthetic-contract-diff.json"],
         ),
     ]
 }
@@ -212,7 +234,15 @@ fn host_and_deployment_entries() -> Vec<SchemaEntry> {
         entry(
             "rusty.manifold.deployment.manifest.v1",
             "ManifoldDeploymentManifest",
-            &["fixtures/deployment/synthetic-deployment.json"],
+            &[
+                "fixtures/deployment/synthetic-deployment.json",
+                "fixtures/damaged/unavailable-deployment-backend.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.deployment.selection_snapshot.v1",
+            "ManifoldDeploymentSelectionSnapshot",
+            &["fixtures/deployment/synthetic-selection.json"],
         ),
     ]
 }
@@ -233,6 +263,11 @@ fn verification_entries() -> Vec<SchemaEntry> {
             "rusty.manifold.simulator.snapshot.v1",
             "SimulatorSnapshot",
             &["fixtures/simulator/synthetic-topology-summary.json"],
+        ),
+        entry(
+            "rusty.manifold.diff.snapshot.v1",
+            "FixtureDiffSnapshot",
+            &["fixtures/diff/synthetic-contract-diff.json"],
         ),
     ]
 }

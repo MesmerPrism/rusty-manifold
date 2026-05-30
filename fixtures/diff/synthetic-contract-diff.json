@@ -1,0 +1,167 @@
+{
+  "$schema": "rusty.manifold.diff.snapshot.v1",
+  "graph_diff": {
+    "$schema": "rusty.manifold.graph.diff.v1",
+    "graph_id": "graph.synthetic_wave_pipeline",
+    "from_revision": 1,
+    "to_revision": 2,
+    "added_nodes": [],
+    "removed_nodes": [],
+    "changed_nodes": [],
+    "added_edges": [],
+    "removed_edges": [
+      {
+        "edge_id": "edge.wave_to_processor",
+        "source_node_id": "node.synthetic_wave_provider",
+        "source_stream_id": "stream.synthetic_wave",
+        "target_node_id": "node.synthetic_wave_processor",
+        "target_input_id": "stream.synthetic_wave"
+      }
+    ],
+    "changed_edges": []
+  },
+  "stream_registry_diff": {
+    "$schema": "rusty.manifold.stream.registry_diff.v1",
+    "from_revision": 1,
+    "to_revision": 2,
+    "added_streams": [],
+    "removed_streams": [
+      {
+        "$schema": "rusty.manifold.stream.manifest.v1",
+        "stream_id": "stream.synthetic_rms",
+        "source_module_id": "module.synthetic_wave_processor",
+        "semantic_family": "synthetic.scalar",
+        "sample_schema": "rusty.manifold.sample.scalar_f32.v1",
+        "rate_class": "periodic",
+        "timestamp_domains": [
+          "clock.host_monotonic"
+        ],
+        "retention": {
+          "policy": "ephemeral"
+        },
+        "sensitivity": "synthetic",
+        "transport_offers": [
+          {
+            "transport_id": "transport.in_process",
+            "transport": "in_process",
+            "endpoint_id": null
+          }
+        ],
+        "subscription": {
+          "ui_subscribable": true,
+          "max_subscribers": 8
+        }
+      }
+    ],
+    "changed_streams": [
+      {
+        "stream_id": "stream.synthetic_wave",
+        "before": {
+          "$schema": "rusty.manifold.stream.manifest.v1",
+          "stream_id": "stream.synthetic_wave",
+          "source_module_id": "module.synthetic_wave_provider",
+          "semantic_family": "synthetic.scalar",
+          "sample_schema": "rusty.manifold.sample.scalar_f32.v1",
+          "rate_class": "periodic",
+          "timestamp_domains": [
+            "clock.host_monotonic"
+          ],
+          "retention": {
+            "policy": "ephemeral"
+          },
+          "sensitivity": "synthetic",
+          "transport_offers": [
+            {
+              "transport_id": "transport.in_process",
+              "transport": "in_process",
+              "endpoint_id": null
+            }
+          ],
+          "subscription": {
+            "ui_subscribable": true,
+            "max_subscribers": 8
+          }
+        },
+        "after": {
+          "$schema": "rusty.manifold.stream.manifest.v1",
+          "stream_id": "stream.synthetic_wave",
+          "source_module_id": "module.synthetic_wave_provider",
+          "semantic_family": "synthetic.scalar",
+          "sample_schema": "rusty.manifold.sample.scalar_f32.v1",
+          "rate_class": "periodic",
+          "timestamp_domains": [
+            "clock.host_monotonic"
+          ],
+          "retention": {
+            "policy": "ephemeral"
+          },
+          "sensitivity": "synthetic",
+          "transport_offers": [
+            {
+              "transport_id": "transport.in_process",
+              "transport": "in_process",
+              "endpoint_id": null
+            }
+          ],
+          "subscription": {
+            "ui_subscribable": true,
+            "max_subscribers": 4
+          }
+        }
+      }
+    ]
+  },
+  "runtime_transition": {
+    "$schema": "rusty.manifold.module.runtime_transition.v1",
+    "module_id": "module.synthetic_wave_provider",
+    "from_revision": 1,
+    "to_revision": 2,
+    "lifecycle_change": {
+      "from": "running",
+      "to": "stopped"
+    },
+    "health_change": null,
+    "backend_change": null,
+    "activated_streams": [],
+    "deactivated_streams": [
+      "stream.synthetic_wave"
+    ],
+    "activated_commands": [],
+    "deactivated_commands": [
+      "command.module.stop"
+    ],
+    "added_issues": [
+      {
+        "issue_code": "issue.synthetic_stopped",
+        "severity": "info",
+        "message": "Synthetic provider stopped cleanly."
+      }
+    ],
+    "resolved_issues": []
+  },
+  "deployment_selection": {
+    "$schema": "rusty.manifold.deployment.selection_snapshot.v1",
+    "deployment_id": "deployment.synthetic_wave_local",
+    "host_id": "host.synthetic",
+    "package_id": "package.synthetic_wave",
+    "status": "pass",
+    "modules": [
+      {
+        "module_id": "module.synthetic_wave_provider",
+        "status": "available",
+        "selected_backend": "backend.synthetic",
+        "missing_capabilities": [],
+        "missing_backends": [],
+        "missing_requirements": []
+      },
+      {
+        "module_id": "module.synthetic_wave_processor",
+        "status": "available",
+        "selected_backend": "backend.synthetic",
+        "missing_capabilities": [],
+        "missing_backends": [],
+        "missing_requirements": []
+      }
+    ]
+  }
+}

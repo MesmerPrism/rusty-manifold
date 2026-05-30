@@ -1,24 +1,20 @@
 {
   "$schema": "rusty.manifold.deployment.manifest.v1",
-  "deployment_id": "deployment.synthetic_wave_local",
+  "deployment_id": "deployment.synthetic_unavailable_backend",
   "target_host_id": "host.synthetic",
   "package_id": "package.synthetic_wave",
   "selected_modules": [
-    "module.synthetic_wave_provider",
-    "module.synthetic_wave_processor"
+    "module.synthetic_wave_provider"
   ],
   "selected_backends": [
     {
       "module_id": "module.synthetic_wave_provider",
-      "backend_id": "backend.synthetic"
-    },
-    {
-      "module_id": "module.synthetic_wave_processor",
-      "backend_id": "backend.synthetic"
+      "backend_id": "backend.replay"
     }
   ],
   "endpoint_id": "endpoint.control_loopback",
   "security_policy": "policy.local_process_only",
   "artifact_policy": "policy.no_artifacts",
-  "session_output_policy": "policy.no_session_export"
+  "session_output_policy": "policy.no_session_export",
+  "expected_rejection": "missing_backend"
 }

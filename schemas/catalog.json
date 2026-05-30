@@ -13,7 +13,15 @@
       "schema_id": "rusty.manifold.graph.manifest.v1",
       "rust_type": "ManifoldGraphManifest",
       "fixture_paths": [
-        "fixtures/graph/synthetic-wave-pipeline.json"
+        "fixtures/graph/synthetic-wave-pipeline.json",
+        "fixtures/graph/synthetic-wave-pipeline-v2.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.graph.diff.v1",
+      "rust_type": "ManifoldGraphDiff",
+      "fixture_paths": [
+        "fixtures/diff/synthetic-contract-diff.json"
       ]
     },
     {
@@ -29,7 +37,15 @@
       "rust_type": "ManifoldModuleRuntimeState",
       "fixture_paths": [
         "fixtures/module/synthetic-wave-runtime-state.json",
-        "fixtures/module/synthetic-processor-runtime-state.json"
+        "fixtures/module/synthetic-processor-runtime-state.json",
+        "fixtures/module/synthetic-wave-runtime-state-v2.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.module.runtime_transition.v1",
+      "rust_type": "ManifoldModuleRuntimeTransition",
+      "fixture_paths": [
+        "fixtures/diff/synthetic-contract-diff.json"
       ]
     },
     {
@@ -44,7 +60,15 @@
       "schema_id": "rusty.manifold.stream.registry_snapshot.v1",
       "rust_type": "ManifoldStreamRegistrySnapshot",
       "fixture_paths": [
-        "fixtures/stream/synthetic-stream-registry.json"
+        "fixtures/stream/synthetic-stream-registry.json",
+        "fixtures/stream/synthetic-stream-registry-v2.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.stream.registry_diff.v1",
+      "rust_type": "ManifoldStreamRegistryDiff",
+      "fixture_paths": [
+        "fixtures/diff/synthetic-contract-diff.json"
       ]
     },
     {
@@ -103,7 +127,15 @@
       "schema_id": "rusty.manifold.deployment.manifest.v1",
       "rust_type": "ManifoldDeploymentManifest",
       "fixture_paths": [
-        "fixtures/deployment/synthetic-deployment.json"
+        "fixtures/deployment/synthetic-deployment.json",
+        "fixtures/damaged/unavailable-deployment-backend.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.deployment.selection_snapshot.v1",
+      "rust_type": "ManifoldDeploymentSelectionSnapshot",
+      "fixture_paths": [
+        "fixtures/deployment/synthetic-selection.json"
       ]
     },
     {
@@ -125,6 +157,13 @@
       "rust_type": "SimulatorSnapshot",
       "fixture_paths": [
         "fixtures/simulator/synthetic-topology-summary.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.diff.snapshot.v1",
+      "rust_type": "FixtureDiffSnapshot",
+      "fixture_paths": [
+        "fixtures/diff/synthetic-contract-diff.json"
       ]
     }
   ]

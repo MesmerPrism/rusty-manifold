@@ -1,0 +1,25 @@
+{
+  "$schema": "rusty.manifold.deployment.selection_snapshot.v1",
+  "deployment_id": "deployment.synthetic_wave_local",
+  "host_id": "host.synthetic",
+  "package_id": "package.synthetic_wave",
+  "status": "pass",
+  "modules": [
+    {
+      "module_id": "module.synthetic_wave_provider",
+      "status": "available",
+      "selected_backend": "backend.synthetic",
+      "missing_capabilities": [],
+      "missing_backends": [],
+      "missing_requirements": []
+    },
+    {
+      "module_id": "module.synthetic_wave_processor",
+      "status": "available",
+      "selected_backend": "backend.synthetic",
+      "missing_capabilities": [],
+      "missing_backends": [],
+      "missing_requirements": []
+    }
+  ]
+}

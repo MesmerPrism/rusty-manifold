@@ -1,0 +1,19 @@
+{
+  "$schema": "rusty.manifold.graph.manifest.v1",
+  "graph_id": "graph.synthetic_wave_pipeline",
+  "graph_revision": 2,
+  "nodes": [
+    {
+      "node_id": "node.synthetic_wave_provider",
+      "module_id": "module.synthetic_wave_provider"
+    },
+    {
+      "node_id": "node.synthetic_wave_processor",
+      "module_id": "module.synthetic_wave_processor"
+    }
+  ],
+  "edges": [],
+  "required_capabilities": [
+    "manifold.graph.run"
+  ]
+}

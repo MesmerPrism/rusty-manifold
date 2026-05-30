@@ -15,7 +15,9 @@
   "capabilities": [
     "manifold.graph.read",
     "manifold.command.request",
-    "manifold.package.inspect"
+    "manifold.package.inspect",
+    "manifold.module.control",
+    "manifold.graph.run"
   ],
   "supported_backends": [
     "backend.synthetic",

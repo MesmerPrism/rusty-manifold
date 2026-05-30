@@ -41,6 +41,7 @@ cargo fmt --all --check
 cargo test --workspace
 cargo run -p rusty-manifold-fixtures -- validate
 cargo run -p rusty-manifold-fixtures -- simulate --check
+cargo run -p rusty-manifold-fixtures -- diff --check
 cargo run -p rusty-manifold-schema -- export --check
 ```
 

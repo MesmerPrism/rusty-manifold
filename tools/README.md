@@ -8,4 +8,5 @@ to run in continuous validation.
 ```powershell
 cargo run -p rusty-manifold-fixtures -- validate
 cargo run -p rusty-manifold-fixtures -- simulate --check
+cargo run -p rusty-manifold-fixtures -- diff --check
 ```

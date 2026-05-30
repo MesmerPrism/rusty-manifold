@@ -14,10 +14,13 @@
   ],
   "capabilities": [
     "manifold.graph.read",
-    "manifold.command.request"
+    "manifold.command.request",
+    "manifold.module.control",
+    "manifold.graph.run"
   ],
   "supported_backends": [
-    "backend.synthetic"
+    "backend.synthetic",
+    "backend.replay"
   ],
   "permissions": [],
   "lifecycle_limits": [],

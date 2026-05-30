@@ -9,9 +9,10 @@ use std::process::ExitCode;
 use rusty_manifold_model::{
     DottedId, ManifoldClockSnapshot, ManifoldCommandAck, ManifoldCommandDescriptor,
     ManifoldCommandEnvelope, ManifoldCommandRejection, ManifoldControlLease,
-    ManifoldControlLeaseRequest, ManifoldDeploymentManifest, ManifoldGraphManifest,
-    ManifoldHostManifest, ManifoldModuleManifest, ManifoldModuleRuntimeState,
-    ManifoldPackageManifest, ManifoldStreamManifest, ManifoldStreamRegistrySnapshot,
+    ManifoldControlLeaseRequest, ManifoldDeploymentManifest, ManifoldDeploymentSelectionSnapshot,
+    ManifoldGraphDiff, ManifoldGraphManifest, ManifoldHostManifest, ManifoldModuleManifest,
+    ManifoldModuleRuntimeState, ManifoldModuleRuntimeTransition, ManifoldPackageManifest,
+    ManifoldStreamManifest, ManifoldStreamRegistryDiff, ManifoldStreamRegistrySnapshot,
     ManifoldValidationScorecard, Revision,
 };
 use serde::de::DeserializeOwned;
@@ -65,6 +66,26 @@ fn run(args: Vec<String>) -> Result<String, CliError> {
                 Ok(output)
             }
         }
+        Command::Diff { check } => {
+            let snapshot = diff_synthetic_contracts(&options.repo_root)?;
+            let output = to_pretty_json(&snapshot)?;
+            if check {
+                let expected_path = options
+                    .repo_root
+                    .join("fixtures/diff/synthetic-contract-diff.json");
+                let expected = read_text(&expected_path)?;
+                if expected.trim_end() == output.trim_end() {
+                    Ok("contract diff snapshot matches fixture".to_owned())
+                } else {
+                    Err(CliError::SnapshotMismatch {
+                        expected_path,
+                        output,
+                    })
+                }
+            } else {
+                Ok(output)
+            }
+        }
     }
 }
 
@@ -84,6 +105,7 @@ impl Options {
         let command = match command_text.as_str() {
             "validate" => Command::Validate,
             "simulate" => Command::Simulate { check: false },
+            "diff" => Command::Diff { check: false },
             "-h" | "--help" | "help" => return Err(CliError::Usage(usage())),
             other => return Err(CliError::UnknownCommand(other.to_owned())),
         };
@@ -100,10 +122,10 @@ impl Options {
                     repo_root = PathBuf::from(value);
                 }
                 "--check" => match &mut command {
-                    Command::Simulate { check } => *check = true,
+                    Command::Simulate { check } | Command::Diff { check } => *check = true,
                     Command::Validate => {
                         return Err(CliError::Usage(
-                            "--check is only valid for simulate".to_owned(),
+                            "--check is only valid for simulate or diff".to_owned(),
                         ));
                     }
                 },
@@ -120,6 +142,7 @@ impl Options {
 enum Command {
     Validate,
     Simulate { check: bool },
+    Diff { check: bool },
 }
 
 fn validate_repo(repo_root: &Path) -> Result<ValidationReport, CliError> {
@@ -192,6 +215,22 @@ fn push_valid_checks(
             Some(&fixtures.control_lease),
         ),
         "command envelope matches descriptor, revision, holder, and lease",
+    );
+
+    let selection_result = match fixtures.deployment_manifest.selection_snapshot(
+        &fixtures.package_manifest,
+        &fixtures.module_manifests,
+        &fixtures.valid_host,
+    ) {
+        Ok(snapshot) if snapshot == fixtures.deployment_selection => Ok(()),
+        Ok(_) => Err("deployment selection snapshot mismatch".to_owned()),
+        Err(error) => Err(error.to_string()),
+    };
+    push_result(
+        checks,
+        "validation.check.deployment_selection",
+        selection_result,
+        "deployment selection resolves package, modules, host, endpoint, and backends",
     );
 }
 
@@ -284,6 +323,24 @@ fn push_damaged_checks(
         "graph edge referencing an unknown node is rejected",
     );
 
+    push_damaged(
+        checks,
+        "validation.check.damaged_unavailable_deployment_backend",
+        expected_rejection(
+            repo_root,
+            "fixtures/damaged/unavailable-deployment-backend.json",
+        )?,
+        fixtures
+            .damaged_unavailable_deployment
+            .validate_selection(
+                &fixtures.package_manifest,
+                &fixtures.module_manifests,
+                &fixtures.valid_host,
+            )
+            .map_err(|error| error.rejection_code().to_owned()),
+        "deployment selecting an unavailable backend is rejected",
+    );
+
     Ok(())
 }
 
@@ -366,24 +423,49 @@ fn simulate_synthetic_topology(repo_root: &Path) -> Result<SimulatorSnapshot, Cl
     })
 }
 
+fn diff_synthetic_contracts(repo_root: &Path) -> Result<FixtureDiffSnapshot, CliError> {
+    let fixtures = FixtureSet::load(repo_root)?;
+    let deployment_selection = fixtures.deployment_manifest.selection_snapshot(
+        &fixtures.package_manifest,
+        &fixtures.module_manifests,
+        &fixtures.valid_host,
+    )?;
+
+    Ok(FixtureDiffSnapshot {
+        schema_id: "rusty.manifold.diff.snapshot.v1".to_owned(),
+        graph_diff: fixtures.next_graph.diff_from(&fixtures.valid_graph),
+        stream_registry_diff: fixtures.next_registry.diff_from(&fixtures.valid_registry),
+        runtime_transition: fixtures
+            .next_provider_runtime
+            .transition_from(&fixtures.module_runtime_states[0]),
+        deployment_selection,
+    })
+}
+
 #[derive(Debug)]
 struct FixtureSet {
     package_manifest: ManifoldPackageManifest,
     valid_graph: ManifoldGraphManifest,
+    next_graph: ManifoldGraphManifest,
     module_manifests: Vec<ManifoldModuleManifest>,
     module_runtime_states: Vec<ManifoldModuleRuntimeState>,
+    next_provider_runtime: ManifoldModuleRuntimeState,
     valid_registry: ManifoldStreamRegistrySnapshot,
+    next_registry: ManifoldStreamRegistrySnapshot,
     command_descriptor: ManifoldCommandDescriptor,
     valid_envelope: ManifoldCommandEnvelope,
     valid_ack: ManifoldCommandAck,
     control_lease: ManifoldControlLease,
     valid_host: ManifoldHostManifest,
+    deployment_manifest: ManifoldDeploymentManifest,
+    deployment_selection: ManifoldDeploymentSelectionSnapshot,
     damaged_endpoint_host: ManifoldHostManifest,
     damaged_stale_command: ManifoldCommandEnvelope,
     damaged_missing_lease_command: ManifoldCommandEnvelope,
     damaged_unknown_stream_module: ManifoldStreamRegistrySnapshot,
     damaged_unknown_graph_module: ManifoldGraphManifest,
     damaged_unknown_graph_node: ManifoldGraphManifest,
+    damaged_unavailable_deployment: ManifoldDeploymentManifest,
     platform_hosts: Vec<ManifoldHostManifest>,
 }
 
@@ -393,6 +475,8 @@ impl FixtureSet {
             read_model(repo_root.join("fixtures/package/synthetic-package.json"))?;
         let valid_graph =
             read_model(repo_root.join("fixtures/graph/synthetic-wave-pipeline.json"))?;
+        let next_graph =
+            read_model(repo_root.join("fixtures/graph/synthetic-wave-pipeline-v2.json"))?;
         let provider_manifest =
             read_model(repo_root.join("fixtures/module/synthetic-wave-provider.json"))?;
         let processor_manifest =
@@ -401,6 +485,8 @@ impl FixtureSet {
             read_model(repo_root.join("fixtures/module/synthetic-wave-runtime-state.json"))?;
         let processor_runtime =
             read_model(repo_root.join("fixtures/module/synthetic-processor-runtime-state.json"))?;
+        let next_provider_runtime =
+            read_model(repo_root.join("fixtures/module/synthetic-wave-runtime-state-v2.json"))?;
 
         read_model::<ManifoldStreamManifest>(
             repo_root.join("fixtures/stream/synthetic-wave-stream.json"),
@@ -411,6 +497,8 @@ impl FixtureSet {
 
         let valid_registry =
             read_model(repo_root.join("fixtures/stream/synthetic-stream-registry.json"))?;
+        let next_registry =
+            read_model(repo_root.join("fixtures/stream/synthetic-stream-registry-v2.json"))?;
         let command_descriptor =
             read_model(repo_root.join("fixtures/command/synthetic-command-descriptor.json"))?;
         let valid_envelope =
@@ -428,9 +516,10 @@ impl FixtureSet {
         let desktop_host = read_model(repo_root.join("fixtures/host/desktop-local.json"))?;
         let mobile_host = read_model(repo_root.join("fixtures/host/mobile-device.json"))?;
         let headset_host = read_model(repo_root.join("fixtures/host/headset-device.json"))?;
-        read_model::<ManifoldDeploymentManifest>(
-            repo_root.join("fixtures/deployment/synthetic-deployment.json"),
-        )?;
+        let deployment_manifest =
+            read_model(repo_root.join("fixtures/deployment/synthetic-deployment.json"))?;
+        let deployment_selection =
+            read_model(repo_root.join("fixtures/deployment/synthetic-selection.json"))?;
         read_model::<ManifoldClockSnapshot>(
             repo_root.join("fixtures/clock/synthetic-clock-snapshot.json"),
         )?;
@@ -450,27 +539,45 @@ impl FixtureSet {
             read_model(repo_root.join("fixtures/damaged/unknown-graph-module-link.json"))?;
         let damaged_unknown_graph_node =
             read_model(repo_root.join("fixtures/damaged/unknown-graph-node-link.json"))?;
+        let damaged_unavailable_deployment =
+            read_model(repo_root.join("fixtures/damaged/unavailable-deployment-backend.json"))?;
 
         Ok(Self {
             package_manifest,
             valid_graph,
+            next_graph,
             module_manifests: vec![provider_manifest, processor_manifest],
             module_runtime_states: vec![provider_runtime, processor_runtime],
+            next_provider_runtime,
             valid_registry,
+            next_registry,
             command_descriptor,
             valid_envelope,
             valid_ack,
             control_lease,
             valid_host,
+            deployment_manifest,
+            deployment_selection,
             damaged_endpoint_host,
             damaged_stale_command,
             damaged_missing_lease_command,
             damaged_unknown_stream_module,
             damaged_unknown_graph_module,
             damaged_unknown_graph_node,
+            damaged_unavailable_deployment,
             platform_hosts: vec![desktop_host, mobile_host, headset_host],
         })
     }
+}
+
+#[derive(Serialize)]
+struct FixtureDiffSnapshot {
+    #[serde(rename = "$schema")]
+    schema_id: String,
+    graph_diff: ManifoldGraphDiff,
+    stream_registry_diff: ManifoldStreamRegistryDiff,
+    runtime_transition: ManifoldModuleRuntimeTransition,
+    deployment_selection: ManifoldDeploymentSelectionSnapshot,
 }
 
 #[derive(Serialize)]
@@ -681,7 +788,8 @@ fn default_repo_root() -> PathBuf {
 }
 
 fn usage() -> String {
-    "usage: rusty-manifold-fixtures <validate|simulate> [--repo-root <path>] [--check]".to_owned()
+    "usage: rusty-manifold-fixtures <validate|simulate|diff> [--repo-root <path>] [--check]"
+        .to_owned()
 }
 
 #[derive(Debug)]
@@ -708,6 +816,7 @@ enum CliError {
     },
     EndpointSecurity(rusty_manifold_model::EndpointSecurityError),
     CommandValidation(rusty_manifold_model::CommandValidationError),
+    DeploymentSelection(rusty_manifold_model::DeploymentSelectionError),
     GraphValidation(rusty_manifold_model::GraphValidationError),
     StreamRegistryValidation(rusty_manifold_model::StreamRegistryValidationError),
 }
@@ -737,6 +846,7 @@ impl fmt::Display for CliError {
             ),
             Self::EndpointSecurity(source) => write!(formatter, "{source}"),
             Self::CommandValidation(source) => write!(formatter, "{source}"),
+            Self::DeploymentSelection(source) => write!(formatter, "{source}"),
             Self::GraphValidation(source) => write!(formatter, "{source}"),
             Self::StreamRegistryValidation(source) => write!(formatter, "{source}"),
         }
@@ -754,6 +864,12 @@ impl From<rusty_manifold_model::EndpointSecurityError> for CliError {
 impl From<rusty_manifold_model::CommandValidationError> for CliError {
     fn from(source: rusty_manifold_model::CommandValidationError) -> Self {
         Self::CommandValidation(source)
+    }
+}
+
+impl From<rusty_manifold_model::DeploymentSelectionError> for CliError {
+    fn from(source: rusty_manifold_model::DeploymentSelectionError) -> Self {
+        Self::DeploymentSelection(source)
     }
 }
 
@@ -789,6 +905,17 @@ mod tests {
             &default_repo_root().join("fixtures/simulator/synthetic-topology-summary.json"),
         )
         .unwrap();
+
+        assert_eq!(expected.trim_end(), output.trim_end());
+    }
+
+    #[test]
+    fn diff_snapshot_is_deterministic() {
+        let snapshot = diff_synthetic_contracts(&default_repo_root()).unwrap();
+        let output = to_pretty_json(&snapshot).unwrap();
+        let expected =
+            read_text(&default_repo_root().join("fixtures/diff/synthetic-contract-diff.json"))
+                .unwrap();
 
         assert_eq!(expected.trim_end(), output.trim_end());
     }
