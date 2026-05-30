@@ -1,0 +1,24 @@
+{
+  "$schema": "rusty.manifold.graph.manifest.v1",
+  "graph_id": "graph.unknown_node_link",
+  "graph_revision": 1,
+  "nodes": [
+    {
+      "node_id": "node.synthetic_wave_provider",
+      "module_id": "module.synthetic_wave_provider"
+    }
+  ],
+  "edges": [
+    {
+      "edge_id": "edge.missing_target",
+      "source_node_id": "node.synthetic_wave_provider",
+      "source_stream_id": "stream.synthetic_wave",
+      "target_node_id": "node.not_registered",
+      "target_input_id": "stream.synthetic_wave"
+    }
+  ],
+  "required_capabilities": [
+    "manifold.graph.run"
+  ],
+  "expected_rejection": "unknown_node_link"
+}

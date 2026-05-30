@@ -25,6 +25,102 @@ pub struct ManifoldPackageManifest {
     pub safety: PackageSafetyFlags,
 }
 
+/// Static graph manifest connecting module nodes and stream edges.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldGraphManifest {
+    /// Schema identifier for this manifest.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable graph id.
+    pub graph_id: DottedId,
+    /// Accepted graph revision.
+    pub graph_revision: Revision,
+    /// Module nodes in the graph.
+    pub nodes: Vec<ManifoldGraphNode>,
+    /// Stream edges between nodes.
+    pub edges: Vec<ManifoldGraphEdge>,
+    /// Capabilities required to run or mutate this graph.
+    pub required_capabilities: Vec<DottedId>,
+}
+
+impl ManifoldGraphManifest {
+    /// Validates that graph nodes reference known module ids and edges reference known nodes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GraphValidationError`] when a node references an unknown module
+    /// or an edge references an unknown graph node.
+    pub fn validate_links(&self, module_ids: &[DottedId]) -> Result<(), GraphValidationError> {
+        for node in &self.nodes {
+            if !module_ids
+                .iter()
+                .any(|module_id| module_id == &node.module_id)
+            {
+                return Err(GraphValidationError {
+                    graph_id: self.graph_id.clone(),
+                    link_id: node.module_id.clone(),
+                    kind: GraphValidationErrorKind::UnknownModuleLink,
+                });
+            }
+        }
+
+        for edge in &self.edges {
+            if !self
+                .nodes
+                .iter()
+                .any(|node| node.node_id == edge.source_node_id)
+            {
+                return Err(GraphValidationError {
+                    graph_id: self.graph_id.clone(),
+                    link_id: edge.source_node_id.clone(),
+                    kind: GraphValidationErrorKind::UnknownNodeLink,
+                });
+            }
+
+            if !self
+                .nodes
+                .iter()
+                .any(|node| node.node_id == edge.target_node_id)
+            {
+                return Err(GraphValidationError {
+                    graph_id: self.graph_id.clone(),
+                    link_id: edge.target_node_id.clone(),
+                    kind: GraphValidationErrorKind::UnknownNodeLink,
+                });
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// A module node in a graph manifest.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldGraphNode {
+    /// Stable graph-local node id.
+    pub node_id: DottedId,
+    /// Module id used by this node.
+    pub module_id: DottedId,
+}
+
+/// A stream edge in a graph manifest.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldGraphEdge {
+    /// Stable graph-local edge id.
+    pub edge_id: DottedId,
+    /// Source node id.
+    pub source_node_id: DottedId,
+    /// Stream id produced by the source node.
+    pub source_stream_id: DottedId,
+    /// Target node id.
+    pub target_node_id: DottedId,
+    /// Target input id or stream id consumed by the target.
+    pub target_input_id: DottedId,
+}
+
 /// Exported ids in a package manifest.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -48,6 +144,7 @@ pub struct ValidationCommandDescriptor {
 }
 
 /// Package-level safety flags.
+#[allow(clippy::struct_excessive_bools)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct PackageSafetyFlags {
@@ -169,6 +266,11 @@ pub struct ManifoldStreamRegistrySnapshot {
 
 impl ManifoldStreamRegistrySnapshot {
     /// Validates that every stream points to a known source module id.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StreamRegistryValidationError`] when a stream references an
+    /// unknown source module.
     pub fn validate_source_modules(
         &self,
         module_ids: &[DottedId],
@@ -248,6 +350,11 @@ pub struct ManifoldCommandEnvelope {
 
 impl ManifoldCommandEnvelope {
     /// Validates the envelope against a descriptor, current revision, and optional lease.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CommandValidationError`] when the envelope does not match the
+    /// descriptor, revision, required capability, or required lease.
     pub fn validate_request(
         &self,
         descriptor: &ManifoldCommandDescriptor,
@@ -439,6 +546,11 @@ pub struct ManifoldHostManifest {
 
 impl ManifoldHostManifest {
     /// Validates endpoint visibility and security pairings.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EndpointSecurityError`] when any endpoint advertises a
+    /// visibility/security pairing that is not accepted by Manifold policy.
     pub fn validate_endpoint_security(&self) -> Result<(), EndpointSecurityError> {
         for endpoint in &self.endpoints {
             endpoint.validate_security()?;
@@ -535,6 +647,11 @@ pub struct EndpointDescriptor {
 
 impl EndpointDescriptor {
     /// Validates that visibility and security are paired safely.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`EndpointSecurityError`] when this endpoint advertises a
+    /// visibility/security pairing that is not accepted by Manifold policy.
     pub fn validate_security(&self) -> Result<(), EndpointSecurityError> {
         let valid = match self.visibility {
             EndpointVisibility::Loopback => {
@@ -967,6 +1084,64 @@ impl fmt::Display for EndpointSecurityError {
 
 impl std::error::Error for EndpointSecurityError {}
 
+/// Graph validation failure.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GraphValidationError {
+    graph_id: DottedId,
+    link_id: DottedId,
+    kind: GraphValidationErrorKind,
+}
+
+impl GraphValidationError {
+    /// Returns the affected graph id.
+    #[must_use]
+    pub fn graph_id(&self) -> &DottedId {
+        &self.graph_id
+    }
+
+    /// Returns the missing or invalid link id.
+    #[must_use]
+    pub fn link_id(&self) -> &DottedId {
+        &self.link_id
+    }
+
+    /// Returns the failure kind.
+    #[must_use]
+    pub const fn kind(&self) -> GraphValidationErrorKind {
+        self.kind
+    }
+
+    /// Returns a stable rejection code.
+    #[must_use]
+    pub const fn rejection_code(&self) -> &'static str {
+        match self.kind {
+            GraphValidationErrorKind::UnknownModuleLink => "unknown_module_link",
+            GraphValidationErrorKind::UnknownNodeLink => "unknown_node_link",
+        }
+    }
+}
+
+impl fmt::Display for GraphValidationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "graph {} contains invalid link {}: {:?}",
+            self.graph_id, self.link_id, self.kind
+        )
+    }
+}
+
+impl std::error::Error for GraphValidationError {}
+
+/// Graph validation failure kind.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum GraphValidationErrorKind {
+    /// A node references an unknown module.
+    UnknownModuleLink,
+    /// An edge references an unknown node.
+    UnknownNodeLink,
+}
+
 /// Stream registry validation failure.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StreamRegistryValidationError {
@@ -1203,6 +1378,27 @@ mod tests {
     }
 
     #[test]
+    fn graph_manifest_rejects_unknown_module_link() {
+        let manifest = ManifoldGraphManifest {
+            schema_id: schema("rusty.manifold.graph.manifest.v1"),
+            graph_id: id("graph.synthetic_wave_pipeline"),
+            graph_revision: Revision::INITIAL,
+            nodes: vec![ManifoldGraphNode {
+                node_id: id("node.unknown"),
+                module_id: id("module.not_registered"),
+            }],
+            edges: Vec::new(),
+            required_capabilities: vec![id("manifold.graph.run")],
+        };
+
+        let error = manifest
+            .validate_links(&[id("module.synthetic_wave_provider")])
+            .unwrap_err();
+
+        assert_eq!(error.rejection_code(), "unknown_module_link");
+    }
+
+    #[test]
     fn stream_registry_rejects_unknown_source_module() {
         let snapshot = ManifoldStreamRegistrySnapshot {
             schema_id: schema("rusty.manifold.stream.registry_snapshot.v1"),
@@ -1285,14 +1481,26 @@ mod serde_fixture_tests {
         fixture::<ManifoldPackageManifest>(include_str!(
             "../../../fixtures/package/synthetic-package.json"
         ));
+        fixture::<ManifoldGraphManifest>(include_str!(
+            "../../../fixtures/graph/synthetic-wave-pipeline.json"
+        ));
         fixture::<ManifoldModuleManifest>(include_str!(
             "../../../fixtures/module/synthetic-wave-provider.json"
+        ));
+        fixture::<ManifoldModuleManifest>(include_str!(
+            "../../../fixtures/module/synthetic-wave-processor.json"
         ));
         fixture::<ManifoldModuleRuntimeState>(include_str!(
             "../../../fixtures/module/synthetic-wave-runtime-state.json"
         ));
+        fixture::<ManifoldModuleRuntimeState>(include_str!(
+            "../../../fixtures/module/synthetic-processor-runtime-state.json"
+        ));
         fixture::<ManifoldStreamManifest>(include_str!(
             "../../../fixtures/stream/synthetic-wave-stream.json"
+        ));
+        fixture::<ManifoldStreamManifest>(include_str!(
+            "../../../fixtures/stream/synthetic-rms-stream.json"
         ));
         fixture::<ManifoldStreamRegistrySnapshot>(include_str!(
             "../../../fixtures/stream/synthetic-stream-registry.json"

@@ -48,4 +48,6 @@ can reject bad state.
 ```powershell
 cargo fmt --all --check
 cargo test --workspace
+cargo run -p rusty-manifold-fixtures -- validate
+cargo run -p rusty-manifold-fixtures -- simulate --check
 ```

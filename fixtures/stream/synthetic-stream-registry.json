@@ -27,6 +27,32 @@
         "ui_subscribable": true,
         "max_subscribers": 8
       }
+    },
+    {
+      "$schema": "rusty.manifold.stream.manifest.v1",
+      "stream_id": "stream.synthetic_rms",
+      "source_module_id": "module.synthetic_wave_processor",
+      "semantic_family": "synthetic.scalar",
+      "sample_schema": "rusty.manifold.sample.scalar_f32.v1",
+      "rate_class": "periodic",
+      "timestamp_domains": [
+        "clock.host_monotonic"
+      ],
+      "retention": {
+        "policy": "ephemeral"
+      },
+      "sensitivity": "synthetic",
+      "transport_offers": [
+        {
+          "transport_id": "transport.in_process",
+          "transport": "in_process",
+          "endpoint_id": null
+        }
+      ],
+      "subscription": {
+        "ui_subscribable": true,
+        "max_subscribers": 8
+      }
     }
   ]
 }

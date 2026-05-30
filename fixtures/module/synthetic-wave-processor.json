@@ -1,0 +1,42 @@
+{
+  "$schema": "rusty.manifold.module.manifest.v1",
+  "module_id": "module.synthetic_wave_processor",
+  "module_kind": "processor",
+  "label": "Synthetic Wave Processor",
+  "version": "0.1.0",
+  "lifecycle_states": [
+    "available",
+    "running",
+    "stopped",
+    "failed"
+  ],
+  "provides_streams": [
+    "stream.synthetic_rms"
+  ],
+  "consumes_streams": [
+    "stream.synthetic_wave"
+  ],
+  "accepted_commands": [
+    "command.module.configure",
+    "command.module.start",
+    "command.module.stop"
+  ],
+  "required_capabilities": [
+    "manifold.module.control"
+  ],
+  "clock_policy": {
+    "source_domain": "clock.host_monotonic",
+    "correlation_required": false
+  },
+  "retention": {
+    "policy": "ephemeral"
+  },
+  "sensitivity": "synthetic",
+  "platform_support": [
+    "backend.synthetic"
+  ],
+  "issue_codes": [
+    "issue.synthetic_input_missing",
+    "issue.synthetic_window_invalid"
+  ]
+}

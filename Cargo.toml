@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/rusty-manifold-fixtures",
     "crates/rusty-manifold-model",
 ]
 resolver = "2"

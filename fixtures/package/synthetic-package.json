@@ -5,10 +5,12 @@
   "license": "MIT OR Apache-2.0",
   "exports": {
     "modules": [
-      "module.synthetic_wave_provider"
+      "module.synthetic_wave_provider",
+      "module.synthetic_wave_processor"
     ],
     "streams": [
-      "stream.synthetic_wave"
+      "stream.synthetic_wave",
+      "stream.synthetic_rms"
     ],
     "commands": [
       "command.module.configure",

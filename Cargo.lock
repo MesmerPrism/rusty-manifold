@@ -33,6 +33,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusty-manifold-fixtures"
+version = "0.1.0"
+dependencies = [
+ "rusty-manifold-model",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "rusty-manifold-model"
 version = "0.1.0"
 dependencies = [

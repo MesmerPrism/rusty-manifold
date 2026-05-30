@@ -19,6 +19,10 @@ pub struct DottedId(String);
 
 impl DottedId {
     /// Parses and validates a dotted identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IdError`] when the value does not match the dotted-id grammar.
     pub fn new(value: impl Into<String>) -> Result<Self, IdError> {
         let value = value.into();
         validate_dotted_id(&value)?;
@@ -73,6 +77,10 @@ pub struct SchemaId(DottedId);
 
 impl SchemaId {
     /// Parses and validates a Manifold schema identifier.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SchemaIdError`] when the value is not a valid Manifold schema id.
     pub fn new(value: impl Into<String>) -> Result<Self, SchemaIdError> {
         let value = value.into();
         let dotted = DottedId::new(value.clone()).map_err(SchemaIdError::InvalidId)?;
@@ -145,6 +153,7 @@ impl Revision {
     pub const INITIAL: Self = Self(1);
 
     /// Creates a non-zero revision.
+    #[must_use]
     pub fn new(value: u64) -> Option<Self> {
         (value != 0).then_some(Self(value))
     }

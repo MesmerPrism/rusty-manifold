@@ -1,0 +1,52 @@
+{
+  "$schema": "rusty.manifold.simulator.snapshot.v1",
+  "simulation_id": "simulation.synthetic_wave_pipeline",
+  "host_id": "host.synthetic",
+  "package_id": "package.synthetic_wave",
+  "graph_id": "graph.synthetic_wave_pipeline",
+  "graph_revision": 1,
+  "module_states": [
+    {
+      "module_id": "module.synthetic_wave_provider",
+      "lifecycle": "running",
+      "health": "healthy",
+      "selected_backend": "backend.synthetic"
+    },
+    {
+      "module_id": "module.synthetic_wave_processor",
+      "lifecycle": "running",
+      "health": "healthy",
+      "selected_backend": "backend.synthetic"
+    }
+  ],
+  "stream_registry_revision": 1,
+  "streams": [
+    "stream.synthetic_wave",
+    "stream.synthetic_rms"
+  ],
+  "accepted_commands": [
+    {
+      "request_id": "request.start.synthetic_wave",
+      "command_id": "command.module.start",
+      "accepted_revision": 2
+    }
+  ],
+  "rejected_commands": [
+    {
+      "request_id": "request.stale.synthetic_wave",
+      "command_id": "command.module.start",
+      "rejection_code": "stale_revision"
+    }
+  ],
+  "scorecard": {
+    "scorecard_id": "scorecard.synthetic_simulator_pass",
+    "status": "pass",
+    "checks": [
+      "validation.check.host_endpoint_security",
+      "validation.check.graph_links",
+      "validation.check.stream_registry_links",
+      "validation.check.command_accept",
+      "validation.check.stale_reject"
+    ]
+  }
+}

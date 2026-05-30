@@ -1,0 +1,16 @@
+{
+  "$schema": "rusty.manifold.graph.manifest.v1",
+  "graph_id": "graph.unknown_module_link",
+  "graph_revision": 1,
+  "nodes": [
+    {
+      "node_id": "node.unknown",
+      "module_id": "module.not_registered"
+    }
+  ],
+  "edges": [],
+  "required_capabilities": [
+    "manifold.graph.run"
+  ],
+  "expected_rejection": "unknown_module_link"
+}

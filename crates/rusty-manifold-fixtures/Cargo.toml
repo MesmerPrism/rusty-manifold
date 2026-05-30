@@ -1,0 +1,17 @@
+[package]
+name = "rusty-manifold-fixtures"
+description = "Fixture validation and source-only simulator tooling for Rusty Manifold contracts."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+rusty-manifold-model = { path = "../rusty-manifold-model", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints]
+workspace = true
