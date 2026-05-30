@@ -1,0 +1,18 @@
+{
+  "$schema": "rusty.manifold.host.manifest.v1",
+  "host_id": "host.synthetic",
+  "authority_role": "primary",
+  "clock_domain": "clock.host_monotonic",
+  "endpoints": [
+    {
+      "endpoint_id": "endpoint.control_loopback",
+      "visibility": "loopback",
+      "transport": "http",
+      "security": "local_process"
+    }
+  ],
+  "capabilities": [
+    "manifold.graph.read",
+    "manifold.command.request"
+  ]
+}

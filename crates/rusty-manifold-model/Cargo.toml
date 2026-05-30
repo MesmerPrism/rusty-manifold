@@ -1,0 +1,15 @@
+[package]
+name = "rusty-manifold-model"
+description = "Core identifiers and model primitives for Rusty Manifold contracts."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = []
+serde = []
+
+[lints]
+workspace = true

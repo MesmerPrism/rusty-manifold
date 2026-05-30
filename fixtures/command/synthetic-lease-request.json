@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.command.lease_request.v1",
+  "request_id": "request.synthetic_lease_1",
+  "holder_id": "holder.test_agent",
+  "scope": "manifold.graph",
+  "expected_revision": 1,
+  "requested_ttl_ms": 30000,
+  "required_capability": "manifold.graph.update",
+  "safety_class": "bounded_mutation"
+}

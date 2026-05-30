@@ -1,0 +1,24 @@
+{
+  "$schema": "rusty.manifold.module.manifest.v1",
+  "module_id": "module.synthetic_wave_provider",
+  "module_kind": "provider",
+  "label": "Synthetic Wave Provider",
+  "version": "0.1.0",
+  "provides_streams": [
+    "stream.synthetic_wave"
+  ],
+  "consumes_streams": [],
+  "accepted_commands": [
+    "command.module.configure",
+    "command.module.start",
+    "command.module.stop"
+  ],
+  "clock_policy": {
+    "source_domain": "clock.host_monotonic",
+    "correlation_required": false
+  },
+  "retention": {
+    "policy": "ephemeral"
+  },
+  "sensitivity": "synthetic"
+}

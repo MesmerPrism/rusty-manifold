@@ -1,0 +1,15 @@
+{
+  "$schema": "rusty.manifold.host.manifest.v1",
+  "host_id": "host.invalid_endpoint_security",
+  "authority_role": "primary",
+  "clock_domain": "clock.host_monotonic",
+  "endpoints": [
+    {
+      "endpoint_id": "endpoint.public_without_policy",
+      "visibility": "public_relay",
+      "transport": "http",
+      "security": "none"
+    }
+  ],
+  "expected_rejection": "endpoint_security_mismatch"
+}

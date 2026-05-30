@@ -1,0 +1,20 @@
+[workspace]
+members = [
+    "crates/rusty-manifold-model",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Till Holzapfel"]
+license = "MIT OR Apache-2.0"
+rust-version = "1.80"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
