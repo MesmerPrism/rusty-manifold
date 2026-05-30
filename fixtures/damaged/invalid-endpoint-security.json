@@ -11,5 +11,11 @@
       "security": "none"
     }
   ],
+  "capabilities": [
+    "manifold.command.request"
+  ],
+  "supported_backends": [
+    "backend.synthetic"
+  ],
   "expected_rejection": "endpoint_security_mismatch"
 }

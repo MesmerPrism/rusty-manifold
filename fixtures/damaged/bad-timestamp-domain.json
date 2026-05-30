@@ -1,0 +1,21 @@
+{
+  "$schema": "rusty.manifold.stream.manifest.v1",
+  "stream_id": "stream.bad_timestamp_domain",
+  "source_module_id": "module.synthetic_wave_provider",
+  "semantic_family": "synthetic.scalar",
+  "sample_schema": "rusty.manifold.sample.scalar_f32.v1",
+  "rate_class": "periodic",
+  "timestamp_domains": [
+    "Clock.Host"
+  ],
+  "retention": {
+    "policy": "ephemeral"
+  },
+  "sensitivity": "synthetic",
+  "transport_offers": [],
+  "subscription": {
+    "ui_subscribable": false,
+    "max_subscribers": null
+  },
+  "expected_rejection": "invalid_dotted_id"
+}

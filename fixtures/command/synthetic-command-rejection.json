@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.command.rejection.v1",
+  "request_id": "request.start.synthetic_wave",
+  "rejection_code": "stale_revision",
+  "message": "expected revision does not match current revision",
+  "retryable": true,
+  "current_revision": 2
+}

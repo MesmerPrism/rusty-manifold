@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.command.descriptor.v1",
+  "command_id": "command.module.start",
+  "target_scope": "module.synthetic_wave_provider",
+  "input_schema": "rusty.manifold.command.input.empty.v1",
+  "required_capability": "manifold.module.control",
+  "required_lease_scope": "module.synthetic_wave_provider",
+  "safety_class": "bounded_mutation",
+  "operator_confirmation_required": false
+}

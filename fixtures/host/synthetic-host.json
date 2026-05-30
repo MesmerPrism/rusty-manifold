@@ -14,5 +14,8 @@
   "capabilities": [
     "manifold.graph.read",
     "manifold.command.request"
+  ],
+  "supported_backends": [
+    "backend.synthetic"
   ]
 }

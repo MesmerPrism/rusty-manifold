@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.command.ack.v1",
+  "request_id": "request.start.synthetic_wave",
+  "accepted_revision": 2,
+  "lease_id": "lease.synthetic_module",
+  "authority_id": "authority.synthetic",
+  "accepted_at_ms": 1765000000100
+}

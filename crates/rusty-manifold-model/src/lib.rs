@@ -3,8 +3,12 @@
 //! This crate starts with the smallest shared vocabulary that other Manifold
 //! crates can build on: stable identifiers, schema identifiers, and revisions.
 
+mod contracts;
+
 use core::fmt;
 use core::str::FromStr;
+
+pub use contracts::*;
 
 /// A lowercase dotted identifier used for stable Manifold ids.
 ///
@@ -39,6 +43,27 @@ impl FromStr for DottedId {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::new(value)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for DottedId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for DottedId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
     }
 }
 
@@ -90,6 +115,27 @@ impl FromStr for SchemaId {
     }
 }
 
+#[cfg(feature = "serde")]
+impl serde::Serialize for SchemaId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for SchemaId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
+
 /// A monotonically increasing revision number.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Revision(u64);
@@ -113,6 +159,27 @@ impl Revision {
     #[must_use]
     pub fn next(self) -> Option<Self> {
         self.0.checked_add(1).map(Self)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Revision {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_u64(self.get())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Revision {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = u64::deserialize(deserializer)?;
+        Self::new(value).ok_or_else(|| serde::de::Error::custom("revision must be non-zero"))
     }
 }
 

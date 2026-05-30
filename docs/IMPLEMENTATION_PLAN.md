@@ -123,7 +123,7 @@ Create a separate workspace after slices 1-4 are stable:
 rusty-manifold-packages/
   packages/
     synthetic/
-    polar-h10/
+    biosignal-sensor/
     recorder/
     bridge-osc/
     bridge-lsl/

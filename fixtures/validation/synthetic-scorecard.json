@@ -1,0 +1,16 @@
+{
+  "$schema": "rusty.manifold.validation.scorecard.v1",
+  "scorecard_id": "scorecard.synthetic_fixture_pass",
+  "target_id": "package.synthetic_wave",
+  "target_revision": null,
+  "status": "pass",
+  "checks": [
+    {
+      "check_id": "validation.check.fixture_deserialize",
+      "status": "pass",
+      "evidence": "valid fixtures deserialize into Slice 1 model contracts",
+      "issue_codes": []
+    }
+  ],
+  "issues": []
+}

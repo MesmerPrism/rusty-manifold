@@ -9,7 +9,13 @@ rust-version.workspace = true
 
 [features]
 default = []
-serde = []
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true }
+
+[dev-dependencies]
+serde_json = "1"
 
 [lints]
 workspace = true

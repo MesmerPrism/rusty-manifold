@@ -1,0 +1,17 @@
+{
+  "$schema": "rusty.manifold.module.runtime_state.v1",
+  "module_id": "module.synthetic_wave_provider",
+  "runtime_revision": 1,
+  "lifecycle": "running",
+  "health": "healthy",
+  "selected_backend": "backend.synthetic",
+  "active_streams": [
+    "stream.synthetic_wave"
+  ],
+  "active_commands": [
+    "command.module.configure",
+    "command.module.start",
+    "command.module.stop"
+  ],
+  "issues": []
+}
