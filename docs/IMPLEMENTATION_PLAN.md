@@ -41,11 +41,6 @@ cargo fmt --all --check
 cargo test --workspace
 cargo run -p rusty-manifold-fixtures -- validate
 cargo run -p rusty-manifold-fixtures -- simulate --check
-```
-
-Later validation slot:
-
-```powershell
 cargo run -p rusty-manifold-schema -- export --check
 ```
 
@@ -92,16 +87,16 @@ and runtime-state shapes that a live host will produce later.
 
 ## Slice 4: Platform Host Contracts
 
-Goal: support Windows, Android phone, and Android headset hosts through the
-same Manifold contracts.
+Goal: support desktop, mobile, and headset hosts through the same Manifold
+contracts.
 
 Host categories:
 
-- `desktop.windows`: desktop host with platform-specific device and process
+- `desktop.local`: desktop host with platform-specific device and process
   APIs.
-- `android.phone`: Android phone host with app-owned permissions and services.
-- `android.headset`: Android headset host with app-owned permissions,
-  lifecycle, and foreground constraints.
+- `mobile.device`: mobile host with app-owned permissions and services.
+- `headset.device`: headset host with app-owned permissions, lifecycle, and
+  foreground constraints.
 
 Rules:
 

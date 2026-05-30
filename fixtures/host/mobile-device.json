@@ -1,0 +1,34 @@
+{
+  "$schema": "rusty.manifold.host.manifest.v1",
+  "host_id": "host.mobile_device",
+  "authority_role": "observer",
+  "host_category": "mobile.device",
+  "clock_domain": "clock.host_monotonic",
+  "endpoints": [
+    {
+      "endpoint_id": "endpoint.mobile_loopback",
+      "visibility": "loopback",
+      "transport": "http",
+      "security": "local_process"
+    }
+  ],
+  "capabilities": [
+    "manifold.graph.read",
+    "manifold.command.request",
+    "manifold.package.inspect"
+  ],
+  "supported_backends": [
+    "backend.synthetic",
+    "backend.replay",
+    "backend.mobile_device"
+  ],
+  "permissions": [
+    "permission.background_operation",
+    "permission.operator_pairing"
+  ],
+  "lifecycle_limits": [
+    "lifecycle.background_limited",
+    "lifecycle.permission_prompt_required"
+  ],
+  "missing_requirements": []
+}

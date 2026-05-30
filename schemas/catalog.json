@@ -1,0 +1,131 @@
+{
+  "$schema": "rusty.manifold.schema.catalog.v1",
+  "version": 1,
+  "entries": [
+    {
+      "schema_id": "rusty.manifold.package.manifest.v1",
+      "rust_type": "ManifoldPackageManifest",
+      "fixture_paths": [
+        "fixtures/package/synthetic-package.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.graph.manifest.v1",
+      "rust_type": "ManifoldGraphManifest",
+      "fixture_paths": [
+        "fixtures/graph/synthetic-wave-pipeline.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.module.manifest.v1",
+      "rust_type": "ManifoldModuleManifest",
+      "fixture_paths": [
+        "fixtures/module/synthetic-wave-provider.json",
+        "fixtures/module/synthetic-wave-processor.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.module.runtime_state.v1",
+      "rust_type": "ManifoldModuleRuntimeState",
+      "fixture_paths": [
+        "fixtures/module/synthetic-wave-runtime-state.json",
+        "fixtures/module/synthetic-processor-runtime-state.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.stream.manifest.v1",
+      "rust_type": "ManifoldStreamManifest",
+      "fixture_paths": [
+        "fixtures/stream/synthetic-wave-stream.json",
+        "fixtures/stream/synthetic-rms-stream.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.stream.registry_snapshot.v1",
+      "rust_type": "ManifoldStreamRegistrySnapshot",
+      "fixture_paths": [
+        "fixtures/stream/synthetic-stream-registry.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.command.descriptor.v1",
+      "rust_type": "ManifoldCommandDescriptor",
+      "fixture_paths": [
+        "fixtures/command/synthetic-command-descriptor.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.command.envelope.v1",
+      "rust_type": "ManifoldCommandEnvelope",
+      "fixture_paths": [
+        "fixtures/command/synthetic-command-envelope.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.command.ack.v1",
+      "rust_type": "ManifoldCommandAck",
+      "fixture_paths": [
+        "fixtures/command/synthetic-command-ack.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.command.rejection.v1",
+      "rust_type": "ManifoldCommandRejection",
+      "fixture_paths": [
+        "fixtures/command/synthetic-command-rejection.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.command.lease_request.v1",
+      "rust_type": "ManifoldControlLeaseRequest",
+      "fixture_paths": [
+        "fixtures/command/synthetic-lease-request.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.command.control_lease.v1",
+      "rust_type": "ManifoldControlLease",
+      "fixture_paths": [
+        "fixtures/command/synthetic-control-lease.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.host.manifest.v1",
+      "rust_type": "ManifoldHostManifest",
+      "fixture_paths": [
+        "fixtures/host/synthetic-host.json",
+        "fixtures/host/desktop-local.json",
+        "fixtures/host/mobile-device.json",
+        "fixtures/host/headset-device.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.deployment.manifest.v1",
+      "rust_type": "ManifoldDeploymentManifest",
+      "fixture_paths": [
+        "fixtures/deployment/synthetic-deployment.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.clock.snapshot.v1",
+      "rust_type": "ManifoldClockSnapshot",
+      "fixture_paths": [
+        "fixtures/clock/synthetic-clock-snapshot.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.validation.scorecard.v1",
+      "rust_type": "ManifoldValidationScorecard",
+      "fixture_paths": [
+        "fixtures/validation/synthetic-scorecard.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.simulator.snapshot.v1",
+      "rust_type": "SimulatorSnapshot",
+      "fixture_paths": [
+        "fixtures/simulator/synthetic-topology-summary.json"
+      ]
+    }
+  ]
+}

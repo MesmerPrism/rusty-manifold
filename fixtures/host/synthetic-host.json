@@ -2,6 +2,7 @@
   "$schema": "rusty.manifold.host.manifest.v1",
   "host_id": "host.synthetic",
   "authority_role": "primary",
+  "host_category": "host.synthetic",
   "clock_domain": "clock.host_monotonic",
   "endpoints": [
     {
@@ -17,5 +18,8 @@
   ],
   "supported_backends": [
     "backend.synthetic"
-  ]
+  ],
+  "permissions": [],
+  "lifecycle_limits": [],
+  "missing_requirements": []
 }

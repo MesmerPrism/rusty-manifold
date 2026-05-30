@@ -23,3 +23,15 @@ Deployment manifests should capture:
 - endpoint and security policy;
 - launch and recovery profile;
 - artifact and session-output policy.
+
+## Platform Host Contract Fixtures
+
+The current contract fixtures include generic host categories only:
+
+- `desktop.local`
+- `mobile.device`
+- `headset.device`
+
+These fixtures describe available backends, permissions, endpoint visibility,
+and lifecycle limits. They do not add platform SDK dependencies or imply
+device-specific authority.

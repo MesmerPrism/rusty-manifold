@@ -534,6 +534,9 @@ pub struct ManifoldHostManifest {
     pub host_id: DottedId,
     /// Authority role advertised by this host.
     pub authority_role: AuthorityRole,
+    /// Generic host category, when advertised.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub host_category: Option<DottedId>,
     /// Host clock domain.
     pub clock_domain: DottedId,
     /// Advertised endpoints.
@@ -541,7 +544,17 @@ pub struct ManifoldHostManifest {
     /// Advertised capabilities.
     pub capabilities: Vec<DottedId>,
     /// Supported backend families.
+    #[cfg_attr(feature = "serde", serde(default))]
     pub supported_backends: Vec<DottedId>,
+    /// Permissions or operator grants available to this host.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub permissions: Vec<DottedId>,
+    /// Lifecycle limits that deployment selection must account for.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub lifecycle_limits: Vec<DottedId>,
+    /// Missing requirements that prevent selected modules or backends.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub missing_requirements: Vec<DottedId>,
 }
 
 impl ManifoldHostManifest {
@@ -1524,6 +1537,9 @@ mod serde_fixture_tests {
             "../../../fixtures/command/synthetic-control-lease.json"
         ));
         fixture::<ManifoldHostManifest>(include_str!("../../../fixtures/host/synthetic-host.json"));
+        fixture::<ManifoldHostManifest>(include_str!("../../../fixtures/host/desktop-local.json"));
+        fixture::<ManifoldHostManifest>(include_str!("../../../fixtures/host/mobile-device.json"));
+        fixture::<ManifoldHostManifest>(include_str!("../../../fixtures/host/headset-device.json"));
         fixture::<ManifoldDeploymentManifest>(include_str!(
             "../../../fixtures/deployment/synthetic-deployment.json"
         ));

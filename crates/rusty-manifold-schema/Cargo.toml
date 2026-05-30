@@ -1,0 +1,16 @@
+[package]
+name = "rusty-manifold-schema"
+description = "Deterministic schema catalog export tooling for Rusty Manifold contracts."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints]
+workspace = true

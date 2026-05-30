@@ -159,6 +159,16 @@ fn push_valid_checks(
         "valid host endpoint visibility and security pairing accepted",
     );
 
+    for host in &fixtures.platform_hosts {
+        let check_id = format!("validation.check.{}_endpoint_security", host.host_id);
+        push_result(
+            checks,
+            &check_id,
+            host.validate_endpoint_security(),
+            "platform host endpoint visibility and security pairing accepted",
+        );
+    }
+
     push_result(
         checks,
         "validation.check.graph_links",
@@ -374,6 +384,7 @@ struct FixtureSet {
     damaged_unknown_stream_module: ManifoldStreamRegistrySnapshot,
     damaged_unknown_graph_module: ManifoldGraphManifest,
     damaged_unknown_graph_node: ManifoldGraphManifest,
+    platform_hosts: Vec<ManifoldHostManifest>,
 }
 
 impl FixtureSet {
@@ -414,6 +425,9 @@ impl FixtureSet {
         let control_lease =
             read_model(repo_root.join("fixtures/command/synthetic-control-lease.json"))?;
         let valid_host = read_model(repo_root.join("fixtures/host/synthetic-host.json"))?;
+        let desktop_host = read_model(repo_root.join("fixtures/host/desktop-local.json"))?;
+        let mobile_host = read_model(repo_root.join("fixtures/host/mobile-device.json"))?;
+        let headset_host = read_model(repo_root.join("fixtures/host/headset-device.json"))?;
         read_model::<ManifoldDeploymentManifest>(
             repo_root.join("fixtures/deployment/synthetic-deployment.json"),
         )?;
@@ -454,6 +468,7 @@ impl FixtureSet {
             damaged_unknown_stream_module,
             damaged_unknown_graph_module,
             damaged_unknown_graph_node,
+            platform_hosts: vec![desktop_host, mobile_host, headset_host],
         })
     }
 }

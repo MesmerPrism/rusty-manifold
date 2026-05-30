@@ -1,0 +1,33 @@
+{
+  "$schema": "rusty.manifold.host.manifest.v1",
+  "host_id": "host.desktop_local",
+  "authority_role": "observer",
+  "host_category": "desktop.local",
+  "clock_domain": "clock.host_monotonic",
+  "endpoints": [
+    {
+      "endpoint_id": "endpoint.desktop_loopback",
+      "visibility": "loopback",
+      "transport": "stdio",
+      "security": "local_process"
+    }
+  ],
+  "capabilities": [
+    "manifold.graph.read",
+    "manifold.command.request",
+    "manifold.package.inspect"
+  ],
+  "supported_backends": [
+    "backend.synthetic",
+    "backend.replay",
+    "backend.desktop_local"
+  ],
+  "permissions": [
+    "permission.local_files",
+    "permission.local_process"
+  ],
+  "lifecycle_limits": [
+    "lifecycle.user_session_bound"
+  ],
+  "missing_requirements": []
+}

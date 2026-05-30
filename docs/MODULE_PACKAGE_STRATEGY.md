@@ -58,8 +58,8 @@ packages/<package-id>/
     model/
     provider/
     processor/
-    backend-windows/
-    backend-android/
+    backend-desktop/
+    backend-mobile/
     backend-synthetic/
 ```
 
