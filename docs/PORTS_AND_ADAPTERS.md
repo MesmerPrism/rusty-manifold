@@ -25,3 +25,10 @@ Every adapter proposal should declare:
 - provenance and release status.
 
 Core crates must remain usable without optional adapter dependencies.
+
+## Command Surface Parity
+
+GUI, CLI, API, MCP, and tests are adapters over the same command descriptors.
+A runtime mutation should not exist only behind a GUI event handler. Build the
+CLI route with the command so an agent can validate behavior deterministically,
+then use GUI testing to judge human usability and platform interaction quality.

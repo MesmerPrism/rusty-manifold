@@ -29,6 +29,9 @@ libraries, or external workflow tools.
   decisions, lifecycle records, registries, clocks, session evidence, and audit.
 - Clients observe or request through typed contracts. They do not mutate
   accepted state directly.
+- Every mutating GUI action must have a CLI route that calls the same command
+  implementation. Agents validate behavior through CLI/command outputs; humans
+  judge usability, layout, focus, and interaction quality.
 - Keep control, discovery, data descriptors, render adoption, and feedback
   separate when a route involves streams or media.
 - Keep high-rate packets, frames, buffers, textures, audio, and sensor payloads
@@ -54,6 +57,8 @@ Run the narrow checks before committing:
 ```powershell
 cargo fmt --all --check
 cargo test --workspace
+cargo run -p rusty-manifold-fixtures -- validate
+cargo run -p rusty-manifold-fixtures -- simulate --check
 ```
 
 When schema tooling exists, add deterministic schema export and fixture
