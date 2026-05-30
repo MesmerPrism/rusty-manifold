@@ -36,6 +36,13 @@ can reject bad state.
 - `schemas/`: generated schemas once schema tooling exists.
 - `tools/`: validation and export tooling once needed.
 
+## Planning Entry Points
+
+- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/MODULE_PACKAGE_STRATEGY.md`
+- `docs/MODULES.md`
+- `docs/HOSTS_AND_DEPLOYMENT.md`
+
 ## First Validation
 
 ```powershell

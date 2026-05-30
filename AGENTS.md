@@ -18,8 +18,10 @@ libraries, or external workflow tools.
 3. `docs/GLOSSARY.md`
 4. `docs/PORTS_AND_ADAPTERS.md`
 5. `docs/COMMANDS_LEASES_AND_AUTHORITY.md`
-6. `docs/SCHEMA_EVOLUTION.md`
-7. `fixtures/README.md`
+6. `docs/IMPLEMENTATION_PLAN.md`
+7. `docs/MODULE_PACKAGE_STRATEGY.md`
+8. `docs/SCHEMA_EVOLUTION.md`
+9. `fixtures/README.md`
 
 ## Architecture Rules
 
