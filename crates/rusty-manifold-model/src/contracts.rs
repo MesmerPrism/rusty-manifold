@@ -1118,6 +1118,133 @@ pub struct ManifoldValidationScorecard {
     pub issues: Vec<ManifoldIssue>,
 }
 
+/// Install, launch, and command-bridge profile consumed by host shells.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldHostessInstallLaunchProfile {
+    /// Schema identifier for this profile.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable profile id.
+    pub profile_id: DottedId,
+    /// Target host profile, such as desktop, mobile, or headset.
+    pub host_profile: DottedId,
+    /// Host shell app id.
+    pub app_id: DottedId,
+    /// How the app is installed or updated.
+    pub install_route: DottedId,
+    /// How the app is launched.
+    pub launch_route: DottedId,
+    /// How commands are delivered.
+    pub command_bridge: DottedId,
+    /// Required permissions or grants for this profile.
+    pub required_permissions: Vec<DottedId>,
+    /// How evidence is pulled or exported.
+    pub evidence_pull_route: DottedId,
+}
+
+/// Named validation slot that a host shell can execute.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldHostessValidationSlot {
+    /// Schema identifier for this slot.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable validation slot id.
+    pub slot_id: DottedId,
+    /// Validation slot kind.
+    pub slot_kind: HostessValidationSlotKind,
+    /// Package ids required by this slot.
+    pub required_packages: Vec<DottedId>,
+    /// Stream ids expected from this slot.
+    pub expected_streams: Vec<DottedId>,
+    /// Command ids this slot may issue.
+    pub command_ids: Vec<DottedId>,
+    /// Scorecard id expected from this slot.
+    pub expected_scorecard_id: DottedId,
+    /// Safety class for running this slot.
+    pub safety_class: SafetyClass,
+}
+
+/// Bundle of manifests, fixtures, and slot selection for one host run.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldHostessRunBundle {
+    /// Schema identifier for this bundle.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable bundle id.
+    pub bundle_id: DottedId,
+    /// Bundle revision.
+    pub bundle_revision: Revision,
+    /// Target host profile.
+    pub target_host_profile: DottedId,
+    /// Validation slot selected for the run.
+    pub validation_slot_id: DottedId,
+    /// Package catalog id or digest id.
+    pub package_catalog_id: DottedId,
+    /// Package ids included in the bundle.
+    pub package_ids: Vec<DottedId>,
+    /// Deployment ids included in the bundle.
+    pub deployment_ids: Vec<DottedId>,
+    /// Graph ids included in the bundle.
+    pub graph_ids: Vec<DottedId>,
+    /// Evidence policy id.
+    pub evidence_policy: DottedId,
+}
+
+/// Host-shell command wrapper carrying a Manifold command envelope.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldHostessCommandEnvelope {
+    /// Schema identifier for this envelope.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Host-shell command request id.
+    pub hostess_request_id: DottedId,
+    /// Target host shell app id.
+    pub target_app_id: DottedId,
+    /// Target host profile.
+    pub target_host_profile: DottedId,
+    /// Run bundle id.
+    pub bundle_id: DottedId,
+    /// Validation slot id.
+    pub validation_slot_id: DottedId,
+    /// Manifold command envelope to validate and route.
+    pub manifold_command: ManifoldCommandEnvelope,
+}
+
+/// Evidence manifest produced after one host-shell run.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldHostessRunEvidence {
+    /// Schema identifier for this evidence document.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable run id.
+    pub run_id: DottedId,
+    /// Bundle used for the run.
+    pub bundle_id: DottedId,
+    /// Validation slot executed.
+    pub validation_slot_id: DottedId,
+    /// Host profile that produced this evidence.
+    pub host_profile: DottedId,
+    /// Host shell app id.
+    pub app_id: DottedId,
+    /// Package ids observed during the run.
+    pub package_ids: Vec<DottedId>,
+    /// Overall status.
+    pub status: ValidationStatus,
+    /// Start timestamp in milliseconds.
+    pub started_at_ms: u64,
+    /// End timestamp in milliseconds.
+    pub ended_at_ms: u64,
+    /// Evidence artifact ids or relative paths.
+    pub evidence_artifacts: Vec<DottedId>,
+    /// Final scorecard for this run.
+    pub scorecard: ManifoldValidationScorecard,
+}
+
 /// Endpoint descriptor.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1521,6 +1648,30 @@ pub enum ModuleAvailabilityStatus {
     Available,
     /// The selected module is declared but cannot run on the host now.
     Unavailable,
+}
+
+/// Host-shell validation slot class.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HostessValidationSlotKind {
+    /// App installed, launchable, writable, and command bridge alive.
+    HostReadiness,
+    /// Package catalog loads and schema versions match.
+    PackageCatalogReadiness,
+    /// Synthetic package graph runs without device APIs.
+    SyntheticPackageRun,
+    /// Replay fixtures drive the same streams and processors.
+    ReplayPackageRun,
+    /// Platform permissions and capabilities are observed.
+    PlatformCapabilityProbe,
+    /// One bounded live adapter route.
+    LiveSmoke,
+    /// Explicit release/acquire run for a single-owner resource.
+    HandoffSmoke,
 }
 
 /// Issue severity.
@@ -2204,6 +2355,27 @@ mod serde_fixture_tests {
         ));
         fixture::<ManifoldValidationScorecard>(include_str!(
             "../../../fixtures/validation/synthetic-scorecard.json"
+        ));
+        fixture::<ManifoldHostessInstallLaunchProfile>(include_str!(
+            "../../../fixtures/hostess/install-profile-desktop.json"
+        ));
+        fixture::<ManifoldHostessInstallLaunchProfile>(include_str!(
+            "../../../fixtures/hostess/install-profile-mobile.json"
+        ));
+        fixture::<ManifoldHostessInstallLaunchProfile>(include_str!(
+            "../../../fixtures/hostess/install-profile-headset.json"
+        ));
+        fixture::<ManifoldHostessValidationSlot>(include_str!(
+            "../../../fixtures/hostess/slot-live-smoke.json"
+        ));
+        fixture::<ManifoldHostessRunBundle>(include_str!(
+            "../../../fixtures/hostess/run-bundle-live-smoke.json"
+        ));
+        fixture::<ManifoldHostessCommandEnvelope>(include_str!(
+            "../../../fixtures/hostess/command-envelope-run-live.json"
+        ));
+        fixture::<ManifoldHostessRunEvidence>(include_str!(
+            "../../../fixtures/hostess/run-evidence-live-smoke.json"
         ));
     }
 

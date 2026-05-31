@@ -1,0 +1,28 @@
+{
+  "$schema": "rusty.manifold.hostess.command_envelope.v1",
+  "hostess_request_id": "request.hostess_t.live_smoke",
+  "target_app_id": "app.rusty_hostess_t.quest",
+  "target_host_profile": "host.headset",
+  "bundle_id": "hostess.bundle.polar_h10.live_smoke",
+  "validation_slot_id": "hostess.slot.live_smoke",
+  "manifold_command": {
+    "$schema": "rusty.manifold.command.envelope.v1",
+    "request_id": "request.synthetic_start",
+    "command_id": "command.module.start",
+    "target_id": "module.synthetic_wave_provider",
+    "target_scope": "module.synthetic_wave_provider",
+    "input_schema": "rusty.manifold.command.module_start.input.v1",
+    "expected_revision": 1,
+    "required_capability": "manifold.module.control",
+    "lease_id": "lease.synthetic_module",
+    "preconditions": [
+      {
+        "kind": "module.lifecycle",
+        "expected_value": "available"
+      }
+    ],
+    "safety_class": "bounded_mutation",
+    "requested_at_ms": 1765000000000,
+    "holder_id": "holder.test_agent"
+  }
+}

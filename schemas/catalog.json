@@ -165,6 +165,43 @@
       "fixture_paths": [
         "fixtures/diff/synthetic-contract-diff.json"
       ]
+    },
+    {
+      "schema_id": "rusty.manifold.hostess.install_launch_profile.v1",
+      "rust_type": "ManifoldHostessInstallLaunchProfile",
+      "fixture_paths": [
+        "fixtures/hostess/install-profile-desktop.json",
+        "fixtures/hostess/install-profile-mobile.json",
+        "fixtures/hostess/install-profile-headset.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.hostess.validation_slot.v1",
+      "rust_type": "ManifoldHostessValidationSlot",
+      "fixture_paths": [
+        "fixtures/hostess/slot-live-smoke.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.hostess.run_bundle.v1",
+      "rust_type": "ManifoldHostessRunBundle",
+      "fixture_paths": [
+        "fixtures/hostess/run-bundle-live-smoke.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.hostess.command_envelope.v1",
+      "rust_type": "ManifoldHostessCommandEnvelope",
+      "fixture_paths": [
+        "fixtures/hostess/command-envelope-run-live.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.hostess.run_evidence.v1",
+      "rust_type": "ManifoldHostessRunEvidence",
+      "fixture_paths": [
+        "fixtures/hostess/run-evidence-live-smoke.json"
+      ]
     }
   ]
 }

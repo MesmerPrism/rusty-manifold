@@ -269,6 +269,35 @@ fn verification_entries() -> Vec<SchemaEntry> {
             "FixtureDiffSnapshot",
             &["fixtures/diff/synthetic-contract-diff.json"],
         ),
+        entry(
+            "rusty.manifold.hostess.install_launch_profile.v1",
+            "ManifoldHostessInstallLaunchProfile",
+            &[
+                "fixtures/hostess/install-profile-desktop.json",
+                "fixtures/hostess/install-profile-mobile.json",
+                "fixtures/hostess/install-profile-headset.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.hostess.validation_slot.v1",
+            "ManifoldHostessValidationSlot",
+            &["fixtures/hostess/slot-live-smoke.json"],
+        ),
+        entry(
+            "rusty.manifold.hostess.run_bundle.v1",
+            "ManifoldHostessRunBundle",
+            &["fixtures/hostess/run-bundle-live-smoke.json"],
+        ),
+        entry(
+            "rusty.manifold.hostess.command_envelope.v1",
+            "ManifoldHostessCommandEnvelope",
+            &["fixtures/hostess/command-envelope-run-live.json"],
+        ),
+        entry(
+            "rusty.manifold.hostess.run_evidence.v1",
+            "ManifoldHostessRunEvidence",
+            &["fixtures/hostess/run-evidence-live-smoke.json"],
+        ),
     ]
 }
 

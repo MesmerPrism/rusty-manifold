@@ -1,0 +1,13 @@
+{
+  "$schema": "rusty.manifold.hostess.install_launch_profile.v1",
+  "profile_id": "hostess.profile.desktop",
+  "host_profile": "host.desktop",
+  "app_id": "app.rusty_hostess_t.desktop",
+  "install_route": "install.local_process",
+  "launch_route": "launch.local_process",
+  "command_bridge": "bridge.local_cli",
+  "required_permissions": [
+    "permission.storage.write"
+  ],
+  "evidence_pull_route": "evidence.filesystem"
+}

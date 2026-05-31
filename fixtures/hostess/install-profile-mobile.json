@@ -1,0 +1,15 @@
+{
+  "$schema": "rusty.manifold.hostess.install_launch_profile.v1",
+  "profile_id": "hostess.profile.mobile",
+  "host_profile": "host.mobile",
+  "app_id": "app.rusty_hostess_t.android",
+  "install_route": "install.android_package",
+  "launch_route": "launch.android_intent",
+  "command_bridge": "bridge.adb_intent_file",
+  "required_permissions": [
+    "permission.bluetooth.scan",
+    "permission.bluetooth.connect",
+    "permission.location.fine"
+  ],
+  "evidence_pull_route": "evidence.adb_pull"
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "rusty.manifold.hostess.run_evidence.v1",
+  "run_id": "hostess.run.polar_h10.live_smoke",
+  "bundle_id": "hostess.bundle.polar_h10.live_smoke",
+  "validation_slot_id": "hostess.slot.live_smoke",
+  "host_profile": "host.headset",
+  "app_id": "app.rusty_hostess_t.quest",
+  "package_ids": [
+    "package.polar_h10"
+  ],
+  "status": "pass",
+  "started_at_ms": 1765000000000,
+  "ended_at_ms": 1765000012000,
+  "evidence_artifacts": [
+    "artifact.hostess_run_json",
+    "artifact.command_log",
+    "artifact.stream_registry_final",
+    "artifact.scorecard"
+  ],
+  "scorecard": {
+    "$schema": "rusty.manifold.validation.scorecard.v1",
+    "scorecard_id": "scorecard.hostess_t.live_smoke",
+    "target_id": "hostess.run.polar_h10.live_smoke",
+    "target_revision": 1,
+    "status": "pass",
+    "checks": [
+      {
+        "check_id": "validation.check.package_manifest_hash",
+        "status": "pass",
+        "evidence": "package manifest hash was present in live capture evidence",
+        "issue_codes": []
+      },
+      {
+        "check_id": "validation.check.stream_samples",
+        "status": "pass",
+        "evidence": "expected stream produced decoded samples",
+        "issue_codes": []
+      }
+    ],
+    "issues": []
+  }
+}
