@@ -200,6 +200,65 @@ pub struct ManifoldGraphEdgeChange {
     pub after: ManifoldGraphEdge,
 }
 
+/// Deterministic execution report for a static graph run.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldGraphExecutionReport {
+    /// Schema identifier for this report.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Graph being executed.
+    pub graph_id: DottedId,
+    /// Graph revision being executed.
+    pub graph_revision: Revision,
+    /// Runtime implementation path that produced this report.
+    pub runtime_path: DottedId,
+    /// Modules selected by the caller.
+    pub selected_module_ids: Vec<DottedId>,
+    /// Nodes materialized after dependency resolution.
+    pub resolved_node_ids: Vec<DottedId>,
+    /// Overall status.
+    pub status: ValidationStatus,
+    /// Per-node execution reports.
+    pub node_reports: Vec<ManifoldGraphNodeExecutionReport>,
+    /// Output stream ids materialized by the run.
+    pub output_stream_ids: Vec<DottedId>,
+    /// Issues found during graph execution.
+    pub issues: Vec<ManifoldIssue>,
+}
+
+/// Execution report for one graph node.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldGraphNodeExecutionReport {
+    /// Graph-local node id.
+    pub node_id: DottedId,
+    /// Module id bound to the node.
+    pub module_id: DottedId,
+    /// Node status.
+    pub status: ValidationStatus,
+    /// Dependency nodes required before this node ran.
+    pub dependency_node_ids: Vec<DottedId>,
+    /// Input stream ids consumed by the node.
+    pub input_stream_ids: Vec<DottedId>,
+    /// Output stream ids produced by the node.
+    pub output_stream_ids: Vec<DottedId>,
+    /// Deterministic sample-count facts reported by the node.
+    pub sample_counts: Vec<ManifoldGraphSampleCount>,
+    /// Machine-readable issue codes for this node.
+    pub issue_codes: Vec<DottedId>,
+}
+
+/// Named sample-count fact in a graph execution report.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldGraphSampleCount {
+    /// Sample-count id, usually graph/module local.
+    pub count_id: DottedId,
+    /// Count value.
+    pub value: u64,
+}
+
 /// Exported ids in a package manifest.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -2309,6 +2368,9 @@ mod serde_fixture_tests {
         ));
         fixture::<ManifoldGraphManifest>(include_str!(
             "../../../fixtures/graph/synthetic-wave-pipeline.json"
+        ));
+        fixture::<ManifoldGraphExecutionReport>(include_str!(
+            "../../../fixtures/graph/synthetic-graph-execution-report.json"
         ));
         fixture::<ManifoldModuleManifest>(include_str!(
             "../../../fixtures/module/synthetic-wave-provider.json"

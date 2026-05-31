@@ -25,6 +25,13 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.graph.execution_report.v1",
+      "rust_type": "ManifoldGraphExecutionReport",
+      "fixture_paths": [
+        "fixtures/graph/synthetic-graph-execution-report.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.module.manifest.v1",
       "rust_type": "ManifoldModuleManifest",
       "fixture_paths": [

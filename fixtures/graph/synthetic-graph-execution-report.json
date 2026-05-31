@@ -1,0 +1,59 @@
+{
+  "$schema": "rusty.manifold.graph.execution_report.v1",
+  "graph_id": "graph.synthetic_wave_pipeline",
+  "graph_revision": 1,
+  "runtime_path": "runtime.synthetic_static_graph",
+  "selected_module_ids": [
+    "module.synthetic.rms_processor"
+  ],
+  "resolved_node_ids": [
+    "node.synthetic_wave_provider",
+    "node.synthetic_rms_processor"
+  ],
+  "status": "pass",
+  "node_reports": [
+    {
+      "node_id": "node.synthetic_wave_provider",
+      "module_id": "module.synthetic.wave_provider",
+      "status": "pass",
+      "dependency_node_ids": [],
+      "input_stream_ids": [],
+      "output_stream_ids": [
+        "stream.synthetic.wave"
+      ],
+      "sample_counts": [
+        {
+          "count_id": "count.synthetic.wave_samples",
+          "value": 128
+        }
+      ],
+      "issue_codes": []
+    },
+    {
+      "node_id": "node.synthetic_rms_processor",
+      "module_id": "module.synthetic.rms_processor",
+      "status": "pass",
+      "dependency_node_ids": [
+        "node.synthetic_wave_provider"
+      ],
+      "input_stream_ids": [
+        "stream.synthetic.wave"
+      ],
+      "output_stream_ids": [
+        "stream.synthetic.rms"
+      ],
+      "sample_counts": [
+        {
+          "count_id": "count.synthetic.rms_windows",
+          "value": 1
+        }
+      ],
+      "issue_codes": []
+    }
+  ],
+  "output_stream_ids": [
+    "stream.synthetic.wave",
+    "stream.synthetic.rms"
+  ],
+  "issues": []
+}

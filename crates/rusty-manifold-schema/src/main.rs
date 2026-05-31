@@ -133,6 +133,11 @@ fn package_and_graph_entries() -> Vec<SchemaEntry> {
             "ManifoldGraphDiff",
             &["fixtures/diff/synthetic-contract-diff.json"],
         ),
+        entry(
+            "rusty.manifold.graph.execution_report.v1",
+            "ManifoldGraphExecutionReport",
+            &["fixtures/graph/synthetic-graph-execution-report.json"],
+        ),
     ]
 }
 
