@@ -21,6 +21,12 @@ pub struct ManifoldPackageManifest {
     pub exports: PackageExports,
     /// Validation commands advertised by the package.
     pub validation_commands: Vec<ValidationCommandDescriptor>,
+    /// Provenance manifest ids or references required to interpret this package.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub provenance_refs: Vec<DottedId>,
+    /// Notice ids required when publishing or presenting this package.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub notice_refs: Vec<DottedId>,
     /// Package safety flags.
     pub safety: PackageSafetyFlags,
 }

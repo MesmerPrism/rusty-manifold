@@ -6,8 +6,12 @@ Manifold package and adapter metadata should make release risk visible.
 
 - Package id and version.
 - Source and provenance.
+- `provenance_refs` that point to package-owned provenance manifests before
+  runtime code is ported.
 - SPDX license expression.
 - Dependency and third-party notice requirements.
+- `notice_refs` for publication, affiliation, medical, generated asset, or
+  other package-specific notices.
 - Native, unsafe, network, subprocess, device, filesystem, model-asset, and
   binary-payload flags.
 - Validation commands and fixture set.
