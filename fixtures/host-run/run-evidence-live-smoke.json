@@ -1,26 +1,26 @@
 {
-  "$schema": "rusty.manifold.hostess.run_evidence.v1",
-  "run_id": "hostess.run.polar_h10.live_smoke",
-  "bundle_id": "hostess.bundle.polar_h10.live_smoke",
-  "validation_slot_id": "hostess.slot.live_smoke",
+  "$schema": "rusty.manifold.host_run.run_evidence.v1",
+  "run_id": "host_run.run.synthetic_wave.live_smoke",
+  "bundle_id": "host_run.bundle.synthetic_wave.live_smoke",
+  "validation_slot_id": "host_run.slot.synthetic_smoke",
   "host_profile": "host.headset",
-  "app_id": "app.rusty_hostess_t.quest",
+  "app_id": "app.host_shell.headset",
   "package_ids": [
-    "package.polar_h10"
+    "package.synthetic_wave"
   ],
   "status": "pass",
   "started_at_ms": 1765000000000,
   "ended_at_ms": 1765000012000,
   "evidence_artifacts": [
-    "artifact.hostess_run_json",
+    "artifact.host_run_json",
     "artifact.command_log",
     "artifact.stream_registry_final",
     "artifact.scorecard"
   ],
   "scorecard": {
     "$schema": "rusty.manifold.validation.scorecard.v1",
-    "scorecard_id": "scorecard.hostess_t.live_smoke",
-    "target_id": "hostess.run.polar_h10.live_smoke",
+    "scorecard_id": "scorecard.host_run.synthetic_smoke",
+    "target_id": "host_run.run.synthetic_wave.live_smoke",
     "target_revision": 1,
     "status": "pass",
     "checks": [

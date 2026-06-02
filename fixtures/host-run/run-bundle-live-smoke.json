@@ -1,0 +1,18 @@
+{
+  "$schema": "rusty.manifold.host_run.run_bundle.v1",
+  "bundle_id": "host_run.bundle.synthetic_wave.live_smoke",
+  "bundle_revision": 1,
+  "target_host_profile": "host.headset",
+  "validation_slot_id": "host_run.slot.synthetic_smoke",
+  "package_catalog_id": "catalog.first_party_packages",
+  "package_ids": [
+    "package.synthetic_wave"
+  ],
+  "deployment_ids": [
+    "deployment.synthetic_wave_local"
+  ],
+  "graph_ids": [
+    "graph.synthetic_wave_pipeline"
+  ],
+  "evidence_policy": "evidence.host_run.bundle"
+}

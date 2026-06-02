@@ -1,8 +1,8 @@
 {
-  "$schema": "rusty.manifold.hostess.install_launch_profile.v1",
-  "profile_id": "hostess.profile.mobile",
+  "$schema": "rusty.manifold.host_run.install_launch_profile.v1",
+  "profile_id": "host_run.profile.mobile",
   "host_profile": "host.mobile",
-  "app_id": "app.rusty_hostess_t.android",
+  "app_id": "app.host_shell.mobile",
   "install_route": "install.android_package",
   "launch_route": "launch.android_intent",
   "command_bridge": "bridge.adb_intent_file",

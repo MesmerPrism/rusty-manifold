@@ -174,40 +174,40 @@
       ]
     },
     {
-      "schema_id": "rusty.manifold.hostess.install_launch_profile.v1",
-      "rust_type": "ManifoldHostessInstallLaunchProfile",
+      "schema_id": "rusty.manifold.host_run.install_launch_profile.v1",
+      "rust_type": "ManifoldHostRunInstallLaunchProfile",
       "fixture_paths": [
-        "fixtures/hostess/install-profile-desktop.json",
-        "fixtures/hostess/install-profile-mobile.json",
-        "fixtures/hostess/install-profile-headset.json"
+        "fixtures/host-run/install-profile-desktop.json",
+        "fixtures/host-run/install-profile-mobile.json",
+        "fixtures/host-run/install-profile-headset.json"
       ]
     },
     {
-      "schema_id": "rusty.manifold.hostess.validation_slot.v1",
-      "rust_type": "ManifoldHostessValidationSlot",
+      "schema_id": "rusty.manifold.host_run.validation_slot.v1",
+      "rust_type": "ManifoldHostRunValidationSlot",
       "fixture_paths": [
-        "fixtures/hostess/slot-live-smoke.json"
+        "fixtures/host-run/slot-live-smoke.json"
       ]
     },
     {
-      "schema_id": "rusty.manifold.hostess.run_bundle.v1",
-      "rust_type": "ManifoldHostessRunBundle",
+      "schema_id": "rusty.manifold.host_run.run_bundle.v1",
+      "rust_type": "ManifoldHostRunBundle",
       "fixture_paths": [
-        "fixtures/hostess/run-bundle-live-smoke.json"
+        "fixtures/host-run/run-bundle-live-smoke.json"
       ]
     },
     {
-      "schema_id": "rusty.manifold.hostess.command_envelope.v1",
-      "rust_type": "ManifoldHostessCommandEnvelope",
+      "schema_id": "rusty.manifold.host_run.command_envelope.v1",
+      "rust_type": "ManifoldHostRunCommandEnvelope",
       "fixture_paths": [
-        "fixtures/hostess/command-envelope-run-live.json"
+        "fixtures/host-run/command-envelope-run-live.json"
       ]
     },
     {
-      "schema_id": "rusty.manifold.hostess.run_evidence.v1",
-      "rust_type": "ManifoldHostessRunEvidence",
+      "schema_id": "rusty.manifold.host_run.run_evidence.v1",
+      "rust_type": "ManifoldHostRunEvidence",
       "fixture_paths": [
-        "fixtures/hostess/run-evidence-live-smoke.json"
+        "fixtures/host-run/run-evidence-live-smoke.json"
       ]
     }
   ]

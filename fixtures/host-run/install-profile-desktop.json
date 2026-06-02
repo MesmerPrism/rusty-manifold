@@ -1,8 +1,8 @@
 {
-  "$schema": "rusty.manifold.hostess.install_launch_profile.v1",
-  "profile_id": "hostess.profile.desktop",
+  "$schema": "rusty.manifold.host_run.install_launch_profile.v1",
+  "profile_id": "host_run.profile.desktop",
   "host_profile": "host.desktop",
-  "app_id": "app.rusty_hostess_t.desktop",
+  "app_id": "app.host_shell.desktop",
   "install_route": "install.local_process",
   "launch_route": "launch.local_process",
   "command_bridge": "bridge.local_cli",

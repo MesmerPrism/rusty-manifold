@@ -1,10 +1,10 @@
 {
-  "$schema": "rusty.manifold.hostess.command_envelope.v1",
-  "hostess_request_id": "request.hostess_t.live_smoke",
-  "target_app_id": "app.rusty_hostess_t.quest",
+  "$schema": "rusty.manifold.host_run.command_envelope.v1",
+  "host_run_request_id": "request.host_run.synthetic_smoke",
+  "target_app_id": "app.host_shell.headset",
   "target_host_profile": "host.headset",
-  "bundle_id": "hostess.bundle.polar_h10.live_smoke",
-  "validation_slot_id": "hostess.slot.live_smoke",
+  "bundle_id": "host_run.bundle.synthetic_wave.live_smoke",
+  "validation_slot_id": "host_run.slot.synthetic_smoke",
   "manifold_command": {
     "$schema": "rusty.manifold.command.envelope.v1",
     "request_id": "request.synthetic_start",

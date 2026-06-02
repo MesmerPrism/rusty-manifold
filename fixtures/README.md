@@ -14,6 +14,7 @@ and safe to use in tests, generated schemas, documentation, and clients.
 - `deployment/`: deployment manifest examples.
 - `clock/`: clock snapshot examples.
 - `validation/`: scorecard examples.
+- `host-run/`: install, launch, validation-slot, command, and run-evidence examples for generic host shells.
 - `simulator/`: deterministic source-only simulator snapshots.
 - `damaged/`: intentionally invalid examples.
 

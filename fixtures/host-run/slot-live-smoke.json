@@ -1,0 +1,18 @@
+{
+  "$schema": "rusty.manifold.host_run.validation_slot.v1",
+  "slot_id": "host_run.slot.synthetic_smoke",
+  "slot_kind": "live_smoke",
+  "required_packages": [
+    "package.synthetic_wave"
+  ],
+  "expected_streams": [
+    "stream.synthetic_wave",
+    "stream.synthetic_rms"
+  ],
+  "command_ids": [
+    "command.module.start",
+    "command.module.stop"
+  ],
+  "expected_scorecard_id": "scorecard.host_run.synthetic_smoke",
+  "safety_class": "bounded_mutation"
+}

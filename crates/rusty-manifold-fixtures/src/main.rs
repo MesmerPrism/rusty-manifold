@@ -10,9 +10,9 @@ use rusty_manifold_model::{
     DottedId, ManifoldClockSnapshot, ManifoldCommandAck, ManifoldCommandDescriptor,
     ManifoldCommandEnvelope, ManifoldCommandRejection, ManifoldControlLease,
     ManifoldControlLeaseRequest, ManifoldDeploymentManifest, ManifoldDeploymentSelectionSnapshot,
-    ManifoldGraphDiff, ManifoldGraphManifest, ManifoldHostManifest, ManifoldHostessCommandEnvelope,
-    ManifoldHostessInstallLaunchProfile, ManifoldHostessRunBundle, ManifoldHostessRunEvidence,
-    ManifoldHostessValidationSlot, ManifoldModuleManifest, ManifoldModuleRuntimeState,
+    ManifoldGraphDiff, ManifoldGraphManifest, ManifoldHostManifest, ManifoldHostRunBundle,
+    ManifoldHostRunCommandEnvelope, ManifoldHostRunEvidence, ManifoldHostRunInstallLaunchProfile,
+    ManifoldHostRunValidationSlot, ManifoldModuleManifest, ManifoldModuleRuntimeState,
     ManifoldModuleRuntimeTransition, ManifoldPackageManifest, ManifoldStreamManifest,
     ManifoldStreamRegistryDiff, ManifoldStreamRegistrySnapshot, ManifoldValidationScorecard,
     Revision,
@@ -235,29 +235,29 @@ fn push_valid_checks(
         "deployment selection resolves package, modules, host, endpoint, and backends",
     );
 
-    let hostess_result = if !fixtures
-        .hostess_profiles
+    let host_run_result = if !fixtures
+        .host_run_profiles
         .iter()
-        .any(|profile| profile.host_profile == fixtures.hostess_bundle.target_host_profile)
+        .any(|profile| profile.host_profile == fixtures.host_run_bundle.target_host_profile)
     {
-        Err("hostess bundle target host profile missing".to_owned())
-    } else if fixtures.hostess_bundle.validation_slot_id != fixtures.hostess_slot.slot_id
-        || fixtures.hostess_command.validation_slot_id != fixtures.hostess_slot.slot_id
-        || fixtures.hostess_evidence.validation_slot_id != fixtures.hostess_slot.slot_id
+        Err("host-run bundle target host profile missing".to_owned())
+    } else if fixtures.host_run_bundle.validation_slot_id != fixtures.host_run_slot.slot_id
+        || fixtures.host_run_command.validation_slot_id != fixtures.host_run_slot.slot_id
+        || fixtures.host_run_evidence.validation_slot_id != fixtures.host_run_slot.slot_id
     {
-        Err("hostess slot ids do not align".to_owned())
-    } else if fixtures.hostess_evidence.bundle_id != fixtures.hostess_bundle.bundle_id {
-        Err("hostess evidence does not reference the run bundle".to_owned())
-    } else if fixtures.hostess_evidence.status != rusty_manifold_model::ValidationStatus::Pass {
-        Err("hostess evidence fixture did not pass".to_owned())
+        Err("host-run slot ids do not align".to_owned())
+    } else if fixtures.host_run_evidence.bundle_id != fixtures.host_run_bundle.bundle_id {
+        Err("host-run evidence does not reference the run bundle".to_owned())
+    } else if fixtures.host_run_evidence.status != rusty_manifold_model::ValidationStatus::Pass {
+        Err("host-run evidence fixture did not pass".to_owned())
     } else {
         Ok(())
     };
     push_result(
         checks,
-        "validation.check.hostess_run_bundle_links",
-        hostess_result,
-        "hostess run bundle, command envelope, validation slot, profiles, and evidence align",
+        "validation.check.host_run_bundle_links",
+        host_run_result,
+        "host-run bundle, command envelope, validation slot, profiles, and evidence align",
     );
 }
 
@@ -494,11 +494,11 @@ struct FixtureSet {
     damaged_unknown_graph_node: ManifoldGraphManifest,
     damaged_unavailable_deployment: ManifoldDeploymentManifest,
     platform_hosts: Vec<ManifoldHostManifest>,
-    hostess_profiles: Vec<ManifoldHostessInstallLaunchProfile>,
-    hostess_slot: ManifoldHostessValidationSlot,
-    hostess_bundle: ManifoldHostessRunBundle,
-    hostess_command: ManifoldHostessCommandEnvelope,
-    hostess_evidence: ManifoldHostessRunEvidence,
+    host_run_profiles: Vec<ManifoldHostRunInstallLaunchProfile>,
+    host_run_slot: ManifoldHostRunValidationSlot,
+    host_run_bundle: ManifoldHostRunBundle,
+    host_run_command: ManifoldHostRunCommandEnvelope,
+    host_run_evidence: ManifoldHostRunEvidence,
 }
 
 impl FixtureSet {
@@ -558,19 +558,19 @@ impl FixtureSet {
         read_model::<ManifoldValidationScorecard>(
             repo_root.join("fixtures/validation/synthetic-scorecard.json"),
         )?;
-        let hostess_desktop_profile =
-            read_model(repo_root.join("fixtures/hostess/install-profile-desktop.json"))?;
-        let hostess_mobile_profile =
-            read_model(repo_root.join("fixtures/hostess/install-profile-mobile.json"))?;
-        let hostess_headset_profile =
-            read_model(repo_root.join("fixtures/hostess/install-profile-headset.json"))?;
-        let hostess_slot = read_model(repo_root.join("fixtures/hostess/slot-live-smoke.json"))?;
-        let hostess_bundle =
-            read_model(repo_root.join("fixtures/hostess/run-bundle-live-smoke.json"))?;
-        let hostess_command =
-            read_model(repo_root.join("fixtures/hostess/command-envelope-run-live.json"))?;
-        let hostess_evidence =
-            read_model(repo_root.join("fixtures/hostess/run-evidence-live-smoke.json"))?;
+        let host_run_desktop_profile =
+            read_model(repo_root.join("fixtures/host-run/install-profile-desktop.json"))?;
+        let host_run_mobile_profile =
+            read_model(repo_root.join("fixtures/host-run/install-profile-mobile.json"))?;
+        let host_run_headset_profile =
+            read_model(repo_root.join("fixtures/host-run/install-profile-headset.json"))?;
+        let host_run_slot = read_model(repo_root.join("fixtures/host-run/slot-live-smoke.json"))?;
+        let host_run_bundle =
+            read_model(repo_root.join("fixtures/host-run/run-bundle-live-smoke.json"))?;
+        let host_run_command =
+            read_model(repo_root.join("fixtures/host-run/command-envelope-run-live.json"))?;
+        let host_run_evidence =
+            read_model(repo_root.join("fixtures/host-run/run-evidence-live-smoke.json"))?;
 
         let damaged_endpoint_host =
             read_model(repo_root.join("fixtures/damaged/invalid-endpoint-security.json"))?;
@@ -611,15 +611,15 @@ impl FixtureSet {
             damaged_unknown_graph_node,
             damaged_unavailable_deployment,
             platform_hosts: vec![desktop_host, mobile_host, headset_host],
-            hostess_profiles: vec![
-                hostess_desktop_profile,
-                hostess_mobile_profile,
-                hostess_headset_profile,
+            host_run_profiles: vec![
+                host_run_desktop_profile,
+                host_run_mobile_profile,
+                host_run_headset_profile,
             ],
-            hostess_slot,
-            hostess_bundle,
-            hostess_command,
-            hostess_evidence,
+            host_run_slot,
+            host_run_bundle,
+            host_run_command,
+            host_run_evidence,
         })
     }
 }

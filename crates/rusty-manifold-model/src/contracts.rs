@@ -1186,7 +1186,7 @@ pub struct ManifoldValidationScorecard {
 /// Install, launch, and command-bridge profile consumed by host shells.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ManifoldHostessInstallLaunchProfile {
+pub struct ManifoldHostRunInstallLaunchProfile {
     /// Schema identifier for this profile.
     #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
     pub schema_id: SchemaId,
@@ -1211,14 +1211,14 @@ pub struct ManifoldHostessInstallLaunchProfile {
 /// Named validation slot that a host shell can execute.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ManifoldHostessValidationSlot {
+pub struct ManifoldHostRunValidationSlot {
     /// Schema identifier for this slot.
     #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
     pub schema_id: SchemaId,
     /// Stable validation slot id.
     pub slot_id: DottedId,
     /// Validation slot kind.
-    pub slot_kind: HostessValidationSlotKind,
+    pub slot_kind: HostRunValidationSlotKind,
     /// Package ids required by this slot.
     pub required_packages: Vec<DottedId>,
     /// Stream ids expected from this slot.
@@ -1234,7 +1234,7 @@ pub struct ManifoldHostessValidationSlot {
 /// Bundle of manifests, fixtures, and slot selection for one host run.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ManifoldHostessRunBundle {
+pub struct ManifoldHostRunBundle {
     /// Schema identifier for this bundle.
     #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
     pub schema_id: SchemaId,
@@ -1261,12 +1261,12 @@ pub struct ManifoldHostessRunBundle {
 /// Host-shell command wrapper carrying a Manifold command envelope.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ManifoldHostessCommandEnvelope {
+pub struct ManifoldHostRunCommandEnvelope {
     /// Schema identifier for this envelope.
     #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
     pub schema_id: SchemaId,
     /// Host-shell command request id.
-    pub hostess_request_id: DottedId,
+    pub host_run_request_id: DottedId,
     /// Target host shell app id.
     pub target_app_id: DottedId,
     /// Target host profile.
@@ -1282,7 +1282,7 @@ pub struct ManifoldHostessCommandEnvelope {
 /// Evidence manifest produced after one host-shell run.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ManifoldHostessRunEvidence {
+pub struct ManifoldHostRunEvidence {
     /// Schema identifier for this evidence document.
     #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
     pub schema_id: SchemaId,
@@ -1722,7 +1722,7 @@ pub enum ModuleAvailabilityStatus {
     serde(rename_all = "snake_case")
 )]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum HostessValidationSlotKind {
+pub enum HostRunValidationSlotKind {
     /// App installed, launchable, writable, and command bridge alive.
     HostReadiness,
     /// Package catalog loads and schema versions match.
@@ -2424,26 +2424,26 @@ mod serde_fixture_tests {
         fixture::<ManifoldValidationScorecard>(include_str!(
             "../../../fixtures/validation/synthetic-scorecard.json"
         ));
-        fixture::<ManifoldHostessInstallLaunchProfile>(include_str!(
-            "../../../fixtures/hostess/install-profile-desktop.json"
+        fixture::<ManifoldHostRunInstallLaunchProfile>(include_str!(
+            "../../../fixtures/host-run/install-profile-desktop.json"
         ));
-        fixture::<ManifoldHostessInstallLaunchProfile>(include_str!(
-            "../../../fixtures/hostess/install-profile-mobile.json"
+        fixture::<ManifoldHostRunInstallLaunchProfile>(include_str!(
+            "../../../fixtures/host-run/install-profile-mobile.json"
         ));
-        fixture::<ManifoldHostessInstallLaunchProfile>(include_str!(
-            "../../../fixtures/hostess/install-profile-headset.json"
+        fixture::<ManifoldHostRunInstallLaunchProfile>(include_str!(
+            "../../../fixtures/host-run/install-profile-headset.json"
         ));
-        fixture::<ManifoldHostessValidationSlot>(include_str!(
-            "../../../fixtures/hostess/slot-live-smoke.json"
+        fixture::<ManifoldHostRunValidationSlot>(include_str!(
+            "../../../fixtures/host-run/slot-live-smoke.json"
         ));
-        fixture::<ManifoldHostessRunBundle>(include_str!(
-            "../../../fixtures/hostess/run-bundle-live-smoke.json"
+        fixture::<ManifoldHostRunBundle>(include_str!(
+            "../../../fixtures/host-run/run-bundle-live-smoke.json"
         ));
-        fixture::<ManifoldHostessCommandEnvelope>(include_str!(
-            "../../../fixtures/hostess/command-envelope-run-live.json"
+        fixture::<ManifoldHostRunCommandEnvelope>(include_str!(
+            "../../../fixtures/host-run/command-envelope-run-live.json"
         ));
-        fixture::<ManifoldHostessRunEvidence>(include_str!(
-            "../../../fixtures/hostess/run-evidence-live-smoke.json"
+        fixture::<ManifoldHostRunEvidence>(include_str!(
+            "../../../fixtures/host-run/run-evidence-live-smoke.json"
         ));
     }
 
