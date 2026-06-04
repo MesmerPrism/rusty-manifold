@@ -303,6 +303,22 @@ fn verification_entries() -> Vec<SchemaEntry> {
             "ManifoldHostRunEvidence",
             &["fixtures/host-run/run-evidence-live-smoke.json"],
         ),
+        entry(
+            "rusty.manifold.shell.handoff.v1",
+            "ManifoldShellHandoffManifest",
+            &[
+                "fixtures/shell-handoff/synthetic-loopback-shell.json",
+                "fixtures/damaged/shell-handoff-missing-stream.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.shell.handoff_review_receipt.v1",
+            "ManifoldShellHandoffReviewReceipt",
+            &[
+                "fixtures/shell-handoff/synthetic-loopback-shell-review.json",
+                "fixtures/damaged/shell-handoff-review-runtime-started.json",
+            ],
+        ),
     ]
 }
 

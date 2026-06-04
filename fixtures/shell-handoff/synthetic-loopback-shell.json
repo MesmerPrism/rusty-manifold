@@ -1,0 +1,34 @@
+{
+  "$schema": "rusty.manifold.shell.handoff.v1",
+  "handoff_id": "shell_handoff.synthetic_wave.loopback",
+  "handoff_revision": 1,
+  "target_host_profile": "host.headset",
+  "shell_app_id": "app.host_shell.headset",
+  "validation_slot_id": "host_run.slot.synthetic_smoke",
+  "stream_bindings": [
+    {
+      "stream_id": "stream.synthetic_wave",
+      "direction": "subscribe",
+      "role": "shell.stream.source_input",
+      "required": true
+    },
+    {
+      "stream_id": "stream.synthetic_rms",
+      "direction": "subscribe",
+      "role": "shell.stream.derived_feedback",
+      "required": true
+    }
+  ],
+  "command_ids": [
+    "command.module.start",
+    "command.module.stop"
+  ],
+  "transport_offers": [
+    {
+      "transport_id": "transport.shell_loopback",
+      "transport": "http",
+      "endpoint_id": "endpoint.headset_loopback"
+    }
+  ],
+  "expected_scorecard_id": "scorecard.host_run.synthetic_smoke"
+}

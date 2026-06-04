@@ -525,9 +525,36 @@ impl ManifoldStreamRegistrySnapshot {
             {
                 return Err(StreamRegistryValidationError {
                     stream_id: stream.stream_id.clone(),
-                    source_module_id: stream.source_module_id.clone(),
+                    rejected_id: stream.source_module_id.clone(),
                     kind: StreamRegistryValidationErrorKind::UnknownModuleLink,
                 });
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validates that endpoint-bound transport offers reference known endpoint ids.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StreamRegistryValidationError`] when a stream transport offer
+    /// points at an endpoint that the selected host does not advertise.
+    pub fn validate_transport_endpoints(
+        &self,
+        endpoint_ids: &[DottedId],
+    ) -> Result<(), StreamRegistryValidationError> {
+        for stream in &self.streams {
+            for offer in &stream.transport_offers {
+                if let Some(endpoint_id) = &offer.endpoint_id {
+                    if !endpoint_ids.iter().any(|known| known == endpoint_id) {
+                        return Err(StreamRegistryValidationError {
+                            stream_id: stream.stream_id.clone(),
+                            rejected_id: endpoint_id.clone(),
+                            kind: StreamRegistryValidationErrorKind::UnknownTransportEndpoint,
+                        });
+                    }
+                }
             }
         }
 
@@ -1310,6 +1337,370 @@ pub struct ManifoldHostRunEvidence {
     pub scorecard: ManifoldValidationScorecard,
 }
 
+/// Descriptor handed to an operator or render shell for one contract-backed run.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldShellHandoffManifest {
+    /// Schema identifier for this handoff.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable handoff id.
+    pub handoff_id: DottedId,
+    /// Handoff revision.
+    pub handoff_revision: Revision,
+    /// Target host profile, such as desktop, mobile, or headset.
+    pub target_host_profile: DottedId,
+    /// Target shell app id.
+    pub shell_app_id: DottedId,
+    /// Validation slot this shell handoff is expected to run.
+    pub validation_slot_id: DottedId,
+    /// Stream bindings the shell must publish or subscribe to.
+    pub stream_bindings: Vec<ManifoldShellStreamBinding>,
+    /// Commands the shell may request through Manifold authority.
+    pub command_ids: Vec<DottedId>,
+    /// Transport offers used by the shell for this handoff.
+    pub transport_offers: Vec<TransportOffer>,
+    /// Scorecard expected from this shell handoff.
+    pub expected_scorecard_id: DottedId,
+}
+
+impl ManifoldShellHandoffManifest {
+    /// Validates stream, command, endpoint, and validation-slot references.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ShellHandoffValidationError`] when the handoff references a
+    /// stream, command, endpoint, or validation slot that is not known to the
+    /// selected bundle context.
+    pub fn validate_links(
+        &self,
+        stream_registry: &ManifoldStreamRegistrySnapshot,
+        command_ids: &[DottedId],
+        endpoint_ids: &[DottedId],
+        validation_slot_ids: &[DottedId],
+    ) -> Result<(), ShellHandoffValidationError> {
+        if !validation_slot_ids
+            .iter()
+            .any(|slot_id| slot_id == &self.validation_slot_id)
+        {
+            return Err(ShellHandoffValidationError::new(
+                self.handoff_id.clone(),
+                self.validation_slot_id.clone(),
+                ShellHandoffValidationErrorKind::UnknownValidationSlot,
+            ));
+        }
+
+        for binding in &self.stream_bindings {
+            if !stream_registry
+                .streams
+                .iter()
+                .any(|stream| stream.stream_id == binding.stream_id)
+            {
+                return Err(ShellHandoffValidationError::new(
+                    self.handoff_id.clone(),
+                    binding.stream_id.clone(),
+                    ShellHandoffValidationErrorKind::UnknownStream,
+                ));
+            }
+        }
+
+        for command_id in &self.command_ids {
+            if !command_ids.iter().any(|known| known == command_id) {
+                return Err(ShellHandoffValidationError::new(
+                    self.handoff_id.clone(),
+                    command_id.clone(),
+                    ShellHandoffValidationErrorKind::UnknownCommand,
+                ));
+            }
+        }
+
+        for offer in &self.transport_offers {
+            if let Some(endpoint_id) = &offer.endpoint_id {
+                if !endpoint_ids.iter().any(|known| known == endpoint_id) {
+                    return Err(ShellHandoffValidationError::new(
+                        self.handoff_id.clone(),
+                        endpoint_id.clone(),
+                        ShellHandoffValidationErrorKind::UnknownEndpoint,
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Builds a deterministic Manifold authority review receipt for this handoff.
+    ///
+    /// The receipt reviews links only. It does not launch a shell, open a
+    /// command session, use a platform runtime, or depend on a legacy app.
+    #[must_use]
+    pub fn review_receipt(
+        &self,
+        stream_registry: &ManifoldStreamRegistrySnapshot,
+        command_ids: &[DottedId],
+        endpoint_ids: &[DottedId],
+        validation_slot_ids: &[DottedId],
+    ) -> ManifoldShellHandoffReviewReceipt {
+        let validation_slot_known = validation_slot_ids
+            .iter()
+            .any(|slot_id| slot_id == &self.validation_slot_id);
+        let streams_known = self.stream_bindings.iter().all(|binding| {
+            stream_registry
+                .streams
+                .iter()
+                .any(|stream| stream.stream_id == binding.stream_id)
+        });
+        let commands_known = self
+            .command_ids
+            .iter()
+            .all(|command_id| command_ids.iter().any(|known| known == command_id));
+        let endpoints_known = self.transport_offers.iter().all(|offer| {
+            offer.endpoint_id.as_ref().map_or(true, |endpoint_id| {
+                endpoint_ids.iter().any(|known| known == endpoint_id)
+            })
+        });
+        let no_runtime_started = true;
+        let checks = vec![
+            shell_handoff_review_check(
+                "check.shell_handoff.validation_slot",
+                validation_slot_known,
+                "shell handoff validation slot resolves",
+                "shell handoff validation slot is unknown",
+                "issue.shell_handoff.unknown_validation_slot",
+            ),
+            shell_handoff_review_check(
+                "check.shell_handoff.streams",
+                streams_known,
+                "shell handoff stream bindings resolve",
+                "shell handoff references an unknown stream",
+                "issue.shell_handoff.unknown_stream",
+            ),
+            shell_handoff_review_check(
+                "check.shell_handoff.commands",
+                commands_known,
+                "shell handoff command ids resolve",
+                "shell handoff references an unknown command",
+                "issue.shell_handoff.unknown_command",
+            ),
+            shell_handoff_review_check(
+                "check.shell_handoff.endpoints",
+                endpoints_known,
+                "shell handoff transport endpoints resolve",
+                "shell handoff references an unknown endpoint",
+                "issue.shell_handoff.unknown_endpoint",
+            ),
+            shell_handoff_review_check(
+                "check.shell_handoff.no_runtime_started",
+                no_runtime_started,
+                "shell handoff review performed no runtime, launch, or session work",
+                "shell handoff review started runtime, launch, or session work",
+                "issue.shell_handoff.runtime_started",
+            ),
+        ];
+        let issues = checks
+            .iter()
+            .flat_map(|check| check.issue_codes.iter().cloned())
+            .map(shell_handoff_review_issue)
+            .collect::<Vec<_>>();
+
+        ManifoldShellHandoffReviewReceipt {
+            schema_id: shell_handoff_review_schema_id(),
+            review_id: shell_handoff_review_id(&self.handoff_id),
+            handoff_id: self.handoff_id.clone(),
+            handoff_revision: self.handoff_revision,
+            target_host_profile: self.target_host_profile.clone(),
+            shell_app_id: self.shell_app_id.clone(),
+            validation_slot_id: self.validation_slot_id.clone(),
+            status: if issues.is_empty() {
+                ValidationStatus::Pass
+            } else {
+                ValidationStatus::Fail
+            },
+            manifold_authority: manifold_authority_id(),
+            reviewed_stream_ids: self
+                .stream_bindings
+                .iter()
+                .map(|binding| binding.stream_id.clone())
+                .collect(),
+            reviewed_command_ids: self.command_ids.clone(),
+            reviewed_transport_ids: self
+                .transport_offers
+                .iter()
+                .map(|offer| offer.transport_id.clone())
+                .collect(),
+            reviewed_endpoint_ids: self
+                .transport_offers
+                .iter()
+                .filter_map(|offer| offer.endpoint_id.clone())
+                .collect(),
+            runtime_execution_performed: false,
+            platform_execution_performed: false,
+            launch_started: false,
+            command_session_started: false,
+            legacy_app_dependency_used: false,
+            checks,
+            issues,
+        }
+    }
+}
+
+/// One shell stream binding inside a handoff manifest.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldShellStreamBinding {
+    /// Stream id bound to the shell.
+    pub stream_id: DottedId,
+    /// Direction from the shell's point of view.
+    pub direction: ShellStreamDirection,
+    /// Role this stream plays in the shell workflow.
+    pub role: DottedId,
+    /// Whether the handoff cannot run without this stream.
+    pub required: bool,
+}
+
+/// Manifold authority review of one shell handoff descriptor.
+#[allow(clippy::struct_excessive_bools)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldShellHandoffReviewReceipt {
+    /// Schema identifier for this review receipt.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable review id.
+    pub review_id: DottedId,
+    /// Reviewed shell handoff id.
+    pub handoff_id: DottedId,
+    /// Reviewed shell handoff revision.
+    pub handoff_revision: Revision,
+    /// Target host profile from the reviewed handoff.
+    pub target_host_profile: DottedId,
+    /// Target shell app id from the reviewed handoff.
+    pub shell_app_id: DottedId,
+    /// Validation slot from the reviewed handoff.
+    pub validation_slot_id: DottedId,
+    /// Review status.
+    pub status: ValidationStatus,
+    /// Manifold authority responsible for accepting or rejecting this review.
+    pub manifold_authority: DottedId,
+    /// Stream ids reviewed from the handoff.
+    pub reviewed_stream_ids: Vec<DottedId>,
+    /// Command ids reviewed from the handoff.
+    pub reviewed_command_ids: Vec<DottedId>,
+    /// Transport ids reviewed from the handoff.
+    pub reviewed_transport_ids: Vec<DottedId>,
+    /// Endpoint ids reviewed from endpoint-bound transport offers.
+    pub reviewed_endpoint_ids: Vec<DottedId>,
+    /// Whether review executed runtime code.
+    pub runtime_execution_performed: bool,
+    /// Whether review executed platform code.
+    pub platform_execution_performed: bool,
+    /// Whether review launched a shell.
+    pub launch_started: bool,
+    /// Whether review opened a command session.
+    pub command_session_started: bool,
+    /// Whether review depended on a legacy app implementation.
+    pub legacy_app_dependency_used: bool,
+    /// Individual review checks.
+    pub checks: Vec<ValidationCheck>,
+    /// Review issues.
+    pub issues: Vec<ManifoldIssue>,
+}
+
+impl ManifoldShellHandoffReviewReceipt {
+    /// Validates that this receipt still matches the reviewed handoff and is review-only.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ShellHandoffReviewReceiptValidationError`] when the receipt
+    /// has drifted from the handoff, claims inconsistent status, or reports
+    /// runtime, platform, launch, legacy-app, or command-session side effects.
+    pub fn validate_against_handoff(
+        &self,
+        handoff: &ManifoldShellHandoffManifest,
+    ) -> Result<(), ShellHandoffReviewReceiptValidationError> {
+        if self.schema_id != shell_handoff_review_schema_id() {
+            return Err(ShellHandoffReviewReceiptValidationError::new(
+                self.review_id.clone(),
+                self.schema_id.to_string(),
+                ShellHandoffReviewReceiptValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.handoff_id != handoff.handoff_id
+            || self.handoff_revision != handoff.handoff_revision
+            || self.target_host_profile != handoff.target_host_profile
+            || self.shell_app_id != handoff.shell_app_id
+            || self.validation_slot_id != handoff.validation_slot_id
+        {
+            return Err(ShellHandoffReviewReceiptValidationError::new(
+                self.review_id.clone(),
+                self.handoff_id.to_string(),
+                ShellHandoffReviewReceiptValidationErrorKind::HandoffMismatch,
+            ));
+        }
+
+        if self.runtime_execution_performed
+            || self.platform_execution_performed
+            || self.launch_started
+            || self.command_session_started
+            || self.legacy_app_dependency_used
+        {
+            return Err(ShellHandoffReviewReceiptValidationError::new(
+                self.review_id.clone(),
+                self.handoff_id.to_string(),
+                ShellHandoffReviewReceiptValidationErrorKind::RuntimeStarted,
+            ));
+        }
+
+        let expected_stream_ids = handoff
+            .stream_bindings
+            .iter()
+            .map(|binding| binding.stream_id.clone())
+            .collect::<Vec<_>>();
+        let expected_transport_ids = handoff
+            .transport_offers
+            .iter()
+            .map(|offer| offer.transport_id.clone())
+            .collect::<Vec<_>>();
+        let expected_endpoint_ids = handoff
+            .transport_offers
+            .iter()
+            .filter_map(|offer| offer.endpoint_id.clone())
+            .collect::<Vec<_>>();
+        if self.reviewed_stream_ids != expected_stream_ids
+            || self.reviewed_command_ids != handoff.command_ids
+            || self.reviewed_transport_ids != expected_transport_ids
+            || self.reviewed_endpoint_ids != expected_endpoint_ids
+        {
+            return Err(ShellHandoffReviewReceiptValidationError::new(
+                self.review_id.clone(),
+                self.handoff_id.to_string(),
+                ShellHandoffReviewReceiptValidationErrorKind::ReviewedIdsMismatch,
+            ));
+        }
+
+        let failed_checks = self
+            .checks
+            .iter()
+            .filter(|check| check.status == ValidationStatus::Fail)
+            .count();
+        let status_consistent = match self.status {
+            ValidationStatus::Pass => failed_checks == 0 && self.issues.is_empty(),
+            ValidationStatus::Fail => failed_checks > 0 && !self.issues.is_empty(),
+            ValidationStatus::Warn => false,
+        };
+        if !status_consistent {
+            return Err(ShellHandoffReviewReceiptValidationError::new(
+                self.review_id.clone(),
+                self.handoff_id.to_string(),
+                ShellHandoffReviewReceiptValidationErrorKind::StatusMismatch,
+            ));
+        }
+
+        Ok(())
+    }
+}
+
 /// Endpoint descriptor.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1739,6 +2130,20 @@ pub enum HostRunValidationSlotKind {
     HandoffSmoke,
 }
 
+/// Direction of a stream binding from an operator or render shell's point of view.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ShellStreamDirection {
+    /// The shell publishes this stream to Manifold.
+    Publish,
+    /// The shell subscribes to this stream from Manifold.
+    Subscribe,
+}
+
 /// Issue severity.
 #[cfg_attr(
     feature = "serde",
@@ -1863,7 +2268,7 @@ pub enum GraphValidationErrorKind {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StreamRegistryValidationError {
     stream_id: DottedId,
-    source_module_id: DottedId,
+    rejected_id: DottedId,
     kind: StreamRegistryValidationErrorKind,
 }
 
@@ -1877,7 +2282,13 @@ impl StreamRegistryValidationError {
     /// Returns the missing or invalid source module id.
     #[must_use]
     pub fn source_module_id(&self) -> &DottedId {
-        &self.source_module_id
+        &self.rejected_id
+    }
+
+    /// Returns the rejected module or endpoint id.
+    #[must_use]
+    pub fn rejected_id(&self) -> &DottedId {
+        &self.rejected_id
     }
 
     /// Returns the failure kind.
@@ -1891,6 +2302,9 @@ impl StreamRegistryValidationError {
     pub const fn rejection_code(&self) -> &'static str {
         match self.kind {
             StreamRegistryValidationErrorKind::UnknownModuleLink => "unknown_module_link",
+            StreamRegistryValidationErrorKind::UnknownTransportEndpoint => {
+                "unknown_transport_endpoint"
+            }
         }
     }
 }
@@ -1899,8 +2313,8 @@ impl fmt::Display for StreamRegistryValidationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             formatter,
-            "stream {} references unknown source module {}",
-            self.stream_id, self.source_module_id
+            "stream {} contains invalid reference {}: {:?}",
+            self.stream_id, self.rejected_id, self.kind
         )
     }
 }
@@ -1912,6 +2326,214 @@ impl std::error::Error for StreamRegistryValidationError {}
 pub enum StreamRegistryValidationErrorKind {
     /// A stream references a source module that is not known to the registry.
     UnknownModuleLink,
+    /// A transport offer references an endpoint not advertised by the host.
+    UnknownTransportEndpoint,
+}
+
+/// Shell handoff review receipt validation failure.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ShellHandoffReviewReceiptValidationError {
+    review_id: DottedId,
+    rejected_value: String,
+    kind: ShellHandoffReviewReceiptValidationErrorKind,
+}
+
+impl ShellHandoffReviewReceiptValidationError {
+    fn new(
+        review_id: DottedId,
+        rejected_value: String,
+        kind: ShellHandoffReviewReceiptValidationErrorKind,
+    ) -> Self {
+        Self {
+            review_id,
+            rejected_value,
+            kind,
+        }
+    }
+
+    /// Returns the affected shell handoff review id.
+    #[must_use]
+    pub fn review_id(&self) -> &DottedId {
+        &self.review_id
+    }
+
+    /// Returns the rejected value.
+    #[must_use]
+    pub fn rejected_value(&self) -> &str {
+        &self.rejected_value
+    }
+
+    /// Returns the failure kind.
+    #[must_use]
+    pub const fn kind(&self) -> ShellHandoffReviewReceiptValidationErrorKind {
+        self.kind
+    }
+
+    /// Returns a stable rejection code.
+    #[must_use]
+    pub const fn rejection_code(&self) -> &'static str {
+        match self.kind {
+            ShellHandoffReviewReceiptValidationErrorKind::UnsupportedSchema => "unsupported_schema",
+            ShellHandoffReviewReceiptValidationErrorKind::HandoffMismatch => "handoff_mismatch",
+            ShellHandoffReviewReceiptValidationErrorKind::ReviewedIdsMismatch => {
+                "reviewed_ids_mismatch"
+            }
+            ShellHandoffReviewReceiptValidationErrorKind::StatusMismatch => "status_mismatch",
+            ShellHandoffReviewReceiptValidationErrorKind::RuntimeStarted => "runtime_started",
+        }
+    }
+}
+
+impl fmt::Display for ShellHandoffReviewReceiptValidationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "shell handoff review {} rejected {}: {:?}",
+            self.review_id, self.rejected_value, self.kind
+        )
+    }
+}
+
+impl std::error::Error for ShellHandoffReviewReceiptValidationError {}
+
+/// Shell handoff review receipt validation failure kind.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ShellHandoffReviewReceiptValidationErrorKind {
+    /// The receipt schema id is not supported.
+    UnsupportedSchema,
+    /// The receipt does not match the reviewed handoff identity.
+    HandoffMismatch,
+    /// The receipt reviewed ids drifted from the handoff.
+    ReviewedIdsMismatch,
+    /// Receipt status, checks, and issues disagree.
+    StatusMismatch,
+    /// The receipt indicates runtime, platform, launch, session, or legacy app work.
+    RuntimeStarted,
+}
+
+/// Shell handoff validation failure.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ShellHandoffValidationError {
+    handoff_id: DottedId,
+    rejected_id: DottedId,
+    kind: ShellHandoffValidationErrorKind,
+}
+
+impl ShellHandoffValidationError {
+    fn new(
+        handoff_id: DottedId,
+        rejected_id: DottedId,
+        kind: ShellHandoffValidationErrorKind,
+    ) -> Self {
+        Self {
+            handoff_id,
+            rejected_id,
+            kind,
+        }
+    }
+
+    /// Returns the affected shell handoff id.
+    #[must_use]
+    pub fn handoff_id(&self) -> &DottedId {
+        &self.handoff_id
+    }
+
+    /// Returns the rejected stream, command, endpoint, or slot id.
+    #[must_use]
+    pub fn rejected_id(&self) -> &DottedId {
+        &self.rejected_id
+    }
+
+    /// Returns the failure kind.
+    #[must_use]
+    pub const fn kind(&self) -> ShellHandoffValidationErrorKind {
+        self.kind
+    }
+
+    /// Returns a stable rejection code.
+    #[must_use]
+    pub const fn rejection_code(&self) -> &'static str {
+        match self.kind {
+            ShellHandoffValidationErrorKind::UnknownStream => "unknown_stream",
+            ShellHandoffValidationErrorKind::UnknownCommand => "unknown_command",
+            ShellHandoffValidationErrorKind::UnknownEndpoint => "unknown_endpoint",
+            ShellHandoffValidationErrorKind::UnknownValidationSlot => "unknown_validation_slot",
+        }
+    }
+}
+
+impl fmt::Display for ShellHandoffValidationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "shell handoff {} rejected {}: {:?}",
+            self.handoff_id, self.rejected_id, self.kind
+        )
+    }
+}
+
+impl std::error::Error for ShellHandoffValidationError {}
+
+/// Shell handoff validation failure kind.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ShellHandoffValidationErrorKind {
+    /// The handoff references a stream absent from the selected registry.
+    UnknownStream,
+    /// The handoff references a command absent from the selected command set.
+    UnknownCommand,
+    /// The handoff references an endpoint absent from the selected host.
+    UnknownEndpoint,
+    /// The handoff references a validation slot absent from the selected bundle.
+    UnknownValidationSlot,
+}
+
+fn shell_handoff_review_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.shell.handoff_review_receipt.v1")
+        .expect("schema literal is valid")
+}
+
+fn shell_handoff_review_id(handoff_id: &DottedId) -> DottedId {
+    DottedId::new(format!("shell_handoff_review.{}", handoff_id.as_str()))
+        .expect("derived review id is valid")
+}
+
+fn manifold_authority_id() -> DottedId {
+    DottedId::new("authority.manifold").expect("authority id literal is valid")
+}
+
+fn shell_handoff_review_check(
+    check_id: &str,
+    condition: bool,
+    pass_evidence: &str,
+    fail_evidence: &str,
+    issue_code: &str,
+) -> ValidationCheck {
+    ValidationCheck {
+        check_id: DottedId::new(check_id).expect("check id literal is valid"),
+        status: if condition {
+            ValidationStatus::Pass
+        } else {
+            ValidationStatus::Fail
+        },
+        evidence: if condition {
+            pass_evidence.to_owned()
+        } else {
+            fail_evidence.to_owned()
+        },
+        issue_codes: if condition {
+            Vec::new()
+        } else {
+            vec![DottedId::new(issue_code).expect("issue code literal is valid")]
+        },
+    }
+}
+
+fn shell_handoff_review_issue(issue_code: DottedId) -> ManifoldIssue {
+    ManifoldIssue {
+        message: format!("shell handoff review failed {issue_code}"),
+        issue_code,
+        severity: IssueSeverity::Error,
+    }
 }
 
 /// Deployment selection validation failure.
@@ -2350,6 +2972,107 @@ mod tests {
             "stream.synthetic_wave"
         );
     }
+
+    #[test]
+    fn shell_handoff_rejects_unknown_stream_binding() {
+        let registry = ManifoldStreamRegistrySnapshot {
+            schema_id: schema("rusty.manifold.stream.registry_snapshot.v1"),
+            registry_revision: Revision::INITIAL,
+            streams: Vec::new(),
+        };
+        let handoff = ManifoldShellHandoffManifest {
+            schema_id: schema("rusty.manifold.shell.handoff.v1"),
+            handoff_id: id("shell_handoff.test"),
+            handoff_revision: Revision::INITIAL,
+            target_host_profile: id("host.headset"),
+            shell_app_id: id("app.host_shell.headset"),
+            validation_slot_id: id("host_run.slot.synthetic_smoke"),
+            stream_bindings: vec![ManifoldShellStreamBinding {
+                stream_id: id("stream.not_registered"),
+                direction: ShellStreamDirection::Subscribe,
+                role: id("shell.stream.source_input"),
+                required: true,
+            }],
+            command_ids: vec![id("command.module.start")],
+            transport_offers: Vec::new(),
+            expected_scorecard_id: id("scorecard.host_run.synthetic_smoke"),
+        };
+
+        let error = handoff
+            .validate_links(
+                &registry,
+                &[id("command.module.start")],
+                &[id("endpoint.headset_loopback")],
+                &[id("host_run.slot.synthetic_smoke")],
+            )
+            .unwrap_err();
+
+        assert_eq!(error.rejection_code(), "unknown_stream");
+    }
+
+    #[test]
+    fn shell_handoff_review_receipt_is_link_checked_and_review_only() {
+        let registry = ManifoldStreamRegistrySnapshot {
+            schema_id: schema("rusty.manifold.stream.registry_snapshot.v1"),
+            registry_revision: Revision::INITIAL,
+            streams: vec![ManifoldStreamManifest {
+                schema_id: schema("rusty.manifold.stream.manifest.v1"),
+                stream_id: id("stream.synthetic_wave"),
+                source_module_id: id("module.synthetic_wave_provider"),
+                semantic_family: id("synthetic.scalar"),
+                sample_schema: schema("rusty.manifold.sample.scalar_f32.v1"),
+                rate_class: StreamRateClass::Periodic,
+                timestamp_domains: vec![id("clock.host_monotonic")],
+                retention: RetentionPolicyDescriptor {
+                    policy: RetentionPolicy::Ephemeral,
+                },
+                sensitivity: SensitivityLevel::Synthetic,
+                transport_offers: Vec::new(),
+                subscription: SubscriptionPolicy {
+                    ui_subscribable: false,
+                    max_subscribers: None,
+                },
+            }],
+        };
+        let handoff = ManifoldShellHandoffManifest {
+            schema_id: schema("rusty.manifold.shell.handoff.v1"),
+            handoff_id: id("shell_handoff.test"),
+            handoff_revision: Revision::INITIAL,
+            target_host_profile: id("host.headset"),
+            shell_app_id: id("app.host_shell.headset"),
+            validation_slot_id: id("host_run.slot.synthetic_smoke"),
+            stream_bindings: vec![ManifoldShellStreamBinding {
+                stream_id: id("stream.synthetic_wave"),
+                direction: ShellStreamDirection::Subscribe,
+                role: id("shell.stream.source_input"),
+                required: true,
+            }],
+            command_ids: vec![id("command.module.start")],
+            transport_offers: vec![TransportOffer {
+                transport_id: id("transport.shell_loopback"),
+                transport: EndpointTransport::Http,
+                endpoint_id: Some(id("endpoint.headset_loopback")),
+            }],
+            expected_scorecard_id: id("scorecard.host_run.synthetic_smoke"),
+        };
+
+        let receipt = handoff.review_receipt(
+            &registry,
+            &[id("command.module.start")],
+            &[id("endpoint.headset_loopback")],
+            &[id("host_run.slot.synthetic_smoke")],
+        );
+
+        assert_eq!(receipt.status, ValidationStatus::Pass);
+        assert_eq!(receipt.manifold_authority, id("authority.manifold"));
+        assert!(!receipt.runtime_execution_performed);
+        assert!(!receipt.platform_execution_performed);
+        assert!(!receipt.launch_started);
+        assert!(!receipt.command_session_started);
+        assert!(!receipt.legacy_app_dependency_used);
+        assert!(receipt.issues.is_empty());
+        assert_eq!(receipt.validate_against_handoff(&handoff), Ok(()));
+    }
 }
 
 #[cfg(all(test, feature = "serde"))]
@@ -2445,6 +3168,12 @@ mod serde_fixture_tests {
         fixture::<ManifoldHostRunEvidence>(include_str!(
             "../../../fixtures/host-run/run-evidence-live-smoke.json"
         ));
+        fixture::<ManifoldShellHandoffManifest>(include_str!(
+            "../../../fixtures/shell-handoff/synthetic-loopback-shell.json"
+        ));
+        fixture::<ManifoldShellHandoffReviewReceipt>(include_str!(
+            "../../../fixtures/shell-handoff/synthetic-loopback-shell-review.json"
+        ));
     }
 
     #[test]
@@ -2510,5 +3239,53 @@ mod serde_fixture_tests {
             .unwrap_err();
 
         assert_eq!(error.rejection_code(), "unknown_module_link");
+    }
+
+    #[test]
+    fn damaged_shell_handoff_fixture_rejects_missing_stream() {
+        let handoff = fixture::<ManifoldShellHandoffManifest>(include_str!(
+            "../../../fixtures/damaged/shell-handoff-missing-stream.json"
+        ));
+        let registry = fixture::<ManifoldStreamRegistrySnapshot>(include_str!(
+            "../../../fixtures/stream/synthetic-stream-registry.json"
+        ));
+        let error = handoff
+            .validate_links(
+                &registry,
+                &[
+                    DottedId::new("command.module.start").unwrap(),
+                    DottedId::new("command.module.stop").unwrap(),
+                ],
+                &[DottedId::new("endpoint.headset_loopback").unwrap()],
+                &[DottedId::new("host_run.slot.synthetic_smoke").unwrap()],
+            )
+            .unwrap_err();
+
+        assert_eq!(error.rejection_code(), "unknown_stream");
+    }
+
+    #[test]
+    fn valid_shell_handoff_review_fixture_matches_handoff() {
+        let handoff = fixture::<ManifoldShellHandoffManifest>(include_str!(
+            "../../../fixtures/shell-handoff/synthetic-loopback-shell.json"
+        ));
+        let receipt = fixture::<ManifoldShellHandoffReviewReceipt>(include_str!(
+            "../../../fixtures/shell-handoff/synthetic-loopback-shell-review.json"
+        ));
+
+        assert_eq!(receipt.validate_against_handoff(&handoff), Ok(()));
+    }
+
+    #[test]
+    fn damaged_shell_handoff_review_fixture_rejects_runtime_started() {
+        let handoff = fixture::<ManifoldShellHandoffManifest>(include_str!(
+            "../../../fixtures/shell-handoff/synthetic-loopback-shell.json"
+        ));
+        let receipt = fixture::<ManifoldShellHandoffReviewReceipt>(include_str!(
+            "../../../fixtures/damaged/shell-handoff-review-runtime-started.json"
+        ));
+        let error = receipt.validate_against_handoff(&handoff).unwrap_err();
+
+        assert_eq!(error.rejection_code(), "runtime_started");
     }
 }

@@ -13,9 +13,9 @@ use rusty_manifold_model::{
     ManifoldGraphDiff, ManifoldGraphManifest, ManifoldHostManifest, ManifoldHostRunBundle,
     ManifoldHostRunCommandEnvelope, ManifoldHostRunEvidence, ManifoldHostRunInstallLaunchProfile,
     ManifoldHostRunValidationSlot, ManifoldModuleManifest, ManifoldModuleRuntimeState,
-    ManifoldModuleRuntimeTransition, ManifoldPackageManifest, ManifoldStreamManifest,
-    ManifoldStreamRegistryDiff, ManifoldStreamRegistrySnapshot, ManifoldValidationScorecard,
-    Revision,
+    ManifoldModuleRuntimeTransition, ManifoldPackageManifest, ManifoldShellHandoffManifest,
+    ManifoldShellHandoffReviewReceipt, ManifoldStreamManifest, ManifoldStreamRegistryDiff,
+    ManifoldStreamRegistrySnapshot, ManifoldValidationScorecard, Revision,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -88,6 +88,24 @@ fn run(args: Vec<String>) -> Result<String, CliError> {
                 Ok(output)
             }
         }
+        Command::ReviewShellHandoff { handoff, output } => {
+            let Some(handoff_path) = handoff else {
+                return Err(CliError::Usage(
+                    "review-shell-handoff requires --handoff <path>".to_owned(),
+                ));
+            };
+            let receipt = review_shell_handoff(&options.repo_root, &handoff_path)?;
+            let status = receipt.status;
+            let serialized = to_pretty_json(&receipt)?;
+            if let Some(output_path) = output {
+                write_text(&output_path, &serialized)?;
+            }
+            if status == rusty_manifold_model::ValidationStatus::Pass {
+                Ok(serialized)
+            } else {
+                Err(CliError::ValidationFailed(serialized))
+            }
+        }
     }
 }
 
@@ -108,6 +126,10 @@ impl Options {
             "validate" => Command::Validate,
             "simulate" => Command::Simulate { check: false },
             "diff" => Command::Diff { check: false },
+            "review-shell-handoff" => Command::ReviewShellHandoff {
+                handoff: None,
+                output: None,
+            },
             "-h" | "--help" | "help" => return Err(CliError::Usage(usage())),
             other => return Err(CliError::UnknownCommand(other.to_owned())),
         };
@@ -125,12 +147,42 @@ impl Options {
                 }
                 "--check" => match &mut command {
                     Command::Simulate { check } | Command::Diff { check } => *check = true,
-                    Command::Validate => {
+                    Command::Validate | Command::ReviewShellHandoff { .. } => {
                         return Err(CliError::Usage(
                             "--check is only valid for simulate or diff".to_owned(),
                         ));
                     }
                 },
+                "--handoff" => {
+                    let Some(value) = args.next() else {
+                        return Err(CliError::Usage("--handoff requires a value".to_owned()));
+                    };
+                    match &mut command {
+                        Command::ReviewShellHandoff { handoff, .. } => {
+                            *handoff = Some(PathBuf::from(value));
+                        }
+                        Command::Validate | Command::Simulate { .. } | Command::Diff { .. } => {
+                            return Err(CliError::Usage(
+                                "--handoff is only valid for review-shell-handoff".to_owned(),
+                            ));
+                        }
+                    }
+                }
+                "--output" => {
+                    let Some(value) = args.next() else {
+                        return Err(CliError::Usage("--output requires a value".to_owned()));
+                    };
+                    match &mut command {
+                        Command::ReviewShellHandoff { output, .. } => {
+                            *output = Some(PathBuf::from(value));
+                        }
+                        Command::Validate | Command::Simulate { .. } | Command::Diff { .. } => {
+                            return Err(CliError::Usage(
+                                "--output is only valid for review-shell-handoff".to_owned(),
+                            ));
+                        }
+                    }
+                }
                 "-h" | "--help" => return Err(CliError::Usage(usage())),
                 other => return Err(CliError::UnknownOption(other.to_owned())),
             }
@@ -143,8 +195,16 @@ impl Options {
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum Command {
     Validate,
-    Simulate { check: bool },
-    Diff { check: bool },
+    Simulate {
+        check: bool,
+    },
+    Diff {
+        check: bool,
+    },
+    ReviewShellHandoff {
+        handoff: Option<PathBuf>,
+        output: Option<PathBuf>,
+    },
 }
 
 fn validate_repo(repo_root: &Path) -> Result<ValidationReport, CliError> {
@@ -155,9 +215,16 @@ fn validate_repo(repo_root: &Path) -> Result<ValidationReport, CliError> {
         .iter()
         .map(|module| module.module_id.clone())
         .collect::<Vec<_>>();
+    let endpoint_ids = fixtures.endpoint_ids();
 
-    push_valid_checks(&mut checks, &fixtures, &module_ids);
-    push_damaged_checks(repo_root, &mut checks, &fixtures, &module_ids)?;
+    push_valid_checks(&mut checks, &fixtures, &module_ids, &endpoint_ids);
+    push_damaged_checks(
+        repo_root,
+        &mut checks,
+        &fixtures,
+        &module_ids,
+        &endpoint_ids,
+    )?;
 
     let failed = checks.iter().any(|check| check.status == "fail");
     Ok(ValidationReport {
@@ -171,6 +238,7 @@ fn push_valid_checks(
     checks: &mut Vec<ValidationCheckReport>,
     fixtures: &FixtureSet,
     module_ids: &[DottedId],
+    endpoint_ids: &[DottedId],
 ) {
     checks.push(pass(
         "validation.check.valid_fixture_deserialize",
@@ -206,6 +274,15 @@ fn push_valid_checks(
         "validation.check.stream_registry_links",
         fixtures.valid_registry.validate_source_modules(module_ids),
         "stream registry source modules are known",
+    );
+
+    push_result(
+        checks,
+        "validation.check.stream_registry_transport_endpoints",
+        fixtures
+            .valid_registry
+            .validate_transport_endpoints(endpoint_ids),
+        "endpoint-bound stream transport offers reference advertised host endpoints",
     );
 
     push_result(
@@ -259,6 +336,27 @@ fn push_valid_checks(
         host_run_result,
         "host-run bundle, command envelope, validation slot, profiles, and evidence align",
     );
+
+    push_result(
+        checks,
+        "validation.check.shell_handoff_links",
+        fixtures.shell_handoff.validate_links(
+            &fixtures.valid_registry,
+            &fixtures.package_manifest.exports.commands,
+            endpoint_ids,
+            std::slice::from_ref(&fixtures.host_run_slot.slot_id),
+        ),
+        "shell handoff streams, commands, endpoint, and validation slot resolve",
+    );
+
+    push_result(
+        checks,
+        "validation.check.shell_handoff_review_receipt",
+        fixtures
+            .shell_handoff_review
+            .validate_against_handoff(&fixtures.shell_handoff),
+        "shell handoff review receipt matches the handoff and stays review-only",
+    );
 }
 
 fn push_damaged_checks(
@@ -266,6 +364,7 @@ fn push_damaged_checks(
     checks: &mut Vec<ValidationCheckReport>,
     fixtures: &FixtureSet,
     module_ids: &[DottedId],
+    endpoint_ids: &[DottedId],
 ) -> Result<(), CliError> {
     push_damaged(
         checks,
@@ -326,6 +425,39 @@ fn push_damaged_checks(
             .validate_source_modules(module_ids)
             .map_err(|error| error.rejection_code().to_owned()),
         "stream registry referencing an unknown module is rejected",
+    );
+
+    push_damaged(
+        checks,
+        "validation.check.damaged_shell_handoff_missing_stream",
+        expected_rejection(
+            repo_root,
+            "fixtures/damaged/shell-handoff-missing-stream.json",
+        )?,
+        fixtures
+            .damaged_shell_handoff
+            .validate_links(
+                &fixtures.valid_registry,
+                &fixtures.package_manifest.exports.commands,
+                endpoint_ids,
+                std::slice::from_ref(&fixtures.host_run_slot.slot_id),
+            )
+            .map_err(|error| error.rejection_code().to_owned()),
+        "shell handoff referencing an unknown stream is rejected",
+    );
+
+    push_damaged(
+        checks,
+        "validation.check.damaged_shell_handoff_review_runtime_started",
+        expected_rejection(
+            repo_root,
+            "fixtures/damaged/shell-handoff-review-runtime-started.json",
+        )?,
+        fixtures
+            .damaged_shell_handoff_review
+            .validate_against_handoff(&fixtures.shell_handoff)
+            .map_err(|error| error.rejection_code().to_owned()),
+        "shell handoff review receipt claiming runtime work is rejected",
     );
 
     push_damaged(
@@ -469,6 +601,23 @@ fn diff_synthetic_contracts(repo_root: &Path) -> Result<FixtureDiffSnapshot, Cli
     })
 }
 
+fn review_shell_handoff(
+    repo_root: &Path,
+    handoff_path: &Path,
+) -> Result<ManifoldShellHandoffReviewReceipt, CliError> {
+    let fixtures = FixtureSet::load(repo_root)?;
+    let handoff = read_model::<ManifoldShellHandoffManifest>(handoff_path)?;
+    let endpoint_ids = fixtures.endpoint_ids();
+    let receipt = handoff.review_receipt(
+        &fixtures.valid_registry,
+        &fixtures.package_manifest.exports.commands,
+        &endpoint_ids,
+        std::slice::from_ref(&fixtures.host_run_slot.slot_id),
+    );
+    receipt.validate_against_handoff(&handoff)?;
+    Ok(receipt)
+}
+
 #[derive(Debug)]
 struct FixtureSet {
     package_manifest: ManifoldPackageManifest,
@@ -499,6 +648,10 @@ struct FixtureSet {
     host_run_bundle: ManifoldHostRunBundle,
     host_run_command: ManifoldHostRunCommandEnvelope,
     host_run_evidence: ManifoldHostRunEvidence,
+    shell_handoff: ManifoldShellHandoffManifest,
+    shell_handoff_review: ManifoldShellHandoffReviewReceipt,
+    damaged_shell_handoff: ManifoldShellHandoffManifest,
+    damaged_shell_handoff_review: ManifoldShellHandoffReviewReceipt,
 }
 
 impl FixtureSet {
@@ -571,6 +724,11 @@ impl FixtureSet {
             read_model(repo_root.join("fixtures/host-run/command-envelope-run-live.json"))?;
         let host_run_evidence =
             read_model(repo_root.join("fixtures/host-run/run-evidence-live-smoke.json"))?;
+        let shell_handoff =
+            read_model(repo_root.join("fixtures/shell-handoff/synthetic-loopback-shell.json"))?;
+        let shell_handoff_review = read_model(
+            repo_root.join("fixtures/shell-handoff/synthetic-loopback-shell-review.json"),
+        )?;
 
         let damaged_endpoint_host =
             read_model(repo_root.join("fixtures/damaged/invalid-endpoint-security.json"))?;
@@ -586,6 +744,11 @@ impl FixtureSet {
             read_model(repo_root.join("fixtures/damaged/unknown-graph-node-link.json"))?;
         let damaged_unavailable_deployment =
             read_model(repo_root.join("fixtures/damaged/unavailable-deployment-backend.json"))?;
+        let damaged_shell_handoff =
+            read_model(repo_root.join("fixtures/damaged/shell-handoff-missing-stream.json"))?;
+        let damaged_shell_handoff_review = read_model(
+            repo_root.join("fixtures/damaged/shell-handoff-review-runtime-started.json"),
+        )?;
 
         Ok(Self {
             package_manifest,
@@ -620,7 +783,22 @@ impl FixtureSet {
             host_run_bundle,
             host_run_command,
             host_run_evidence,
+            shell_handoff,
+            shell_handoff_review,
+            damaged_shell_handoff,
+            damaged_shell_handoff_review,
         })
+    }
+
+    fn endpoint_ids(&self) -> Vec<DottedId> {
+        std::iter::once(&self.valid_host)
+            .chain(self.platform_hosts.iter())
+            .flat_map(|host| {
+                host.endpoints
+                    .iter()
+                    .map(|endpoint| endpoint.endpoint_id.clone())
+            })
+            .collect()
     }
 }
 
@@ -804,6 +982,24 @@ fn read_text(path: &Path) -> Result<String, CliError> {
     })
 }
 
+fn write_text(path: &Path, text: &str) -> Result<(), CliError> {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent).map_err(|source| CliError::Io {
+            path: parent.to_path_buf(),
+            source,
+        })?;
+    }
+    let mut text = text.to_owned();
+    text.push('\n');
+    fs::write(path, text).map_err(|source| CliError::Io {
+        path: path.to_path_buf(),
+        source,
+    })
+}
+
 fn expected_rejection(repo_root: &Path, relative_path: &str) -> Result<String, CliError> {
     let path = repo_root.join(relative_path);
     let text = read_text(&path)?;
@@ -842,7 +1038,7 @@ fn default_repo_root() -> PathBuf {
 }
 
 fn usage() -> String {
-    "usage: rusty-manifold-fixtures <validate|simulate|diff> [--repo-root <path>] [--check]"
+    "usage: rusty-manifold-fixtures <validate|simulate|diff|review-shell-handoff> [--repo-root <path>] [--check] [--handoff <path>] [--output <path>]"
         .to_owned()
 }
 
@@ -873,6 +1069,9 @@ enum CliError {
     DeploymentSelection(rusty_manifold_model::DeploymentSelectionError),
     GraphValidation(rusty_manifold_model::GraphValidationError),
     StreamRegistryValidation(rusty_manifold_model::StreamRegistryValidationError),
+    ShellHandoffReviewReceiptValidation(
+        rusty_manifold_model::ShellHandoffReviewReceiptValidationError,
+    ),
 }
 
 impl fmt::Display for CliError {
@@ -903,6 +1102,7 @@ impl fmt::Display for CliError {
             Self::DeploymentSelection(source) => write!(formatter, "{source}"),
             Self::GraphValidation(source) => write!(formatter, "{source}"),
             Self::StreamRegistryValidation(source) => write!(formatter, "{source}"),
+            Self::ShellHandoffReviewReceiptValidation(source) => write!(formatter, "{source}"),
         }
     }
 }
@@ -939,6 +1139,12 @@ impl From<rusty_manifold_model::StreamRegistryValidationError> for CliError {
     }
 }
 
+impl From<rusty_manifold_model::ShellHandoffReviewReceiptValidationError> for CliError {
+    fn from(source: rusty_manifold_model::ShellHandoffReviewReceiptValidationError) -> Self {
+        Self::ShellHandoffReviewReceiptValidation(source)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -972,5 +1178,45 @@ mod tests {
                 .unwrap();
 
         assert_eq!(expected.trim_end(), output.trim_end());
+    }
+
+    #[test]
+    fn shell_handoff_review_receipt_is_generated_from_handoff() {
+        let handoff_path =
+            default_repo_root().join("fixtures/shell-handoff/synthetic-loopback-shell.json");
+
+        let receipt = review_shell_handoff(&default_repo_root(), &handoff_path).unwrap();
+
+        assert_eq!(receipt.status, rusty_manifold_model::ValidationStatus::Pass);
+        assert_eq!(
+            receipt.handoff_id.to_string(),
+            "shell_handoff.synthetic_wave.loopback"
+        );
+        assert!(!receipt.runtime_execution_performed);
+        assert!(!receipt.launch_started);
+        assert!(!receipt.command_session_started);
+    }
+
+    #[test]
+    fn shell_handoff_review_command_writes_receipt() {
+        let output_path = default_repo_root().join("target/test-shell-handoff-review.json");
+        let _ = fs::remove_file(&output_path);
+
+        let output = run(vec![
+            "review-shell-handoff".to_string(),
+            "--handoff".to_string(),
+            default_repo_root()
+                .join("fixtures/shell-handoff/synthetic-loopback-shell.json")
+                .display()
+                .to_string(),
+            "--output".to_string(),
+            output_path.display().to_string(),
+        ])
+        .unwrap();
+
+        assert!(output.contains("\"$schema\": \"rusty.manifold.shell.handoff_review_receipt.v1\""));
+        assert!(output_path.is_file());
+        let written = read_text(&output_path).unwrap();
+        assert_eq!(written.trim_end(), output.trim_end());
     }
 }

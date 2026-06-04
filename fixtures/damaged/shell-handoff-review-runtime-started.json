@@ -1,0 +1,64 @@
+{
+  "$schema": "rusty.manifold.shell.handoff_review_receipt.v1",
+  "review_id": "shell_handoff_review.shell_handoff.synthetic_wave.loopback",
+  "handoff_id": "shell_handoff.synthetic_wave.loopback",
+  "handoff_revision": 1,
+  "target_host_profile": "host.headset",
+  "shell_app_id": "app.host_shell.headset",
+  "validation_slot_id": "host_run.slot.synthetic_smoke",
+  "status": "pass",
+  "manifold_authority": "authority.manifold",
+  "reviewed_stream_ids": [
+    "stream.synthetic_wave",
+    "stream.synthetic_rms"
+  ],
+  "reviewed_command_ids": [
+    "command.module.start",
+    "command.module.stop"
+  ],
+  "reviewed_transport_ids": [
+    "transport.shell_loopback"
+  ],
+  "reviewed_endpoint_ids": [
+    "endpoint.headset_loopback"
+  ],
+  "runtime_execution_performed": true,
+  "platform_execution_performed": false,
+  "launch_started": false,
+  "command_session_started": false,
+  "legacy_app_dependency_used": false,
+  "checks": [
+    {
+      "check_id": "check.shell_handoff.validation_slot",
+      "status": "pass",
+      "evidence": "shell handoff validation slot resolves",
+      "issue_codes": []
+    },
+    {
+      "check_id": "check.shell_handoff.streams",
+      "status": "pass",
+      "evidence": "shell handoff stream bindings resolve",
+      "issue_codes": []
+    },
+    {
+      "check_id": "check.shell_handoff.commands",
+      "status": "pass",
+      "evidence": "shell handoff command ids resolve",
+      "issue_codes": []
+    },
+    {
+      "check_id": "check.shell_handoff.endpoints",
+      "status": "pass",
+      "evidence": "shell handoff transport endpoints resolve",
+      "issue_codes": []
+    },
+    {
+      "check_id": "check.shell_handoff.no_runtime_started",
+      "status": "pass",
+      "evidence": "shell handoff review performed no runtime, launch, or session work",
+      "issue_codes": []
+    }
+  ],
+  "issues": [],
+  "expected_rejection": "runtime_started"
+}
