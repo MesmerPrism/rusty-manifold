@@ -1769,6 +1769,26 @@ fn push_valid_checks(
 
     push_result(
         checks,
+        "validation.check.command_dispatch_rejects_snapshot_revision_mismatch",
+        command_dispatch_rejects_snapshot_revision_mismatch(
+            &fixtures.authority_snapshot_v2,
+            &fixtures.accepted_command_review,
+        ),
+        "command dispatch preparation rejects command reviews from a different authority snapshot revision",
+    );
+
+    push_result(
+        checks,
+        "validation.check.command_dispatch_receipt_rejects_request_lineage_mismatch",
+        command_dispatch_receipt_rejects_request_lineage_mismatch(
+            &fixtures.authority_snapshot,
+            &fixtures.accepted_command_dispatch,
+        ),
+        "command dispatch receipt validation rejects top-level request ids that diverge from the embedded review",
+    );
+
+    push_result(
+        checks,
         "validation.check.lease_authority_audit_event",
         fixtures
             .lease_authority_audit_event

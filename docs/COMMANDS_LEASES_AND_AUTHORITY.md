@@ -44,6 +44,9 @@ separate source-only dispatch receipt. `ManifoldCommandDispatchReceipt` carries
 the reviewed command id, request id, ack or dispatch rejection, and the
 reviewed authority decision. It does not advance accepted authority state,
 execute the command, start a module, open a transport, or contact a host.
+Dispatch preparation rejects reviews from a different authority snapshot
+revision, and receipt validation rejects top-level command or request lineage
+that diverges from the embedded review.
 
 The fixture CLI route is:
 

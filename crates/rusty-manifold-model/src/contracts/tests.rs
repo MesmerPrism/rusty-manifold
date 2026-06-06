@@ -463,6 +463,46 @@ fn command_dispatch_receipt_prepares_accepted_review() {
 }
 
 #[test]
+fn command_dispatch_receipt_rejects_review_from_different_authority_revision() {
+    let snapshot = authority_snapshot();
+    let review = snapshot
+        .review_command(
+            command_envelope(),
+            command_review_clock(),
+            vec![id(
+                "evidence.command_authority.request.start.synthetic_wave",
+            )],
+        )
+        .unwrap();
+    let mut next_snapshot = snapshot.clone();
+    next_snapshot.authority_revision = Revision::new(2).unwrap();
+
+    let error = next_snapshot.prepare_command_dispatch(review).unwrap_err();
+
+    assert_eq!(error.rejection_code(), "authority_revision_mismatch");
+}
+
+#[test]
+fn command_dispatch_receipt_rejects_receipt_review_request_mismatch() {
+    let snapshot = authority_snapshot();
+    let review = snapshot
+        .review_command(
+            command_envelope(),
+            command_review_clock(),
+            vec![id(
+                "evidence.command_authority.request.start.synthetic_wave",
+            )],
+        )
+        .unwrap();
+    let mut receipt = snapshot.prepare_command_dispatch(review).unwrap();
+    receipt.request_id = id("request.command_dispatch.lineage_mismatch");
+
+    let error = receipt.validate_against_snapshot(&snapshot).unwrap_err();
+
+    assert_eq!(error.rejection_code(), "request_id_mismatch");
+}
+
+#[test]
 fn command_authority_audit_event_rejects_unknown_command() {
     let snapshot = authority_snapshot();
     let mut event = accepted_command_audit_event();

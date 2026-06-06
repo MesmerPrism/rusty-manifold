@@ -105,6 +105,44 @@ pub(super) fn command_dispatch_matches_fixture(
     }
 }
 
+pub(super) fn command_dispatch_rejects_snapshot_revision_mismatch(
+    snapshot: &ManifoldAuthoritySnapshot,
+    review: &ManifoldCommandAuthorityReview,
+) -> Result<(), String> {
+    match snapshot.prepare_command_dispatch(review.clone()) {
+        Ok(receipt) => Err(format!(
+            "command dispatch unexpectedly accepted mismatched review {} as {}",
+            review.review_id, receipt.dispatch_id
+        )),
+        Err(error) if error.rejection_code() == "authority_revision_mismatch" => Ok(()),
+        Err(error) => Err(format!(
+            "expected authority_revision_mismatch, got {}",
+            error.rejection_code()
+        )),
+    }
+}
+
+pub(super) fn command_dispatch_receipt_rejects_request_lineage_mismatch(
+    snapshot: &ManifoldAuthoritySnapshot,
+    receipt: &ManifoldCommandDispatchReceipt,
+) -> Result<(), String> {
+    let mut damaged = receipt.clone();
+    damaged.request_id = DottedId::new("request.command_dispatch.lineage_mismatch")
+        .expect("literal request id is valid");
+
+    match damaged.validate_against_snapshot(snapshot) {
+        Ok(()) => Err(format!(
+            "damaged command dispatch receipt {} unexpectedly validated",
+            damaged.dispatch_id
+        )),
+        Err(error) if error.rejection_code() == "request_id_mismatch" => Ok(()),
+        Err(error) => Err(format!(
+            "expected request_id_mismatch, got {}",
+            error.rejection_code()
+        )),
+    }
+}
+
 pub(super) fn review_lease(
     repo_root: &Path,
     snapshot_path: &Path,
