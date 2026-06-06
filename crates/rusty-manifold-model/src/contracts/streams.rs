@@ -2710,29 +2710,6 @@ pub enum ManifoldStreamSubscriptionRenewalAuthorityAuditEventKind {
     SubscriptionRenewalRejected,
 }
 
-/// Command authority review outcome.
-#[cfg_attr(
-    feature = "serde",
-    derive(serde::Deserialize, serde::Serialize),
-    serde(rename_all = "snake_case")
-)]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ManifoldCommandAuthorityReviewOutcome {
-    /// Authority accepted the command request.
-    CommandAccepted,
-    /// Authority rejected the command request.
-    CommandRejected,
-}
-
-impl From<ManifoldCommandAuthorityReviewOutcome> for ManifoldCommandAuthorityAuditEventKind {
-    fn from(outcome: ManifoldCommandAuthorityReviewOutcome) -> Self {
-        match outcome {
-            ManifoldCommandAuthorityReviewOutcome::CommandAccepted => Self::CommandAccepted,
-            ManifoldCommandAuthorityReviewOutcome::CommandRejected => Self::CommandRejected,
-        }
-    }
-}
-
 /// Stream-registry authority review outcome.
 #[cfg_attr(
     feature = "serde",
