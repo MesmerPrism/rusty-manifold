@@ -165,6 +165,11 @@ authority application receipt. The application advances the authority snapshot
 revision by one and installs the accepted stream registry snapshot, or rejects
 application when the review itself was rejected.
 
+Registry review protects active stream subscriptions before accepting topology
+changes: transport offers used by active subscriptions, UI subscription policy
+used by active UI subscribers, and subscriber limits below the active count are
+rejected with `active_subscription_conflict`.
+
 The fixture CLI route is:
 
 ```powershell

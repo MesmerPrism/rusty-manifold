@@ -37,6 +37,11 @@ The reviewer rejects expired registry leases at the review clock even when the
 lease is still present in accepted authority state. Expired lease cleanup is a
 separate explicit authority sweep.
 
+When active subscriptions exist, registry review also rejects diffs that remove
+an in-use transport offer, disable UI subscription policy while UI subscribers
+are active, or lower subscriber limits below the active subscriber count. These
+are authority rejections, not runtime transport mutations.
+
 The fixture CLI route is:
 
 ```powershell

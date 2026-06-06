@@ -106,6 +106,9 @@
         "fixtures/damaged/stream-registry-request-stale-revision.json",
         "fixtures/damaged/stream-registry-request-missing-lease.json",
         "fixtures/damaged/stream-registry-request-remove-active-stream.json",
+        "fixtures/damaged/stream-registry-request-remove-active-transport.json",
+        "fixtures/damaged/stream-registry-request-disable-active-ui-subscriptions.json",
+        "fixtures/damaged/stream-registry-request-lower-active-subscriber-limit.json",
         "fixtures/damaged/stream-registry-request-unknown-module.json",
         "fixtures/damaged/stream-registry-request-unknown-endpoint.json"
       ]
@@ -498,6 +501,9 @@
         "fixtures/stream-registry-review/synthetic-stream-registry-stale-revision-review.json",
         "fixtures/stream-registry-review/synthetic-stream-registry-missing-lease-review.json",
         "fixtures/stream-registry-review/synthetic-stream-registry-active-stream-review.json",
+        "fixtures/stream-registry-review/synthetic-stream-registry-remove-active-transport-review.json",
+        "fixtures/stream-registry-review/synthetic-stream-registry-disable-active-ui-subscriptions-review.json",
+        "fixtures/stream-registry-review/synthetic-stream-registry-lower-active-subscriber-limit-review.json",
         "fixtures/stream-registry-review/synthetic-stream-registry-unknown-module-review.json",
         "fixtures/stream-registry-review/synthetic-stream-registry-unknown-endpoint-review.json"
       ]
