@@ -932,191 +932,6 @@ impl ManifoldAuthoritySnapshot {
         Ok(())
     }
 
-    /// Deterministically reviews one command envelope against this authority snapshot.
-    ///
-    /// The review is source-only: it does not execute the command, mutate runtime
-    /// state, open transports, or contact a host. Accepted reviews advance the
-    /// reported authority revision by one; rejected reviews keep the current
-    /// authority revision in the rejection.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
-    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
-    pub fn review_command(
-        &self,
-        envelope: ManifoldCommandEnvelope,
-        recorded_clock: ManifoldClockSnapshot,
-        evidence_refs: Vec<DottedId>,
-    ) -> Result<ManifoldCommandAuthorityReview, ManifoldAuthorityValidationError> {
-        self.validate_authority_links()?;
-
-        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
-            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
-            || recorded_clock.sequence < self.clock_snapshot.sequence
-        {
-            return Err(ManifoldAuthorityValidationError::new(
-                envelope.request_id.clone(),
-                recorded_clock.clock_domain.to_string(),
-                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
-            ));
-        }
-
-        if evidence_refs.is_empty() {
-            return Err(ManifoldAuthorityValidationError::new(
-                envelope.request_id.clone(),
-                "evidence_refs".to_owned(),
-                ManifoldAuthorityValidationErrorKind::MissingEvidence,
-            ));
-        }
-
-        let decision = self.command_authority_decision(&envelope, &recorded_clock);
-        let lease = envelope
-            .lease_id
-            .as_ref()
-            .and_then(|lease_id| self.active_lease(lease_id))
-            .cloned();
-        let (outcome, accepted, rejection) = match decision {
-            CommandAuthorityDecision::Accepted => {
-                let accepted_revision = self.authority_revision.next().ok_or_else(|| {
-                    ManifoldAuthorityValidationError::new(
-                        envelope.request_id.clone(),
-                        self.authority_revision.get().to_string(),
-                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
-                    )
-                })?;
-                (
-                    ManifoldCommandAuthorityReviewOutcome::CommandAccepted,
-                    Some(ManifoldCommandAck {
-                        schema_id: command_ack_schema_id(),
-                        request_id: envelope.request_id.clone(),
-                        accepted_revision,
-                        lease_id: envelope.lease_id.clone(),
-                        authority_id: self.authority_id.clone(),
-                        accepted_at_ms: wall_unix_ms_u64(&recorded_clock),
-                    }),
-                    None,
-                )
-            }
-            CommandAuthorityDecision::Rejected {
-                rejection_code,
-                message,
-                retryable,
-            } => (
-                ManifoldCommandAuthorityReviewOutcome::CommandRejected,
-                None,
-                Some(ManifoldCommandRejection {
-                    schema_id: command_rejection_schema_id(),
-                    request_id: envelope.request_id.clone(),
-                    rejection_code: DottedId::new(rejection_code)
-                        .expect("rejection code literal is a valid dotted id"),
-                    message,
-                    retryable,
-                    current_revision: Some(self.authority_revision),
-                }),
-            ),
-        };
-
-        let audit_event = ManifoldCommandAuthorityAuditEvent {
-            schema_id: command_authority_audit_event_schema_id(),
-            event_id: command_authority_audit_event_id(&envelope.request_id, outcome),
-            authority_id: self.authority_id.clone(),
-            prior_authority_revision: self.authority_revision,
-            event_kind: outcome.into(),
-            envelope,
-            accepted: accepted.clone(),
-            rejection: rejection.clone(),
-            lease,
-            recorded_clock,
-            evidence_refs,
-        };
-
-        let review = ManifoldCommandAuthorityReview {
-            schema_id: command_authority_review_schema_id(),
-            review_id: command_authority_review_id(&audit_event.envelope.request_id),
-            authority_id: self.authority_id.clone(),
-            authority_revision: self.authority_revision,
-            outcome,
-            accepted,
-            rejection,
-            audit_event,
-        };
-        review.validate_against_snapshot(self)?;
-        Ok(review)
-    }
-
-    /// Prepares one accepted command review for downstream dispatch.
-    ///
-    /// The receipt is source-only. It confirms that a command authority review
-    /// is valid for this snapshot and is ready for a downstream transport or
-    /// executor to consume, but it does not execute the command, mutate
-    /// accepted authority state, open transports, or contact a host.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`ManifoldAuthorityValidationError`] when this snapshot is
-    /// invalid or the supplied review does not match this authority snapshot.
-    pub fn prepare_command_dispatch(
-        &self,
-        review: ManifoldCommandAuthorityReview,
-    ) -> Result<ManifoldCommandDispatchReceipt, ManifoldAuthorityValidationError> {
-        self.validate_authority_links()?;
-        review.validate_against_snapshot(self)?;
-
-        let dispatch_id = command_dispatch_receipt_id(&review.review_id);
-        let command_id = review.audit_event.envelope.command_id.clone();
-        let request_id = review.audit_event.envelope.request_id.clone();
-
-        let (outcome, ack, rejection) =
-            if review.outcome == ManifoldCommandAuthorityReviewOutcome::CommandRejected {
-                (
-                    ManifoldCommandDispatchReceiptOutcome::CommandDispatchRejected,
-                    None,
-                    Some(ManifoldCommandDispatchRejection {
-                        schema_id: command_dispatch_rejection_schema_id(),
-                        dispatch_id: dispatch_id.clone(),
-                        rejection_code: DottedId::new("review_rejected")
-                            .expect("rejection code literal is valid"),
-                        message: "command review did not accept a command".to_owned(),
-                        retryable: review
-                            .rejection
-                            .as_ref()
-                            .map(|rejection| rejection.retryable)
-                            .unwrap_or(false),
-                        current_authority_revision: self.authority_revision,
-                    }),
-                )
-            } else {
-                let ack = review.accepted.clone().ok_or_else(|| {
-                    ManifoldAuthorityValidationError::new(
-                        review.review_id.clone(),
-                        "accepted".to_owned(),
-                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
-                    )
-                })?;
-                (
-                    ManifoldCommandDispatchReceiptOutcome::CommandDispatchReady,
-                    Some(ack),
-                    None,
-                )
-            };
-
-        let receipt = ManifoldCommandDispatchReceipt {
-            schema_id: command_dispatch_receipt_schema_id(),
-            dispatch_id,
-            authority_id: self.authority_id.clone(),
-            authority_revision: self.authority_revision,
-            command_id,
-            request_id,
-            outcome,
-            ack,
-            rejection,
-            review,
-        };
-        receipt.validate_against_snapshot(self)?;
-        Ok(receipt)
-    }
-
     /// Deterministically reviews one control lease request against this authority snapshot.
     ///
     /// The review is source-only: it does not mutate the accepted lease set,
@@ -3488,12 +3303,6 @@ impl ManifoldAuthoritySnapshot {
         Ok(application)
     }
 
-    fn command_descriptor(&self, command_id: &DottedId) -> Option<&ManifoldCommandDescriptor> {
-        self.command_descriptors
-            .iter()
-            .find(|descriptor| &descriptor.command_id == command_id)
-    }
-
     fn stream_manifest(&self, stream_id: &DottedId) -> Option<&ManifoldStreamManifest> {
         self.stream_registry
             .streams
@@ -3532,52 +3341,6 @@ impl ManifoldAuthoritySnapshot {
         self.active_stream_subscriptions
             .iter()
             .find(|subscription| &subscription.subscription_id == subscription_id)
-    }
-
-    fn command_authority_decision(
-        &self,
-        envelope: &ManifoldCommandEnvelope,
-        recorded_clock: &ManifoldClockSnapshot,
-    ) -> CommandAuthorityDecision {
-        let Some(descriptor) = self.command_descriptor(&envelope.command_id) else {
-            return CommandAuthorityDecision::Rejected {
-                rejection_code: "unknown_command",
-                message: "command is not advertised by this authority".to_owned(),
-                retryable: false,
-            };
-        };
-
-        let active_lease = if let Some(lease_id) = &envelope.lease_id {
-            let Some(lease) = self.active_lease(lease_id) else {
-                return CommandAuthorityDecision::Rejected {
-                    rejection_code: "unknown_lease",
-                    message: "command references an unknown lease".to_owned(),
-                    retryable: true,
-                };
-            };
-            Some(lease)
-        } else {
-            None
-        };
-
-        if let Some(lease) = active_lease {
-            if lease_expired_at(lease, recorded_clock) {
-                return CommandAuthorityDecision::Rejected {
-                    rejection_code: "expired_lease",
-                    message: "command references a lease expired at the review clock".to_owned(),
-                    retryable: true,
-                };
-            }
-        }
-
-        match envelope.validate_request(descriptor, self.authority_revision, active_lease) {
-            Ok(()) => CommandAuthorityDecision::Accepted,
-            Err(error) => CommandAuthorityDecision::Rejected {
-                rejection_code: error.rejection_code(),
-                message: error.message().to_owned(),
-                retryable: command_validation_retryable(error.kind()),
-            },
-        }
     }
 
     fn lease_authority_decision(
@@ -5327,16 +5090,6 @@ impl ManifoldAuthoritySnapshot {
 
         Ok(transition)
     }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum CommandAuthorityDecision {
-    Accepted,
-    Rejected {
-        rejection_code: &'static str,
-        message: String,
-        retryable: bool,
-    },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
