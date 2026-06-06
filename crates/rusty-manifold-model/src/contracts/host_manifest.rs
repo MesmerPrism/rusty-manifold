@@ -866,3 +866,512 @@ impl fmt::Display for EndpointSecurityError {
 }
 
 impl std::error::Error for EndpointSecurityError {}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum HostManifestAuthorityDecision {
+    Accepted(ManifoldHostManifest),
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct HostManifestRejection {
+    rejection_code: String,
+    message: String,
+    retryable: bool,
+}
+
+impl HostManifestRejection {
+    fn new(rejection_code: impl Into<String>, message: impl Into<String>, retryable: bool) -> Self {
+        Self {
+            rejection_code: rejection_code.into(),
+            message: message.into(),
+            retryable,
+        }
+    }
+}
+
+impl ManifoldAuthoritySnapshot {
+    /// Deterministically reviews one host manifest change request.
+    ///
+    /// The review is source-only: it accepts or rejects proposed contract state
+    /// and does not start host services, open endpoints, probe permissions, or
+    /// mutate a live host.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_host_manifest_change(
+        &self,
+        request: ManifoldHostManifestChangeRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldHostManifestAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.host_manifest_authority_decision(&request, &recorded_clock);
+        let lease = request
+            .lease_id
+            .as_ref()
+            .and_then(|lease_id| self.active_lease(lease_id))
+            .cloned();
+        let (outcome, accepted, rejection) = match decision {
+            HostManifestAuthorityDecision::Accepted(manifest) => (
+                ManifoldHostManifestAuthorityReviewOutcome::HostManifestAccepted,
+                Some(manifest),
+                None,
+            ),
+            HostManifestAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+            } => (
+                ManifoldHostManifestAuthorityReviewOutcome::HostManifestRejected,
+                None,
+                Some(ManifoldHostManifestRejection {
+                    schema_id: host_manifest_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldHostManifestAuthorityAuditEvent {
+            schema_id: host_manifest_authority_audit_event_schema_id(),
+            event_id: host_manifest_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            host_id: self.host_manifest.host_id.clone(),
+            event_kind: outcome.into(),
+            request,
+            accepted: accepted.clone(),
+            rejection: rejection.clone(),
+            lease,
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldHostManifestAuthorityReview {
+            schema_id: host_manifest_authority_review_schema_id(),
+            review_id: host_manifest_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            host_id: audit_event.host_id.clone(),
+            outcome,
+            accepted,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one host manifest authority review to this snapshot.
+    ///
+    /// Accepted host manifest reviews produce a new `ManifoldAuthoritySnapshot`
+    /// with the authority revision advanced by one and the accepted host
+    /// manifest installed. Rejected reviews produce a machine-readable
+    /// application rejection and leave accepted state unchanged. This is
+    /// source-only: it does not start host services, open endpoints, probe
+    /// permissions, or mutate a live host.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_host_manifest_authority_review(
+        &self,
+        review: ManifoldHostManifestAuthorityReview,
+    ) -> Result<ManifoldHostManifestAuthorityApplication, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        let application_id = host_manifest_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let host_id = review.host_id.clone();
+
+        let (outcome, applied_snapshot, rejection) =
+            match review.validate_against_snapshot(self) {
+                Err(error) => (
+                    ManifoldHostManifestAuthorityApplicationOutcome::HostManifestApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new(error.rejection_code())
+                            .expect("authority rejection code is a valid dotted id"),
+                        message: format!(
+                            "host manifest review does not match authority snapshot: {error}"
+                        ),
+                        retryable: authority_application_validation_retryable(error.kind()),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                ),
+                Ok(()) if review.outcome == ManifoldHostManifestAuthorityReviewOutcome::HostManifestRejected => {
+                    (
+                        ManifoldHostManifestAuthorityApplicationOutcome::HostManifestApplicationRejected,
+                        None,
+                        Some(ManifoldAuthoritySnapshotApplicationRejection {
+                            schema_id: authority_snapshot_application_rejection_schema_id(),
+                            application_id: application_id.clone(),
+                            rejection_code: DottedId::new("review_rejected")
+                                .expect("rejection code literal is valid"),
+                            message: "host manifest review did not accept a host manifest"
+                                .to_owned(),
+                            retryable: review
+                                .rejection
+                                .as_ref()
+                                .map(|rejection| rejection.retryable)
+                                .unwrap_or(false),
+                            current_authority_revision: self.authority_revision,
+                        }),
+                    )
+                }
+                Ok(()) => {
+                    let Some(next_authority_revision) = self.authority_revision.next() else {
+                        return Err(ManifoldAuthorityValidationError::new(
+                            review.review_id.clone(),
+                            self.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        ));
+                    };
+                    let accepted_manifest = review.accepted.clone().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            review.review_id.clone(),
+                            "accepted".to_owned(),
+                            ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                        )
+                    })?;
+                    let mut next_snapshot = self.clone();
+                    next_snapshot.authority_revision = next_authority_revision;
+                    next_snapshot.host_manifest = accepted_manifest;
+                    next_snapshot.validate_authority_links()?;
+                    (
+                        ManifoldHostManifestAuthorityApplicationOutcome::HostManifestApplied,
+                        Some(next_snapshot),
+                        None,
+                    )
+                }
+            };
+
+        let application = ManifoldHostManifestAuthorityApplication {
+            schema_id: host_manifest_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            host_id,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    fn host_manifest_authority_decision(
+        &self,
+        request: &ManifoldHostManifestChangeRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> HostManifestAuthorityDecision {
+        if request.schema_id != host_manifest_change_request_schema_id() {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "host manifest request schema is not supported".to_owned(),
+                retryable: false,
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message:
+                    "host manifest request expected authority revision does not match current revision"
+                        .to_owned(),
+                retryable: true,
+            };
+        }
+
+        if !self
+            .host_manifest
+            .capabilities
+            .iter()
+            .any(|capability| capability == &request.required_capability)
+        {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "capability_not_advertised".to_owned(),
+                message: "host manifest request capability is not advertised by the authority host"
+                    .to_owned(),
+                retryable: false,
+            };
+        }
+
+        let Some(lease_id) = &request.lease_id else {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "missing_lease".to_owned(),
+                message: "host manifest change requires an active host-manifest lease".to_owned(),
+                retryable: true,
+            };
+        };
+
+        let Some(lease) = self.active_lease(lease_id) else {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "unknown_lease".to_owned(),
+                message: "host manifest request references an unknown lease".to_owned(),
+                retryable: true,
+            };
+        };
+
+        if lease.state != LeaseState::Active {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "inactive_lease".to_owned(),
+                message: "host manifest lease is not active".to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease_expired_at(lease, recorded_clock) {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "expired_lease".to_owned(),
+                message: "host manifest lease is expired at the review clock".to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease.granted_revision > self.authority_revision {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "lease_revision_ahead".to_owned(),
+                message: "host manifest lease was granted after this authority revision".to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease.holder_id != request.holder_id
+            || lease.scope != host_manifest_lease_scope()
+            || lease.required_capability != request.required_capability
+        {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "lease_mismatch".to_owned(),
+                message: "host manifest request does not match the active lease".to_owned(),
+                retryable: true,
+            };
+        }
+
+        match self.validate_proposed_host_manifest(&request.proposed_manifest) {
+            Ok(()) => HostManifestAuthorityDecision::Accepted(request.proposed_manifest.clone()),
+            Err(rejection) => HostManifestAuthorityDecision::Rejected {
+                rejection_code: rejection.rejection_code,
+                message: rejection.message,
+                retryable: rejection.retryable,
+            },
+        }
+    }
+
+    fn validate_proposed_host_manifest(
+        &self,
+        proposed: &ManifoldHostManifest,
+    ) -> Result<(), HostManifestRejection> {
+        if proposed.schema_id != host_manifest_schema_id() {
+            return Err(HostManifestRejection::new(
+                "unsupported_schema",
+                "host manifest schema is not supported",
+                false,
+            ));
+        }
+
+        if proposed.host_id != self.host_manifest.host_id {
+            return Err(HostManifestRejection::new(
+                "host_id_mismatch",
+                "host manifest proposal cannot change the authority host id",
+                false,
+            ));
+        }
+
+        if proposed.authority_role == AuthorityRole::None {
+            return Err(HostManifestRejection::new(
+                "missing_authority_role",
+                "host manifest proposal must advertise an authority role",
+                false,
+            ));
+        }
+
+        if proposed.clock_domain != self.clock_snapshot.clock_domain {
+            return Err(HostManifestRejection::new(
+                "clock_domain_mismatch",
+                "host manifest proposal clock domain does not match the authority clock",
+                true,
+            ));
+        }
+
+        if let Err(error) = proposed.validate_endpoint_security() {
+            return Err(HostManifestRejection::new(
+                "endpoint_security_mismatch",
+                format!(
+                    "host manifest proposal endpoint {} has an unsafe visibility/security pairing",
+                    error.endpoint_id()
+                ),
+                false,
+            ));
+        }
+
+        if let Some(endpoint_id) = duplicate_endpoint_id(&proposed.endpoints) {
+            return Err(HostManifestRejection::new(
+                "duplicate_endpoint",
+                format!("host manifest proposal duplicates endpoint id {endpoint_id}"),
+                false,
+            ));
+        }
+
+        if let Some(capability) = duplicate_id(&proposed.capabilities) {
+            return Err(HostManifestRejection::new(
+                "duplicate_capability",
+                format!("host manifest proposal duplicates capability {capability}"),
+                false,
+            ));
+        }
+
+        if let Some(backend) = duplicate_id(&proposed.supported_backends) {
+            return Err(HostManifestRejection::new(
+                "duplicate_backend",
+                format!("host manifest proposal duplicates backend {backend}"),
+                false,
+            ));
+        }
+
+        for endpoint in &self.host_manifest.endpoints {
+            if !proposed
+                .endpoints
+                .iter()
+                .any(|known| known.endpoint_id == endpoint.endpoint_id)
+            {
+                return Err(HostManifestRejection::new(
+                    "endpoint_in_use",
+                    format!(
+                        "host manifest proposal removes advertised endpoint {}",
+                        endpoint.endpoint_id
+                    ),
+                    true,
+                ));
+            }
+        }
+
+        for stream in &self.stream_registry.streams {
+            for offer in &stream.transport_offers {
+                if let Some(endpoint_id) = &offer.endpoint_id {
+                    if !proposed
+                        .endpoints
+                        .iter()
+                        .any(|known| &known.endpoint_id == endpoint_id)
+                    {
+                        return Err(HostManifestRejection::new(
+                            "endpoint_in_use",
+                            format!(
+                                "host manifest proposal removes endpoint {endpoint_id} used by stream {}",
+                                stream.stream_id
+                            ),
+                            true,
+                        ));
+                    }
+                }
+            }
+        }
+
+        for lease in &self.active_leases {
+            if !proposed
+                .capabilities
+                .iter()
+                .any(|capability| capability == &lease.required_capability)
+            {
+                return Err(HostManifestRejection::new(
+                    "capability_in_use",
+                    format!(
+                        "host manifest proposal removes capability {} used by active lease {}",
+                        lease.required_capability, lease.lease_id
+                    ),
+                    true,
+                ));
+            }
+        }
+
+        for descriptor in &self.command_descriptors {
+            if !proposed
+                .capabilities
+                .iter()
+                .any(|capability| capability == &descriptor.required_capability)
+            {
+                return Err(HostManifestRejection::new(
+                    "capability_in_use",
+                    format!(
+                        "host manifest proposal removes capability {} used by command {}",
+                        descriptor.required_capability, descriptor.command_id
+                    ),
+                    true,
+                ));
+            }
+        }
+
+        for subscription in &self.active_stream_subscriptions {
+            if !proposed
+                .capabilities
+                .iter()
+                .any(|capability| capability == &subscription.required_capability)
+            {
+                return Err(HostManifestRejection::new(
+                    "capability_in_use",
+                    format!(
+                        "host manifest proposal removes capability {} used by active stream subscription {}",
+                        subscription.required_capability, subscription.subscription_id
+                    ),
+                    true,
+                ));
+            }
+        }
+
+        for state in &self.module_runtime_states {
+            if let Some(backend) = &state.selected_backend {
+                if !proposed
+                    .supported_backends
+                    .iter()
+                    .any(|known| known == backend)
+                {
+                    return Err(HostManifestRejection::new(
+                        "backend_in_use",
+                        format!(
+                            "host manifest proposal removes backend {backend} used by module {}",
+                            state.module_id
+                        ),
+                        true,
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+}
