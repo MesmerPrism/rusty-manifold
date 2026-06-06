@@ -865,3 +865,513 @@ impl From<ManifoldModuleRuntimeStateAuthorityReviewOutcome>
         }
     }
 }
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ModuleRuntimeStateAuthorityDecision {
+    Accepted {
+        state: ManifoldModuleRuntimeState,
+        transition: ManifoldModuleRuntimeTransition,
+    },
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+        current_runtime_revision: Option<Revision>,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ModuleRuntimeStateRejection {
+    rejection_code: String,
+    message: String,
+    retryable: bool,
+}
+
+impl ModuleRuntimeStateRejection {
+    fn new(rejection_code: impl Into<String>, message: impl Into<String>, retryable: bool) -> Self {
+        Self {
+            rejection_code: rejection_code.into(),
+            message: message.into(),
+            retryable,
+        }
+    }
+}
+
+impl ManifoldAuthoritySnapshot {
+    /// Deterministically reviews one module runtime-state change request.
+    ///
+    /// The review is source-only: it accepts or rejects proposed contract state
+    /// and computes the resulting transition without starting, stopping, or
+    /// contacting a runtime module.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_module_runtime_state_change(
+        &self,
+        request: ManifoldModuleRuntimeStateChangeRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldModuleRuntimeStateAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.module_runtime_state_authority_decision(&request, &recorded_clock);
+        let lease = request
+            .lease_id
+            .as_ref()
+            .and_then(|lease_id| self.active_lease(lease_id))
+            .cloned();
+        let runtime_revision = self
+            .module_runtime_state(&request.module_id)
+            .map(|state| state.runtime_revision);
+        let (outcome, accepted, transition, rejection) = match decision {
+            ModuleRuntimeStateAuthorityDecision::Accepted { state, transition } => (
+                ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateAccepted,
+                Some(state),
+                Some(transition),
+                None,
+            ),
+            ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                current_runtime_revision,
+            } => (
+                ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateRejected,
+                None,
+                None,
+                Some(ManifoldModuleRuntimeStateRejection {
+                    schema_id: module_runtime_state_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_authority_revision: self.authority_revision,
+                    current_runtime_revision,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldModuleRuntimeStateAuthorityAuditEvent {
+            schema_id: module_runtime_state_authority_audit_event_schema_id(),
+            event_id: module_runtime_state_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            module_id: request.module_id.clone(),
+            prior_runtime_revision: runtime_revision,
+            event_kind: outcome.into(),
+            request,
+            accepted: accepted.clone(),
+            transition: transition.clone(),
+            rejection: rejection.clone(),
+            lease,
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldModuleRuntimeStateAuthorityReview {
+            schema_id: module_runtime_state_authority_review_schema_id(),
+            review_id: module_runtime_state_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            module_id: audit_event.module_id.clone(),
+            runtime_revision,
+            outcome,
+            accepted,
+            transition,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one module runtime-state authority review to this snapshot.
+    ///
+    /// Accepted runtime-state reviews produce a new `ManifoldAuthoritySnapshot`
+    /// with the authority revision advanced by one and the accepted module
+    /// runtime state installed. Rejected reviews produce a machine-readable
+    /// application rejection and leave accepted state unchanged. This is
+    /// source-only: it does not start, stop, load, unload, signal, or contact a
+    /// runtime module.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_module_runtime_state_authority_review(
+        &self,
+        review: ManifoldModuleRuntimeStateAuthorityReview,
+    ) -> Result<ManifoldModuleRuntimeStateAuthorityApplication, ManifoldAuthorityValidationError>
+    {
+        self.validate_authority_links()?;
+
+        let application_id = module_runtime_state_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let module_id = review.module_id.clone();
+        let from_runtime_revision = self
+            .module_runtime_state(&module_id)
+            .map(|state| state.runtime_revision);
+
+        let (outcome, applied_snapshot, rejection) =
+            match review.validate_against_snapshot(self) {
+                Err(error) => (
+                    ManifoldModuleRuntimeStateAuthorityApplicationOutcome::RuntimeStateApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new(error.rejection_code())
+                            .expect("authority rejection code is a valid dotted id"),
+                        message: format!(
+                            "module runtime-state review does not match authority snapshot: {error}"
+                        ),
+                        retryable: authority_application_validation_retryable(error.kind()),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                ),
+                Ok(()) if review.outcome
+                    == ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateRejected =>
+                {
+                    (
+                        ManifoldModuleRuntimeStateAuthorityApplicationOutcome::RuntimeStateApplicationRejected,
+                        None,
+                        Some(ManifoldAuthoritySnapshotApplicationRejection {
+                            schema_id: authority_snapshot_application_rejection_schema_id(),
+                            application_id: application_id.clone(),
+                            rejection_code: DottedId::new("review_rejected")
+                                .expect("rejection code literal is valid"),
+                            message: "module runtime-state review did not accept runtime state"
+                                .to_owned(),
+                            retryable: review
+                                .rejection
+                                .as_ref()
+                                .map(|rejection| rejection.retryable)
+                                .unwrap_or(false),
+                            current_authority_revision: self.authority_revision,
+                        }),
+                    )
+                }
+                Ok(()) => {
+                    let Some(next_authority_revision) = self.authority_revision.next() else {
+                        return Err(ManifoldAuthorityValidationError::new(
+                            review.review_id.clone(),
+                            self.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        ));
+                    };
+                    let accepted_state = review.accepted.clone().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            review.review_id.clone(),
+                            "accepted".to_owned(),
+                            ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                        )
+                    })?;
+                    let mut next_snapshot = self.clone();
+                    next_snapshot.authority_revision = next_authority_revision;
+                    let Some(state) = next_snapshot
+                        .module_runtime_states
+                        .iter_mut()
+                        .find(|state| state.module_id == accepted_state.module_id)
+                    else {
+                        return Err(ManifoldAuthorityValidationError::new(
+                            review.review_id.clone(),
+                            accepted_state.module_id.to_string(),
+                            ManifoldAuthorityValidationErrorKind::UnknownModule,
+                        ));
+                    };
+                    *state = accepted_state;
+                    next_snapshot.validate_authority_links()?;
+                    (
+                        ManifoldModuleRuntimeStateAuthorityApplicationOutcome::RuntimeStateApplied,
+                        Some(next_snapshot),
+                        None,
+                    )
+                }
+            };
+
+        let application = ManifoldModuleRuntimeStateAuthorityApplication {
+            schema_id: module_runtime_state_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            module_id,
+            from_runtime_revision,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    fn module_runtime_state_authority_decision(
+        &self,
+        request: &ManifoldModuleRuntimeStateChangeRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> ModuleRuntimeStateAuthorityDecision {
+        if request.schema_id != module_runtime_state_change_request_schema_id() {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "module runtime-state request schema is not supported".to_owned(),
+                retryable: false,
+                current_runtime_revision: self
+                    .module_runtime_state(&request.module_id)
+                    .map(|state| state.runtime_revision),
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message: "module runtime-state request expected authority revision does not match current revision"
+                    .to_owned(),
+                retryable: true,
+                current_runtime_revision: self
+                    .module_runtime_state(&request.module_id)
+                    .map(|state| state.runtime_revision),
+            };
+        }
+
+        if !self
+            .host_manifest
+            .capabilities
+            .iter()
+            .any(|capability| capability == &request.required_capability)
+        {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "capability_not_advertised".to_owned(),
+                message:
+                    "module runtime-state request capability is not advertised by the authority host"
+                        .to_owned(),
+                retryable: false,
+                current_runtime_revision: self
+                    .module_runtime_state(&request.module_id)
+                    .map(|state| state.runtime_revision),
+            };
+        }
+
+        if request.proposed_state.module_id != request.module_id {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "module_id_mismatch".to_owned(),
+                message: "module runtime-state request module id does not match proposed state"
+                    .to_owned(),
+                retryable: false,
+                current_runtime_revision: self
+                    .module_runtime_state(&request.module_id)
+                    .map(|state| state.runtime_revision),
+            };
+        }
+
+        let Some(current_state) = self.module_runtime_state(&request.module_id) else {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "unknown_module".to_owned(),
+                message:
+                    "module runtime-state request targets a module absent from authority state"
+                        .to_owned(),
+                retryable: true,
+                current_runtime_revision: None,
+            };
+        };
+
+        let Some(lease_id) = &request.lease_id else {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "missing_lease".to_owned(),
+                message: "module runtime-state change requires an active module lease".to_owned(),
+                retryable: true,
+                current_runtime_revision: Some(current_state.runtime_revision),
+            };
+        };
+
+        let Some(lease) = self.active_lease(lease_id) else {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "unknown_lease".to_owned(),
+                message: "module runtime-state request references an unknown lease".to_owned(),
+                retryable: true,
+                current_runtime_revision: Some(current_state.runtime_revision),
+            };
+        };
+
+        if lease.state != LeaseState::Active {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "inactive_lease".to_owned(),
+                message: "module runtime-state lease is not active".to_owned(),
+                retryable: true,
+                current_runtime_revision: Some(current_state.runtime_revision),
+            };
+        }
+
+        if lease_expired_at(lease, recorded_clock) {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "expired_lease".to_owned(),
+                message: "module runtime-state lease is expired at the review clock".to_owned(),
+                retryable: true,
+                current_runtime_revision: Some(current_state.runtime_revision),
+            };
+        }
+
+        if lease.granted_revision > self.authority_revision {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "lease_revision_ahead".to_owned(),
+                message: "module runtime-state lease was granted after this authority revision"
+                    .to_owned(),
+                retryable: true,
+                current_runtime_revision: Some(current_state.runtime_revision),
+            };
+        }
+
+        if lease.holder_id != request.holder_id
+            || lease.scope != request.module_id
+            || lease.required_capability != request.required_capability
+        {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "lease_mismatch".to_owned(),
+                message: "module runtime-state request does not match the active lease".to_owned(),
+                retryable: true,
+                current_runtime_revision: Some(current_state.runtime_revision),
+            };
+        }
+
+        match self.validate_proposed_module_runtime_state(current_state, &request.proposed_state) {
+            Ok(transition) => ModuleRuntimeStateAuthorityDecision::Accepted {
+                state: request.proposed_state.clone(),
+                transition,
+            },
+            Err(rejection) => ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: rejection.rejection_code,
+                message: rejection.message,
+                retryable: rejection.retryable,
+                current_runtime_revision: Some(current_state.runtime_revision),
+            },
+        }
+    }
+
+    fn validate_proposed_module_runtime_state(
+        &self,
+        current_state: &ManifoldModuleRuntimeState,
+        proposed_state: &ManifoldModuleRuntimeState,
+    ) -> Result<ManifoldModuleRuntimeTransition, ModuleRuntimeStateRejection> {
+        if proposed_state.schema_id != module_runtime_state_schema_id() {
+            return Err(ModuleRuntimeStateRejection::new(
+                "unsupported_schema",
+                "module runtime-state schema is not supported",
+                false,
+            ));
+        }
+
+        if proposed_state.module_id != current_state.module_id {
+            return Err(ModuleRuntimeStateRejection::new(
+                "module_id_mismatch",
+                "module runtime-state proposal targets a different module",
+                false,
+            ));
+        }
+
+        if proposed_state.runtime_revision
+            != current_state.runtime_revision.next().ok_or_else(|| {
+                ModuleRuntimeStateRejection::new(
+                    "runtime_revision_mismatch",
+                    "module runtime revision cannot advance",
+                    false,
+                )
+            })?
+        {
+            return Err(ModuleRuntimeStateRejection::new(
+                "runtime_revision_mismatch",
+                "module runtime-state proposal must advance the runtime revision by one",
+                true,
+            ));
+        }
+
+        if let Some(backend) = &proposed_state.selected_backend {
+            if !self
+                .host_manifest
+                .supported_backends
+                .iter()
+                .any(|known| known == backend)
+            {
+                return Err(ModuleRuntimeStateRejection::new(
+                    "missing_backend",
+                    "module runtime-state proposal selects a backend absent from the authority host",
+                    false,
+                ));
+            }
+        }
+
+        if proposed_state.lifecycle == ModuleLifecycleState::Stopped
+            && !proposed_state.active_streams.is_empty()
+        {
+            return Err(ModuleRuntimeStateRejection::new(
+                "lifecycle_state_conflict",
+                "stopped module runtime-state cannot report active streams",
+                true,
+            ));
+        }
+
+        for stream_id in &proposed_state.active_streams {
+            let Some(stream) = self
+                .stream_registry
+                .streams
+                .iter()
+                .find(|stream| &stream.stream_id == stream_id)
+            else {
+                return Err(ModuleRuntimeStateRejection::new(
+                    "unknown_stream",
+                    "module runtime-state proposal references an unknown active stream",
+                    true,
+                ));
+            };
+
+            if stream.source_module_id != proposed_state.module_id {
+                return Err(ModuleRuntimeStateRejection::new(
+                    "stream_owner_mismatch",
+                    "module runtime-state proposal claims a stream owned by another module",
+                    false,
+                ));
+            }
+        }
+
+        for command_id in &proposed_state.active_commands {
+            if !self.command_ids.iter().any(|known| known == command_id) {
+                return Err(ModuleRuntimeStateRejection::new(
+                    "unknown_command",
+                    "module runtime-state proposal references an unknown active command",
+                    true,
+                ));
+            }
+        }
+
+        let transition = proposed_state.transition_from(current_state);
+        if module_runtime_transition_is_empty(&transition) {
+            return Err(ModuleRuntimeStateRejection::new(
+                "empty_runtime_transition",
+                "module runtime-state proposal has no lifecycle, health, backend, stream, command, or issue changes",
+                false,
+            ));
+        }
+
+        Ok(transition)
+    }
+}
