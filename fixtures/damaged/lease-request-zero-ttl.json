@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.command.lease_request.v1",
+  "request_id": "request.lease.zero_ttl",
+  "holder_id": "holder.test_agent",
+  "scope": "manifold.graph",
+  "expected_revision": 1,
+  "requested_ttl_ms": 0,
+  "required_capability": "manifold.graph.run",
+  "safety_class": "bounded_mutation"
+}

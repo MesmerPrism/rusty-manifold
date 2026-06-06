@@ -1,0 +1,9 @@
+{
+  "$schema": "rusty.manifold.command.lease_release_rejection.v1",
+  "request_id": "request.lease_release.stale_revision",
+  "rejection_code": "stale_revision",
+  "message": "control lease release request expected authority revision does not match current revision",
+  "retryable": true,
+  "current_revision": 2,
+  "active_lease_count": 5
+}

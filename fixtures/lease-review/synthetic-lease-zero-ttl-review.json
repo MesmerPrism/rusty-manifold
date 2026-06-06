@@ -1,0 +1,58 @@
+{
+  "$schema": "rusty.manifold.authority.lease_review.v1",
+  "review_id": "lease_review.request.lease.zero_ttl",
+  "authority_id": "authority.synthetic",
+  "authority_revision": 1,
+  "outcome": "lease_rejected",
+  "accepted": null,
+  "rejection": {
+    "$schema": "rusty.manifold.command.lease_rejection.v1",
+    "request_id": "request.lease.zero_ttl",
+    "rejection_code": "invalid_ttl",
+    "message": "lease request ttl must be greater than zero",
+    "retryable": false,
+    "current_revision": 1,
+    "conflicting_lease_id": null
+  },
+  "audit_event": {
+    "$schema": "rusty.manifold.authority.lease_audit_event.v1",
+    "event_id": "audit.lease.request.lease.zero_ttl.rejected",
+    "authority_id": "authority.synthetic",
+    "prior_authority_revision": 1,
+    "event_kind": "lease_rejected",
+    "request": {
+      "$schema": "rusty.manifold.command.lease_request.v1",
+      "request_id": "request.lease.zero_ttl",
+      "holder_id": "holder.test_agent",
+      "scope": "manifold.graph",
+      "expected_revision": 1,
+      "requested_ttl_ms": 0,
+      "required_capability": "manifold.graph.run",
+      "safety_class": "bounded_mutation"
+    },
+    "accepted": null,
+    "rejection": {
+      "$schema": "rusty.manifold.command.lease_rejection.v1",
+      "request_id": "request.lease.zero_ttl",
+      "rejection_code": "invalid_ttl",
+      "message": "lease request ttl must be greater than zero",
+      "retryable": false,
+      "current_revision": 1,
+      "conflicting_lease_id": null
+    },
+    "recorded_clock": {
+      "$schema": "rusty.manifold.clock.snapshot.v1",
+      "clock_domain": "clock.host_monotonic",
+      "clock_epoch_id": "clock_epoch.synthetic_1",
+      "sequence": 43,
+      "monotonic_elapsed_ns": 1234567990,
+      "wall_unix_ms": 1765000000100,
+      "read_uncertainty_ns": 250000,
+      "health": "healthy",
+      "wall_clock_adjustment_count": 0
+    },
+    "evidence_refs": [
+      "evidence.lease_authority.request.lease.zero_ttl"
+    ]
+  }
+}

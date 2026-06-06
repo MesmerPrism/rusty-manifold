@@ -1,0 +1,21 @@
+{
+  "$schema": "rusty.manifold.clock.snapshot_change_request.v1",
+  "request_id": "request.clock.synthetic_tick",
+  "holder_id": "holder.test_agent",
+  "expected_authority_revision": 1,
+  "lease_id": "lease.synthetic_clock",
+  "required_capability": "manifold.clock.update",
+  "from_clock_epoch_id": "clock_epoch.synthetic_1",
+  "from_clock_sequence": 42,
+  "proposed_snapshot": {
+    "$schema": "rusty.manifold.clock.snapshot.v1",
+    "clock_domain": "clock.host_monotonic",
+    "clock_epoch_id": "clock_epoch.synthetic_1",
+    "sequence": 43,
+    "monotonic_elapsed_ns": 1234567990,
+    "wall_unix_ms": 1765000000100,
+    "read_uncertainty_ns": 250000,
+    "health": "degraded",
+    "wall_clock_adjustment_count": 0
+  }
+}

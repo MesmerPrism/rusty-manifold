@@ -435,6 +435,55 @@ pub struct ManifoldModuleRuntimeTransition {
     pub resolved_issues: Vec<ManifoldIssue>,
 }
 
+/// Request to change one module runtime-state snapshot under Manifold authority.
+///
+/// The request proposes contract state only. It does not start or stop a
+/// process, load a module, open a transport, or claim platform lifecycle work.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldModuleRuntimeStateChangeRequest {
+    /// Schema identifier for this request.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable request id.
+    pub request_id: DottedId,
+    /// Holder requesting the state transition.
+    pub holder_id: DottedId,
+    /// Authority revision the requester observed.
+    pub expected_authority_revision: Revision,
+    /// Lease id proving authority to change this module state.
+    pub lease_id: Option<DottedId>,
+    /// Capability required for this runtime-state transition.
+    pub required_capability: DottedId,
+    /// Module whose state is being changed.
+    pub module_id: DottedId,
+    /// Runtime revision expected before the transition.
+    pub from_runtime_revision: Revision,
+    /// Proposed accepted module state after the transition.
+    pub proposed_state: ManifoldModuleRuntimeState,
+}
+
+/// Rejection for a module runtime-state change request.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldModuleRuntimeStateRejection {
+    /// Schema identifier for this rejection.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request that was rejected.
+    pub request_id: DottedId,
+    /// Stable rejection code.
+    pub rejection_code: DottedId,
+    /// Display-safe rejection message.
+    pub message: String,
+    /// Whether retrying after refreshing state may help.
+    pub retryable: bool,
+    /// Current authority revision observed by the reviewer.
+    pub current_authority_revision: Revision,
+    /// Current runtime revision for the requested module, if known.
+    pub current_runtime_revision: Option<Revision>,
+}
+
 /// Lifecycle field change.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -601,6 +650,237 @@ pub struct ManifoldStreamRegistryDiff {
     pub removed_streams: Vec<ManifoldStreamManifest>,
     /// Streams with the same id but changed metadata.
     pub changed_streams: Vec<ManifoldStreamChange>,
+}
+
+/// Request to change the accepted stream registry.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamRegistryChangeRequest {
+    /// Schema identifier for this request.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request id.
+    pub request_id: DottedId,
+    /// Holder id.
+    pub holder_id: DottedId,
+    /// Expected authority revision.
+    pub expected_authority_revision: Revision,
+    /// Lease id authorizing registry mutation.
+    pub lease_id: Option<DottedId>,
+    /// Capability required for the registry change.
+    pub required_capability: DottedId,
+    /// Proposed registry diff.
+    pub diff: ManifoldStreamRegistryDiff,
+}
+
+/// Rejected stream-registry change result.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamRegistryRejection {
+    /// Schema identifier for this rejection.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request id being rejected.
+    pub request_id: DottedId,
+    /// Machine-readable rejection code.
+    pub rejection_code: DottedId,
+    /// Display-safe explanation.
+    pub message: String,
+    /// Whether retry is safe without operator intervention.
+    pub retryable: bool,
+    /// Current authority revision.
+    pub current_authority_revision: Revision,
+    /// Current accepted stream-registry revision.
+    pub current_registry_revision: Revision,
+}
+
+/// Request to subscribe to one accepted stream transport offer.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionRequest {
+    /// Schema identifier for this request.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request id.
+    pub request_id: DottedId,
+    /// Subscriber id.
+    pub subscriber_id: DottedId,
+    /// Subscriber class used for manifest policy checks.
+    pub subscriber_kind: ManifoldStreamSubscriberKind,
+    /// Expected authority revision.
+    pub expected_authority_revision: Revision,
+    /// Expected stream-registry revision.
+    pub expected_registry_revision: Revision,
+    /// Stream to subscribe to.
+    pub stream_id: DottedId,
+    /// Transport offer selected by the subscriber.
+    pub transport_id: DottedId,
+    /// Requested time-to-live in milliseconds.
+    pub requested_ttl_ms: u64,
+    /// Capability required to admit this subscription.
+    pub required_capability: DottedId,
+    /// Request timestamp in milliseconds in the subscriber's chosen clock domain.
+    pub requested_at_ms: u64,
+}
+
+/// Accepted stream subscription.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscription {
+    /// Schema identifier for this subscription.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable subscription id.
+    pub subscription_id: DottedId,
+    /// Request id that created this subscription.
+    pub request_id: DottedId,
+    /// Subscriber id.
+    pub subscriber_id: DottedId,
+    /// Subscriber class admitted by policy.
+    pub subscriber_kind: ManifoldStreamSubscriberKind,
+    /// Stream being subscribed to.
+    pub stream_id: DottedId,
+    /// Transport offer selected for the subscription.
+    pub transport_id: DottedId,
+    /// Endpoint used by the transport offer, when endpoint-bound.
+    pub endpoint_id: Option<DottedId>,
+    /// Subscription state.
+    pub state: ManifoldStreamSubscriptionState,
+    /// Authority revision at which the subscription was accepted.
+    pub accepted_authority_revision: Revision,
+    /// Registry revision at which the stream offer was accepted.
+    pub accepted_registry_revision: Revision,
+    /// Acceptance timestamp in milliseconds.
+    pub accepted_at_ms: u64,
+    /// Expiration timestamp in milliseconds.
+    pub expires_at_ms: u64,
+    /// Capability used to admit the subscription.
+    pub required_capability: DottedId,
+}
+
+/// Rejected stream subscription request result.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionRejection {
+    /// Schema identifier for this rejection.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request id being rejected.
+    pub request_id: DottedId,
+    /// Machine-readable rejection code.
+    pub rejection_code: DottedId,
+    /// Display-safe explanation.
+    pub message: String,
+    /// Whether retry is safe without operator intervention.
+    pub retryable: bool,
+    /// Current authority revision.
+    pub current_authority_revision: Revision,
+    /// Current accepted stream-registry revision.
+    pub current_registry_revision: Revision,
+    /// Active subscriber count observed for the requested stream.
+    pub active_subscriber_count: u32,
+}
+
+/// Request to release one accepted active stream subscription.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionReleaseRequest {
+    /// Schema identifier for this request.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request id.
+    pub request_id: DottedId,
+    /// Subscription to release.
+    pub subscription_id: DottedId,
+    /// Subscriber id expected to own the subscription.
+    pub subscriber_id: DottedId,
+    /// Expected authority revision.
+    pub expected_authority_revision: Revision,
+    /// Expected stream-registry revision.
+    pub expected_registry_revision: Revision,
+    /// Stream expected to own the subscription.
+    pub stream_id: DottedId,
+    /// Machine-readable reason for releasing the subscription.
+    pub release_reason: DottedId,
+    /// Request timestamp in milliseconds in the subscriber's chosen clock domain.
+    pub requested_at_ms: u64,
+}
+
+/// Rejected stream subscription release request result.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionReleaseRejection {
+    /// Schema identifier for this rejection.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request id being rejected.
+    pub request_id: DottedId,
+    /// Machine-readable rejection code.
+    pub rejection_code: DottedId,
+    /// Display-safe explanation.
+    pub message: String,
+    /// Whether retry is safe without operator intervention.
+    pub retryable: bool,
+    /// Current authority revision.
+    pub current_authority_revision: Revision,
+    /// Current accepted stream-registry revision.
+    pub current_registry_revision: Revision,
+    /// Active subscriber count observed for the requested stream.
+    pub active_subscriber_count: u32,
+}
+
+/// Request to renew one accepted active stream subscription.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionRenewalRequest {
+    /// Schema identifier for this request.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request id.
+    pub request_id: DottedId,
+    /// Subscription to renew.
+    pub subscription_id: DottedId,
+    /// Subscriber id expected to own the subscription.
+    pub subscriber_id: DottedId,
+    /// Expected authority revision.
+    pub expected_authority_revision: Revision,
+    /// Expected stream-registry revision.
+    pub expected_registry_revision: Revision,
+    /// Stream expected to own the subscription.
+    pub stream_id: DottedId,
+    /// Transport offer expected by the subscriber.
+    pub transport_id: DottedId,
+    /// Requested subscription duration from the review clock wall time.
+    pub requested_ttl_ms: u64,
+    /// Machine-readable reason for renewing the subscription.
+    pub renewal_reason: DottedId,
+    /// Request timestamp in milliseconds in the subscriber's chosen clock domain.
+    pub requested_at_ms: u64,
+}
+
+/// Rejected stream subscription renewal request result.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionRenewalRejection {
+    /// Schema identifier for this rejection.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request id being rejected.
+    pub request_id: DottedId,
+    /// Machine-readable rejection code.
+    pub rejection_code: DottedId,
+    /// Display-safe explanation.
+    pub message: String,
+    /// Whether retry is safe without operator intervention.
+    pub retryable: bool,
+    /// Current authority revision.
+    pub current_authority_revision: Revision,
+    /// Current accepted stream-registry revision.
+    pub current_registry_revision: Revision,
+    /// Active subscriber count observed for the requested stream.
+    pub active_subscriber_count: u32,
+    /// Current expiration, when the referenced active subscription was known.
+    pub current_expires_at_ms: Option<u64>,
 }
 
 /// Changed stream descriptor.
@@ -846,6 +1126,170 @@ pub struct ManifoldControlLease {
     pub required_capability: DottedId,
 }
 
+/// Rejected control lease request result.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldControlLeaseRejection {
+    /// Schema identifier for this lease rejection.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request id being rejected.
+    pub request_id: DottedId,
+    /// Machine-readable rejection code.
+    pub rejection_code: DottedId,
+    /// Display-safe explanation.
+    pub message: String,
+    /// Whether retry is safe without operator intervention.
+    pub retryable: bool,
+    /// Current authority revision.
+    pub current_revision: Revision,
+    /// Conflicting lease id, when a held lease blocks the request.
+    pub conflicting_lease_id: Option<DottedId>,
+}
+
+/// Request to release one accepted active control lease.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldControlLeaseReleaseRequest {
+    /// Schema identifier for this request.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request id.
+    pub request_id: DottedId,
+    /// Lease to release.
+    pub lease_id: DottedId,
+    /// Holder expected to own the lease.
+    pub holder_id: DottedId,
+    /// Expected authority revision.
+    pub expected_authority_revision: Revision,
+    /// Lease scope expected by the requester.
+    pub scope: DottedId,
+    /// Machine-readable reason for releasing the lease.
+    pub release_reason: DottedId,
+    /// Request timestamp in milliseconds in the holder's chosen clock domain.
+    pub requested_at_ms: u64,
+}
+
+/// Rejected control lease release request result.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldControlLeaseReleaseRejection {
+    /// Schema identifier for this release rejection.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request id being rejected.
+    pub request_id: DottedId,
+    /// Machine-readable rejection code.
+    pub rejection_code: DottedId,
+    /// Display-safe explanation.
+    pub message: String,
+    /// Whether retry is safe without operator intervention.
+    pub retryable: bool,
+    /// Current authority revision.
+    pub current_revision: Revision,
+    /// Active lease count observed before the release decision.
+    pub active_lease_count: usize,
+}
+
+/// Request to renew one accepted active control lease.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldControlLeaseRenewalRequest {
+    /// Schema identifier for this request.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request id.
+    pub request_id: DottedId,
+    /// Lease to renew.
+    pub lease_id: DottedId,
+    /// Holder expected to own the lease.
+    pub holder_id: DottedId,
+    /// Expected authority revision.
+    pub expected_authority_revision: Revision,
+    /// Lease scope expected by the requester.
+    pub scope: DottedId,
+    /// Requested lease duration from the review clock wall time.
+    pub requested_ttl_ms: u64,
+    /// Machine-readable reason for renewing the lease.
+    pub renewal_reason: DottedId,
+    /// Request timestamp in milliseconds in the holder's chosen clock domain.
+    pub requested_at_ms: u64,
+}
+
+/// Rejected control lease renewal request result.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldControlLeaseRenewalRejection {
+    /// Schema identifier for this renewal rejection.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request id being rejected.
+    pub request_id: DottedId,
+    /// Machine-readable rejection code.
+    pub rejection_code: DottedId,
+    /// Display-safe explanation.
+    pub message: String,
+    /// Whether retry is safe without operator intervention.
+    pub retryable: bool,
+    /// Current authority revision.
+    pub current_revision: Revision,
+    /// Active lease count observed before the renewal decision.
+    pub active_lease_count: usize,
+    /// Current expiration, when the referenced active lease was known.
+    pub current_expires_at_ms: Option<u64>,
+}
+
+/// Request to sweep expired accepted authority state.
+///
+/// The request is source-only authority maintenance. It asks Manifold to
+/// classify active leases and active stream subscriptions by the supplied
+/// review clock and prepare an auditable accepted-state transition; it does
+/// not start timers, close transports, notify holders, or contact runtimes.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldAuthorityExpirySweepRequest {
+    /// Schema identifier for this request.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable request id.
+    pub request_id: DottedId,
+    /// Actor requesting the sweep.
+    pub requester_id: DottedId,
+    /// Authority revision the requester observed.
+    pub expected_authority_revision: Revision,
+    /// Stream-registry revision the requester observed.
+    pub expected_registry_revision: Revision,
+    /// Machine-readable reason for the sweep.
+    pub sweep_reason: DottedId,
+    /// Request timestamp in milliseconds in the requester clock domain.
+    pub requested_at_ms: u64,
+}
+
+/// Rejection for an authority expiry sweep request.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldAuthorityExpirySweepRejection {
+    /// Schema identifier for this rejection.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request id being rejected.
+    pub request_id: DottedId,
+    /// Machine-readable rejection code.
+    pub rejection_code: DottedId,
+    /// Display-safe explanation.
+    pub message: String,
+    /// Whether retrying after refreshing state or time may help.
+    pub retryable: bool,
+    /// Current authority revision observed by the reviewer.
+    pub current_authority_revision: Revision,
+    /// Current accepted stream-registry revision observed by the reviewer.
+    pub current_registry_revision: Revision,
+    /// Expired active lease count at the review clock.
+    pub expired_lease_count: usize,
+    /// Expired active stream subscription count at the review clock.
+    pub expired_subscription_count: usize,
+}
+
 /// Host advertisement manifest.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -894,6 +1338,49 @@ impl ManifoldHostManifest {
 
         Ok(())
     }
+}
+
+/// Request to change the accepted host manifest under Manifold authority.
+///
+/// The request proposes contract state only. It does not start host services,
+/// open endpoints, probe platform permissions, or execute adapter code.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldHostManifestChangeRequest {
+    /// Schema identifier for this request.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable request id.
+    pub request_id: DottedId,
+    /// Holder requesting the host manifest change.
+    pub holder_id: DottedId,
+    /// Authority revision the requester observed.
+    pub expected_authority_revision: Revision,
+    /// Lease id proving authority to change the host manifest.
+    pub lease_id: Option<DottedId>,
+    /// Capability required for host manifest mutation.
+    pub required_capability: DottedId,
+    /// Proposed accepted host manifest after the change.
+    pub proposed_manifest: ManifoldHostManifest,
+}
+
+/// Rejection for a host manifest change request.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldHostManifestRejection {
+    /// Schema identifier for this rejection.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request that was rejected.
+    pub request_id: DottedId,
+    /// Stable rejection code.
+    pub rejection_code: DottedId,
+    /// Display-safe rejection message.
+    pub message: String,
+    /// Whether retrying after refreshing state may help.
+    pub retryable: bool,
+    /// Current authority revision observed by the reviewer.
+    pub current_authority_revision: Revision,
 }
 
 /// Deployment placement manifest.
@@ -1187,6 +1674,11595 @@ pub struct ManifoldClockSnapshot {
     pub health: ClockHealth,
     /// Number of wall-clock adjustments observed by this epoch.
     pub wall_clock_adjustment_count: u64,
+}
+
+/// Request to change the accepted clock snapshot under Manifold authority.
+///
+/// The request proposes contract state only. It does not read a live clock,
+/// change OS time, start a clock service, or open any host adapter.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldClockSnapshotChangeRequest {
+    /// Schema identifier for this request.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable request id.
+    pub request_id: DottedId,
+    /// Holder requesting the clock snapshot change.
+    pub holder_id: DottedId,
+    /// Authority revision the requester observed.
+    pub expected_authority_revision: Revision,
+    /// Lease id proving authority to change the clock snapshot.
+    pub lease_id: Option<DottedId>,
+    /// Capability required for clock mutation.
+    pub required_capability: DottedId,
+    /// Clock epoch id the requester observed before the proposed change.
+    pub from_clock_epoch_id: DottedId,
+    /// Clock sequence the requester observed before the proposed change.
+    pub from_clock_sequence: u64,
+    /// Proposed accepted clock snapshot after the change.
+    pub proposed_snapshot: ManifoldClockSnapshot,
+}
+
+/// Rejection for a clock snapshot change request.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldClockSnapshotRejection {
+    /// Schema identifier for this rejection.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Request that was rejected.
+    pub request_id: DottedId,
+    /// Stable rejection code.
+    pub rejection_code: DottedId,
+    /// Display-safe rejection message.
+    pub message: String,
+    /// Whether retrying after refreshing state may help.
+    pub retryable: bool,
+    /// Current authority revision observed by the reviewer.
+    pub current_authority_revision: Revision,
+    /// Current clock epoch id observed by the reviewer.
+    pub current_clock_epoch_id: DottedId,
+    /// Current clock sequence observed by the reviewer.
+    pub current_clock_sequence: u64,
+}
+
+/// Snapshot of the Manifold state used to review command authority.
+///
+/// This is a data contract only. It records the authority inputs a validator,
+/// GUI, CLI, or host shell can inspect before issuing or auditing a mutating
+/// command; it does not imply sockets, runtime loading, or platform adapters.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldAuthoritySnapshot {
+    /// Schema identifier for this snapshot.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable authority id.
+    pub authority_id: DottedId,
+    /// Authority revision used for command and lease preconditions.
+    pub authority_revision: Revision,
+    /// Host manifest that owns this authority view.
+    pub host_manifest: ManifoldHostManifest,
+    /// Clock snapshot used for authority decisions.
+    pub clock_snapshot: ManifoldClockSnapshot,
+    /// Stream registry visible to command routing.
+    pub stream_registry: ManifoldStreamRegistrySnapshot,
+    /// Module runtime states visible to the authority.
+    pub module_runtime_states: Vec<ManifoldModuleRuntimeState>,
+    /// Command ids advertised through package or runtime contracts.
+    pub command_ids: Vec<DottedId>,
+    /// Descriptors for commands the authority can fully validate.
+    pub command_descriptors: Vec<ManifoldCommandDescriptor>,
+    /// Active control leases considered by the authority.
+    pub active_leases: Vec<ManifoldControlLease>,
+    /// Active stream subscriptions admitted by the authority.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Vec::is_empty")
+    )]
+    pub active_stream_subscriptions: Vec<ManifoldStreamSubscription>,
+}
+
+impl ManifoldAuthoritySnapshot {
+    /// Validates that command, lease, stream, module, host, and clock inputs align.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when any authority input
+    /// points outside the snapshot or advertises an unsafe host/clock/lease pairing.
+    pub fn validate_authority_links(&self) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.snapshot.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.authority_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.host_manifest.authority_role == AuthorityRole::None {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.authority_id.clone(),
+                self.host_manifest.host_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::HostHasNoAuthority,
+            ));
+        }
+
+        if let Err(error) = self.host_manifest.validate_endpoint_security() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.authority_id.clone(),
+                error.endpoint_id().to_string(),
+                ManifoldAuthorityValidationErrorKind::HostEndpointSecurityMismatch,
+            ));
+        }
+
+        if self.host_manifest.clock_domain != self.clock_snapshot.clock_domain {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.authority_id.clone(),
+                self.clock_snapshot.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockDomainMismatch,
+            ));
+        }
+
+        if self.stream_registry.registry_revision > self.authority_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.authority_id.clone(),
+                self.stream_registry.registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionAhead,
+            ));
+        }
+
+        let module_ids = self
+            .module_runtime_states
+            .iter()
+            .map(|state| state.module_id.clone())
+            .collect::<Vec<_>>();
+        for stream in &self.stream_registry.streams {
+            if !module_ids
+                .iter()
+                .any(|module_id| module_id == &stream.source_module_id)
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.authority_id.clone(),
+                    stream.source_module_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::UnknownStreamModule,
+                ));
+            }
+        }
+
+        let stream_ids = self
+            .stream_registry
+            .streams
+            .iter()
+            .map(|stream| stream.stream_id.clone())
+            .collect::<Vec<_>>();
+        for state in &self.module_runtime_states {
+            for stream_id in &state.active_streams {
+                if !stream_ids.iter().any(|known| known == stream_id) {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        state.module_id.clone(),
+                        stream_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownModuleStream,
+                    ));
+                }
+            }
+
+            for command_id in &state.active_commands {
+                if !self.command_ids.iter().any(|known| known == command_id) {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        state.module_id.clone(),
+                        command_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownModuleCommand,
+                    ));
+                }
+            }
+        }
+
+        for descriptor in &self.command_descriptors {
+            if !self
+                .command_ids
+                .iter()
+                .any(|command_id| command_id == &descriptor.command_id)
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.authority_id.clone(),
+                    descriptor.command_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::UnknownCommand,
+                ));
+            }
+
+            if !self
+                .host_manifest
+                .capabilities
+                .iter()
+                .any(|capability| capability == &descriptor.required_capability)
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    descriptor.command_id.clone(),
+                    descriptor.required_capability.to_string(),
+                    ManifoldAuthorityValidationErrorKind::CapabilityNotAdvertised,
+                ));
+            }
+        }
+
+        for lease in &self.active_leases {
+            if lease.state != LeaseState::Active {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.authority_id.clone(),
+                    lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::InactiveLease,
+                ));
+            }
+
+            if lease.granted_revision > self.authority_revision {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.authority_id.clone(),
+                    lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseRevisionAhead,
+                ));
+            }
+
+            if !self
+                .host_manifest
+                .capabilities
+                .iter()
+                .any(|capability| capability == &lease.required_capability)
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    lease.lease_id.clone(),
+                    lease.required_capability.to_string(),
+                    ManifoldAuthorityValidationErrorKind::CapabilityNotAdvertised,
+                ));
+            }
+        }
+
+        if let Some(subscription_id) = duplicate_subscription_id(&self.active_stream_subscriptions)
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.authority_id.clone(),
+                subscription_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+            ));
+        }
+
+        let endpoint_ids = self
+            .host_manifest
+            .endpoints
+            .iter()
+            .map(|endpoint| endpoint.endpoint_id.clone())
+            .collect::<Vec<_>>();
+        for subscription in &self.active_stream_subscriptions {
+            if subscription.state != ManifoldStreamSubscriptionState::Active {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.authority_id.clone(),
+                    subscription.subscription_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+                ));
+            }
+
+            if subscription.accepted_authority_revision > self.authority_revision {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.authority_id.clone(),
+                    subscription.subscription_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+                ));
+            }
+
+            if subscription.accepted_registry_revision > self.stream_registry.registry_revision {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.authority_id.clone(),
+                    subscription.subscription_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+                ));
+            }
+
+            if !self
+                .host_manifest
+                .capabilities
+                .iter()
+                .any(|capability| capability == &subscription.required_capability)
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    subscription.subscription_id.clone(),
+                    subscription.required_capability.to_string(),
+                    ManifoldAuthorityValidationErrorKind::CapabilityNotAdvertised,
+                ));
+            }
+
+            let stream = self
+                .stream_manifest(&subscription.stream_id)
+                .ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        self.authority_id.clone(),
+                        subscription.stream_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownStream,
+                    )
+                })?;
+
+            let offer = stream
+                .transport_offers
+                .iter()
+                .find(|offer| offer.transport_id == subscription.transport_id)
+                .ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        self.authority_id.clone(),
+                        subscription.transport_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownTransport,
+                    )
+                })?;
+
+            if offer.endpoint_id != subscription.endpoint_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    subscription.subscription_id.clone(),
+                    subscription.transport_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+                ));
+            }
+
+            if let Some(endpoint_id) = &subscription.endpoint_id {
+                if !endpoint_ids.iter().any(|known| known == endpoint_id) {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        subscription.subscription_id.clone(),
+                        endpoint_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownTransport,
+                    ));
+                }
+            }
+
+            if subscription.subscriber_kind == ManifoldStreamSubscriberKind::Ui
+                && !stream.subscription.ui_subscribable
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    subscription.subscription_id.clone(),
+                    subscription.stream_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::SubscriptionNotAllowed,
+                ));
+            }
+        }
+
+        for stream in &self.stream_registry.streams {
+            if let Some(max_subscribers) = stream.subscription.max_subscribers {
+                let active_count = self.active_subscription_count(&stream.stream_id);
+                if active_count > max_subscribers {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.authority_id.clone(),
+                        stream.stream_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::SubscriptionLimitReached,
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Deterministically reviews one command envelope against this authority snapshot.
+    ///
+    /// The review is source-only: it does not execute the command, mutate runtime
+    /// state, open transports, or contact a host. Accepted reviews advance the
+    /// reported authority revision by one; rejected reviews keep the current
+    /// authority revision in the rejection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_command(
+        &self,
+        envelope: ManifoldCommandEnvelope,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldCommandAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                envelope.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                envelope.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.command_authority_decision(&envelope, &recorded_clock);
+        let lease = envelope
+            .lease_id
+            .as_ref()
+            .and_then(|lease_id| self.active_lease(lease_id))
+            .cloned();
+        let (outcome, accepted, rejection) = match decision {
+            CommandAuthorityDecision::Accepted => {
+                let accepted_revision = self.authority_revision.next().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        envelope.request_id.clone(),
+                        self.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    )
+                })?;
+                (
+                    ManifoldCommandAuthorityReviewOutcome::CommandAccepted,
+                    Some(ManifoldCommandAck {
+                        schema_id: command_ack_schema_id(),
+                        request_id: envelope.request_id.clone(),
+                        accepted_revision,
+                        lease_id: envelope.lease_id.clone(),
+                        authority_id: self.authority_id.clone(),
+                        accepted_at_ms: wall_unix_ms_u64(&recorded_clock),
+                    }),
+                    None,
+                )
+            }
+            CommandAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+            } => (
+                ManifoldCommandAuthorityReviewOutcome::CommandRejected,
+                None,
+                Some(ManifoldCommandRejection {
+                    schema_id: command_rejection_schema_id(),
+                    request_id: envelope.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code literal is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_revision: Some(self.authority_revision),
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldCommandAuthorityAuditEvent {
+            schema_id: command_authority_audit_event_schema_id(),
+            event_id: command_authority_audit_event_id(&envelope.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            event_kind: outcome.into(),
+            envelope,
+            accepted: accepted.clone(),
+            rejection: rejection.clone(),
+            lease,
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldCommandAuthorityReview {
+            schema_id: command_authority_review_schema_id(),
+            review_id: command_authority_review_id(&audit_event.envelope.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            outcome,
+            accepted,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Prepares one accepted command review for downstream dispatch.
+    ///
+    /// The receipt is source-only. It confirms that a command authority review
+    /// is valid for this snapshot and is ready for a downstream transport or
+    /// executor to consume, but it does not execute the command, mutate
+    /// accepted authority state, open transports, or contact a host.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this snapshot is
+    /// invalid or the supplied review does not match this authority snapshot.
+    pub fn prepare_command_dispatch(
+        &self,
+        review: ManifoldCommandAuthorityReview,
+    ) -> Result<ManifoldCommandDispatchReceipt, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+        review.validate_against_snapshot(self)?;
+
+        let dispatch_id = command_dispatch_receipt_id(&review.review_id);
+        let command_id = review.audit_event.envelope.command_id.clone();
+        let request_id = review.audit_event.envelope.request_id.clone();
+
+        let (outcome, ack, rejection) =
+            if review.outcome == ManifoldCommandAuthorityReviewOutcome::CommandRejected {
+                (
+                    ManifoldCommandDispatchReceiptOutcome::CommandDispatchRejected,
+                    None,
+                    Some(ManifoldCommandDispatchRejection {
+                        schema_id: command_dispatch_rejection_schema_id(),
+                        dispatch_id: dispatch_id.clone(),
+                        rejection_code: DottedId::new("review_rejected")
+                            .expect("rejection code literal is valid"),
+                        message: "command review did not accept a command".to_owned(),
+                        retryable: review
+                            .rejection
+                            .as_ref()
+                            .map(|rejection| rejection.retryable)
+                            .unwrap_or(false),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                )
+            } else {
+                let ack = review.accepted.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                (
+                    ManifoldCommandDispatchReceiptOutcome::CommandDispatchReady,
+                    Some(ack),
+                    None,
+                )
+            };
+
+        let receipt = ManifoldCommandDispatchReceipt {
+            schema_id: command_dispatch_receipt_schema_id(),
+            dispatch_id,
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            command_id,
+            request_id,
+            outcome,
+            ack,
+            rejection,
+            review,
+        };
+        receipt.validate_against_snapshot(self)?;
+        Ok(receipt)
+    }
+
+    /// Deterministically reviews one control lease request against this authority snapshot.
+    ///
+    /// The review is source-only: it does not mutate the accepted lease set,
+    /// renew leases, execute commands, or contact a host.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_lease_request(
+        &self,
+        request: ManifoldControlLeaseRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldControlLeaseAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.lease_authority_decision(&request);
+        let (outcome, accepted, rejection) = match decision {
+            LeaseAuthorityDecision::Accepted => (
+                ManifoldControlLeaseAuthorityReviewOutcome::LeaseAccepted,
+                Some(ManifoldControlLease {
+                    schema_id: control_lease_schema_id(),
+                    lease_id: control_lease_id(&request.request_id),
+                    holder_id: request.holder_id.clone(),
+                    scope: request.scope.clone(),
+                    state: LeaseState::Active,
+                    granted_revision: self.authority_revision,
+                    expires_at_ms: wall_unix_ms_u64(&recorded_clock)
+                        .saturating_add(request.requested_ttl_ms),
+                    required_capability: request.required_capability.clone(),
+                }),
+                None,
+            ),
+            LeaseAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                conflicting_lease_id,
+            } => (
+                ManifoldControlLeaseAuthorityReviewOutcome::LeaseRejected,
+                None,
+                Some(ManifoldControlLeaseRejection {
+                    schema_id: control_lease_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code literal is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_revision: self.authority_revision,
+                    conflicting_lease_id,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldControlLeaseAuthorityAuditEvent {
+            schema_id: control_lease_authority_audit_event_schema_id(),
+            event_id: control_lease_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            event_kind: outcome.into(),
+            request,
+            accepted: accepted.clone(),
+            rejection: rejection.clone(),
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldControlLeaseAuthorityReview {
+            schema_id: control_lease_authority_review_schema_id(),
+            review_id: control_lease_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            outcome,
+            accepted,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one control-lease authority review to this snapshot.
+    ///
+    /// Accepted lease reviews produce a new `ManifoldAuthoritySnapshot` with
+    /// the authority revision advanced by one and the accepted active lease
+    /// appended. Rejected reviews produce a machine-readable application
+    /// rejection and leave accepted state unchanged. This is source-only: it
+    /// does not renew leases, execute commands, mutate runtime state, open
+    /// transports, or contact a host.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_control_lease_authority_review(
+        &self,
+        review: ManifoldControlLeaseAuthorityReview,
+    ) -> Result<ManifoldControlLeaseAuthorityApplication, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        let application_id = control_lease_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let request_id = review.audit_event.request.request_id.clone();
+        let lease_scope = review.audit_event.request.scope.clone();
+        let from_active_lease_count = self.active_leases.len();
+
+        let (outcome, applied_snapshot, rejection) = match review.validate_against_snapshot(self) {
+            Err(error) => (
+                ManifoldControlLeaseAuthorityApplicationOutcome::LeaseApplicationRejected,
+                None,
+                Some(ManifoldAuthoritySnapshotApplicationRejection {
+                    schema_id: authority_snapshot_application_rejection_schema_id(),
+                    application_id: application_id.clone(),
+                    rejection_code: DottedId::new(error.rejection_code())
+                        .expect("authority rejection code is a valid dotted id"),
+                    message: format!(
+                        "control lease review does not match authority snapshot: {error}"
+                    ),
+                    retryable: authority_application_validation_retryable(error.kind()),
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+            Ok(())
+                if review.outcome == ManifoldControlLeaseAuthorityReviewOutcome::LeaseRejected =>
+            {
+                (
+                    ManifoldControlLeaseAuthorityApplicationOutcome::LeaseApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new("review_rejected")
+                            .expect("rejection code literal is valid"),
+                        message: "control lease review did not accept a lease".to_owned(),
+                        retryable: review
+                            .rejection
+                            .as_ref()
+                            .map(|rejection| rejection.retryable)
+                            .unwrap_or(false),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                )
+            }
+            Ok(()) => {
+                let Some(next_authority_revision) = self.authority_revision.next() else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        self.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                };
+                let accepted_lease = review.accepted.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut next_snapshot = self.clone();
+                next_snapshot.authority_revision = next_authority_revision;
+                next_snapshot.active_leases.push(accepted_lease);
+                next_snapshot.validate_authority_links()?;
+                (
+                    ManifoldControlLeaseAuthorityApplicationOutcome::LeaseApplied,
+                    Some(next_snapshot),
+                    None,
+                )
+            }
+        };
+
+        let application = ManifoldControlLeaseAuthorityApplication {
+            schema_id: control_lease_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            request_id,
+            lease_scope,
+            from_active_lease_count,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    /// Deterministically reviews one active control lease release request.
+    ///
+    /// The review is source-only: it verifies release preconditions against
+    /// accepted authority state and records the lease to remove, but it does
+    /// not cancel timers, execute commands, contact hosts, or notify runtimes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_control_lease_release(
+        &self,
+        request: ManifoldControlLeaseReleaseRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldControlLeaseReleaseAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.lease_release_authority_decision(&request, &recorded_clock);
+        let active_lease_count = self.active_leases.len();
+        let (outcome, released, rejection) = match decision {
+            LeaseReleaseAuthorityDecision::Released(lease) => (
+                ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleased,
+                Some(lease),
+                None,
+            ),
+            LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                active_lease_count,
+            } => (
+                ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleaseRejected,
+                None,
+                Some(ManifoldControlLeaseReleaseRejection {
+                    schema_id: control_lease_release_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_revision: self.authority_revision,
+                    active_lease_count,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldControlLeaseReleaseAuthorityAuditEvent {
+            schema_id: control_lease_release_authority_audit_event_schema_id(),
+            event_id: control_lease_release_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            active_lease_count,
+            event_kind: outcome.into(),
+            request,
+            released: released.clone(),
+            rejection: rejection.clone(),
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldControlLeaseReleaseAuthorityReview {
+            schema_id: control_lease_release_authority_review_schema_id(),
+            review_id: control_lease_release_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            outcome,
+            released,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one control lease release authority review.
+    ///
+    /// Accepted release reviews produce a new `ManifoldAuthoritySnapshot` with
+    /// the authority revision advanced by one and the released lease removed
+    /// from the active set. Rejected reviews produce a machine-readable
+    /// application rejection and leave accepted state unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_control_lease_release_authority_review(
+        &self,
+        review: ManifoldControlLeaseReleaseAuthorityReview,
+    ) -> Result<ManifoldControlLeaseReleaseAuthorityApplication, ManifoldAuthorityValidationError>
+    {
+        self.validate_authority_links()?;
+
+        let application_id = control_lease_release_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let lease_id = review.audit_event.request.lease_id.clone();
+        let lease_scope = review.audit_event.request.scope.clone();
+        let from_active_lease_count = self.active_leases.len();
+
+        let (outcome, applied_snapshot, rejection) = match review.validate_against_snapshot(self) {
+            Err(error) => (
+                ManifoldControlLeaseReleaseAuthorityApplicationOutcome::LeaseReleaseApplicationRejected,
+                None,
+                Some(ManifoldAuthoritySnapshotApplicationRejection {
+                    schema_id: authority_snapshot_application_rejection_schema_id(),
+                    application_id: application_id.clone(),
+                    rejection_code: DottedId::new(error.rejection_code())
+                        .expect("authority rejection code is a valid dotted id"),
+                    message: format!(
+                        "control lease release review does not match authority snapshot: {error}"
+                    ),
+                    retryable: authority_application_validation_retryable(error.kind()),
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+            Ok(())
+                if review.outcome
+                    == ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleaseRejected =>
+            {
+                (
+                    ManifoldControlLeaseReleaseAuthorityApplicationOutcome::LeaseReleaseApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new("review_rejected")
+                            .expect("rejection code literal is valid"),
+                        message: "control lease release review did not release a lease".to_owned(),
+                        retryable: review
+                            .rejection
+                            .as_ref()
+                            .map(|rejection| rejection.retryable)
+                            .unwrap_or(false),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                )
+            }
+            Ok(()) => {
+                let Some(next_authority_revision) = self.authority_revision.next() else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        self.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                };
+                let released_lease = review.released.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        "released".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut next_snapshot = self.clone();
+                next_snapshot.authority_revision = next_authority_revision;
+                let Some(position) = next_snapshot
+                    .active_leases
+                    .iter()
+                    .position(|lease| lease.lease_id == released_lease.lease_id)
+                else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        released_lease.lease_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownLease,
+                    ));
+                };
+                next_snapshot.active_leases.remove(position);
+                next_snapshot.validate_authority_links()?;
+                (
+                    ManifoldControlLeaseReleaseAuthorityApplicationOutcome::LeaseReleaseApplied,
+                    Some(next_snapshot),
+                    None,
+                )
+            }
+        };
+
+        let application = ManifoldControlLeaseReleaseAuthorityApplication {
+            schema_id: control_lease_release_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            lease_id,
+            lease_scope,
+            from_active_lease_count,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    /// Deterministically reviews one active control lease renewal request.
+    ///
+    /// The review is source-only: it verifies renewal preconditions against
+    /// accepted active lease state and produces a renewed lease candidate or
+    /// machine-readable rejection. It does not start timers, execute commands,
+    /// contact a host, or mutate accepted authority state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_control_lease_renewal(
+        &self,
+        request: ManifoldControlLeaseRenewalRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldControlLeaseRenewalAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let active_lease_count = self.active_leases.len();
+        let decision = self.lease_renewal_authority_decision(&request, &recorded_clock);
+        let (outcome, renewed, rejection) = match decision {
+            LeaseRenewalAuthorityDecision::Renewed(lease) => (
+                ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewed,
+                Some(lease),
+                None,
+            ),
+            LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                active_lease_count,
+                current_expires_at_ms,
+            } => (
+                ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewalRejected,
+                None,
+                Some(ManifoldControlLeaseRenewalRejection {
+                    schema_id: control_lease_renewal_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_revision: self.authority_revision,
+                    active_lease_count,
+                    current_expires_at_ms,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldControlLeaseRenewalAuthorityAuditEvent {
+            schema_id: control_lease_renewal_authority_audit_event_schema_id(),
+            event_id: control_lease_renewal_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            active_lease_count,
+            event_kind: outcome.into(),
+            request,
+            renewed: renewed.clone(),
+            rejection: rejection.clone(),
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldControlLeaseRenewalAuthorityReview {
+            schema_id: control_lease_renewal_authority_review_schema_id(),
+            review_id: control_lease_renewal_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            outcome,
+            renewed,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one control lease renewal authority review.
+    ///
+    /// Accepted renewal reviews produce a new `ManifoldAuthoritySnapshot` with
+    /// the authority revision advanced by one and the reviewed lease replaced
+    /// by its renewed candidate. Rejected reviews produce a machine-readable
+    /// application rejection and leave accepted state unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_control_lease_renewal_authority_review(
+        &self,
+        review: ManifoldControlLeaseRenewalAuthorityReview,
+    ) -> Result<ManifoldControlLeaseRenewalAuthorityApplication, ManifoldAuthorityValidationError>
+    {
+        self.validate_authority_links()?;
+
+        let application_id = control_lease_renewal_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let lease_id = review.audit_event.request.lease_id.clone();
+        let lease_scope = review.audit_event.request.scope.clone();
+        let from_active_lease_count = self.active_leases.len();
+
+        let (outcome, applied_snapshot, rejection) = match review.validate_against_snapshot(self) {
+            Err(error) => (
+                ManifoldControlLeaseRenewalAuthorityApplicationOutcome::LeaseRenewalApplicationRejected,
+                None,
+                Some(ManifoldAuthoritySnapshotApplicationRejection {
+                    schema_id: authority_snapshot_application_rejection_schema_id(),
+                    application_id: application_id.clone(),
+                    rejection_code: DottedId::new(error.rejection_code())
+                        .expect("authority rejection code is a valid dotted id"),
+                    message: format!(
+                        "control lease renewal review does not match authority snapshot: {error}"
+                    ),
+                    retryable: authority_application_validation_retryable(error.kind()),
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+            Ok(())
+                if review.outcome
+                    == ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewalRejected =>
+            {
+                (
+                    ManifoldControlLeaseRenewalAuthorityApplicationOutcome::LeaseRenewalApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new("review_rejected")
+                            .expect("rejection code literal is valid"),
+                        message: "control lease renewal review did not renew a lease".to_owned(),
+                        retryable: review
+                            .rejection
+                            .as_ref()
+                            .map(|rejection| rejection.retryable)
+                            .unwrap_or(false),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                )
+            }
+            Ok(()) => {
+                let Some(next_authority_revision) = self.authority_revision.next() else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        self.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                };
+                let renewed_lease = review.renewed.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        "renewed".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut next_snapshot = self.clone();
+                next_snapshot.authority_revision = next_authority_revision;
+                let Some(position) = next_snapshot
+                    .active_leases
+                    .iter()
+                    .position(|lease| lease.lease_id == renewed_lease.lease_id)
+                else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        renewed_lease.lease_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownLease,
+                    ));
+                };
+                next_snapshot.active_leases[position] = renewed_lease;
+                next_snapshot.validate_authority_links()?;
+                (
+                    ManifoldControlLeaseRenewalAuthorityApplicationOutcome::LeaseRenewalApplied,
+                    Some(next_snapshot),
+                    None,
+                )
+            }
+        };
+
+        let application = ManifoldControlLeaseRenewalAuthorityApplication {
+            schema_id: control_lease_renewal_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            lease_id,
+            lease_scope,
+            from_active_lease_count,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    /// Deterministically reviews one authority expiry sweep request.
+    ///
+    /// The review is source-only: it classifies accepted active leases and
+    /// active stream subscriptions as expired at the supplied review clock and
+    /// records exactly which accepted-state entries should be removed. It does
+    /// not start timers, execute commands, close transports, contact hosts, or
+    /// notify holders/subscribers.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_authority_expiry_sweep(
+        &self,
+        request: ManifoldAuthorityExpirySweepRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldAuthorityExpirySweepAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.authority_expiry_sweep_decision(&request, &recorded_clock);
+        let (outcome, expired_leases, expired_stream_subscriptions, rejection) = match decision {
+            AuthorityExpirySweepDecision::Accepted {
+                expired_leases,
+                expired_stream_subscriptions,
+            } => (
+                ManifoldAuthorityExpirySweepAuthorityReviewOutcome::ExpiredStateAccepted,
+                expired_leases,
+                expired_stream_subscriptions,
+                None,
+            ),
+            AuthorityExpirySweepDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                expired_lease_count,
+                expired_subscription_count,
+            } => (
+                ManifoldAuthorityExpirySweepAuthorityReviewOutcome::ExpirySweepRejected,
+                Vec::new(),
+                Vec::new(),
+                Some(ManifoldAuthorityExpirySweepRejection {
+                    schema_id: authority_expiry_sweep_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_authority_revision: self.authority_revision,
+                    current_registry_revision: self.stream_registry.registry_revision,
+                    expired_lease_count,
+                    expired_subscription_count,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldAuthorityExpirySweepAuthorityAuditEvent {
+            schema_id: authority_expiry_sweep_authority_audit_event_schema_id(),
+            event_id: authority_expiry_sweep_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            prior_registry_revision: self.stream_registry.registry_revision,
+            event_kind: outcome.into(),
+            request,
+            expired_leases: expired_leases.clone(),
+            expired_stream_subscriptions: expired_stream_subscriptions.clone(),
+            rejection: rejection.clone(),
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldAuthorityExpirySweepAuthorityReview {
+            schema_id: authority_expiry_sweep_authority_review_schema_id(),
+            review_id: authority_expiry_sweep_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            registry_revision: self.stream_registry.registry_revision,
+            outcome,
+            expired_leases,
+            expired_stream_subscriptions,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one authority expiry sweep review.
+    ///
+    /// Accepted sweep reviews produce a new `ManifoldAuthoritySnapshot` with
+    /// the authority revision advanced by one and exactly the reviewed expired
+    /// leases/subscriptions removed from accepted state. Rejected reviews
+    /// produce a machine-readable application rejection and leave accepted
+    /// state unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_authority_expiry_sweep_review(
+        &self,
+        review: ManifoldAuthorityExpirySweepAuthorityReview,
+    ) -> Result<ManifoldAuthorityExpirySweepAuthorityApplication, ManifoldAuthorityValidationError>
+    {
+        self.validate_authority_links()?;
+
+        let application_id = authority_expiry_sweep_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let from_registry_revision = self.stream_registry.registry_revision;
+        let from_active_lease_count = self.active_leases.len();
+        let from_active_subscription_count = self.active_stream_subscriptions.len();
+
+        let (outcome, applied_snapshot, rejection) = match review.validate_against_snapshot(self) {
+            Err(error) => (
+                ManifoldAuthorityExpirySweepAuthorityApplicationOutcome::ExpirySweepApplicationRejected,
+                None,
+                Some(ManifoldAuthoritySnapshotApplicationRejection {
+                    schema_id: authority_snapshot_application_rejection_schema_id(),
+                    application_id: application_id.clone(),
+                    rejection_code: DottedId::new(error.rejection_code())
+                        .expect("authority rejection code is a valid dotted id"),
+                    message: format!(
+                        "authority expiry sweep review does not match authority snapshot: {error}"
+                    ),
+                    retryable: authority_application_validation_retryable(error.kind()),
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+            Ok(())
+                if review.outcome
+                    == ManifoldAuthorityExpirySweepAuthorityReviewOutcome::ExpirySweepRejected =>
+            {
+                (
+                    ManifoldAuthorityExpirySweepAuthorityApplicationOutcome::ExpirySweepApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new("review_rejected")
+                            .expect("rejection code literal is valid"),
+                        message: "authority expiry sweep review did not accept expired state"
+                            .to_owned(),
+                        retryable: review
+                            .rejection
+                            .as_ref()
+                            .map(|rejection| rejection.retryable)
+                            .unwrap_or(false),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                )
+            }
+            Ok(()) => {
+                let Some(next_authority_revision) = self.authority_revision.next() else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        self.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                };
+
+                let expired_lease_ids = review
+                    .expired_leases
+                    .iter()
+                    .map(|lease| lease.lease_id.clone())
+                    .collect::<Vec<_>>();
+                let expired_subscription_ids = review
+                    .expired_stream_subscriptions
+                    .iter()
+                    .map(|subscription| subscription.subscription_id.clone())
+                    .collect::<Vec<_>>();
+
+                let mut next_snapshot = self.clone();
+                next_snapshot.authority_revision = next_authority_revision;
+                next_snapshot
+                    .active_leases
+                    .retain(|lease| !expired_lease_ids.iter().any(|id| id == &lease.lease_id));
+                next_snapshot
+                    .active_stream_subscriptions
+                    .retain(|subscription| {
+                        !expired_subscription_ids
+                            .iter()
+                            .any(|id| id == &subscription.subscription_id)
+                    });
+                next_snapshot.validate_authority_links()?;
+                (
+                    ManifoldAuthorityExpirySweepAuthorityApplicationOutcome::ExpiredStateApplied,
+                    Some(next_snapshot),
+                    None,
+                )
+            }
+        };
+
+        let application = ManifoldAuthorityExpirySweepAuthorityApplication {
+            schema_id: authority_expiry_sweep_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            from_registry_revision,
+            request_id: review.audit_event.request.request_id.clone(),
+            from_active_lease_count,
+            from_active_subscription_count,
+            expired_lease_count: review.expired_leases.len(),
+            expired_subscription_count: review.expired_stream_subscriptions.len(),
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    /// Deterministically reviews one stream-registry change request against this authority snapshot.
+    ///
+    /// The review is source-only: it applies the proposed diff to contract data
+    /// only and does not publish streams, open transports, start modules, or
+    /// mutate a runtime registry.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_stream_registry_change(
+        &self,
+        request: ManifoldStreamRegistryChangeRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldStreamRegistryAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.stream_registry_authority_decision(&request, &recorded_clock);
+        let lease = request
+            .lease_id
+            .as_ref()
+            .and_then(|lease_id| self.active_lease(lease_id))
+            .cloned();
+        let (outcome, accepted, rejection) = match decision {
+            StreamRegistryAuthorityDecision::Accepted(snapshot) => (
+                ManifoldStreamRegistryAuthorityReviewOutcome::RegistryAccepted,
+                Some(snapshot),
+                None,
+            ),
+            StreamRegistryAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+            } => (
+                ManifoldStreamRegistryAuthorityReviewOutcome::RegistryRejected,
+                None,
+                Some(ManifoldStreamRegistryRejection {
+                    schema_id: stream_registry_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_authority_revision: self.authority_revision,
+                    current_registry_revision: self.stream_registry.registry_revision,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldStreamRegistryAuthorityAuditEvent {
+            schema_id: stream_registry_authority_audit_event_schema_id(),
+            event_id: stream_registry_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            prior_registry_revision: self.stream_registry.registry_revision,
+            event_kind: outcome.into(),
+            request,
+            accepted: accepted.clone(),
+            rejection: rejection.clone(),
+            lease,
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldStreamRegistryAuthorityReview {
+            schema_id: stream_registry_authority_review_schema_id(),
+            review_id: stream_registry_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            registry_revision: self.stream_registry.registry_revision,
+            outcome,
+            accepted,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one stream-registry authority review to this snapshot.
+    ///
+    /// Accepted registry reviews produce a new `ManifoldAuthoritySnapshot` with
+    /// the authority revision advanced by one and the accepted stream registry
+    /// installed. Rejected reviews produce a machine-readable application
+    /// rejection and leave accepted state unchanged. This is source-only: it
+    /// does not publish streams, open transports, notify subscribers, or
+    /// mutate a runtime registry.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_stream_registry_authority_review(
+        &self,
+        review: ManifoldStreamRegistryAuthorityReview,
+    ) -> Result<ManifoldStreamRegistryAuthorityApplication, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        let application_id = stream_registry_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let from_registry_revision = self.stream_registry.registry_revision;
+
+        let (outcome, applied_snapshot, rejection) = match review.validate_against_snapshot(self) {
+            Err(error) => (
+                ManifoldStreamRegistryAuthorityApplicationOutcome::RegistryApplicationRejected,
+                None,
+                Some(ManifoldAuthoritySnapshotApplicationRejection {
+                    schema_id: authority_snapshot_application_rejection_schema_id(),
+                    application_id: application_id.clone(),
+                    rejection_code: DottedId::new(error.rejection_code())
+                        .expect("authority rejection code is a valid dotted id"),
+                    message: format!(
+                        "stream registry review does not match authority snapshot: {error}"
+                    ),
+                    retryable: authority_application_validation_retryable(error.kind()),
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+            Ok(())
+                if review.outcome
+                    == ManifoldStreamRegistryAuthorityReviewOutcome::RegistryRejected =>
+            {
+                (
+                    ManifoldStreamRegistryAuthorityApplicationOutcome::RegistryApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new("review_rejected")
+                            .expect("rejection code literal is valid"),
+                        message: "stream registry review did not accept a registry snapshot"
+                            .to_owned(),
+                        retryable: review
+                            .rejection
+                            .as_ref()
+                            .map(|rejection| rejection.retryable)
+                            .unwrap_or(false),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                )
+            }
+            Ok(()) => {
+                let Some(next_authority_revision) = self.authority_revision.next() else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        self.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                };
+                let mut next_snapshot = self.clone();
+                next_snapshot.authority_revision = next_authority_revision;
+                next_snapshot.stream_registry = review.accepted.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                next_snapshot.validate_authority_links()?;
+                (
+                    ManifoldStreamRegistryAuthorityApplicationOutcome::RegistrySnapshotApplied,
+                    Some(next_snapshot),
+                    None,
+                )
+            }
+        };
+
+        let application = ManifoldStreamRegistryAuthorityApplication {
+            schema_id: stream_registry_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            from_registry_revision,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    /// Deterministically reviews one stream subscription request.
+    ///
+    /// The review is source-only: it admits or rejects a subscriber against the
+    /// accepted stream manifest and host capability state, but it does not open
+    /// transports, notify subscribers, or contact runtime providers.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_stream_subscription(
+        &self,
+        request: ManifoldStreamSubscriptionRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldStreamSubscriptionAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.stream_subscription_authority_decision(&request, &recorded_clock);
+        let active_subscriber_count = self.active_subscription_count(&request.stream_id);
+        let (outcome, accepted, rejection) = match decision {
+            StreamSubscriptionAuthorityDecision::Accepted(subscription) => (
+                ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionAccepted,
+                Some(subscription),
+                None,
+            ),
+            StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                active_subscriber_count,
+            } => (
+                ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionRejected,
+                None,
+                Some(ManifoldStreamSubscriptionRejection {
+                    schema_id: stream_subscription_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_authority_revision: self.authority_revision,
+                    current_registry_revision: self.stream_registry.registry_revision,
+                    active_subscriber_count,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldStreamSubscriptionAuthorityAuditEvent {
+            schema_id: stream_subscription_authority_audit_event_schema_id(),
+            event_id: stream_subscription_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            prior_registry_revision: self.stream_registry.registry_revision,
+            active_subscriber_count,
+            event_kind: outcome.into(),
+            request,
+            accepted: accepted.clone(),
+            rejection: rejection.clone(),
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldStreamSubscriptionAuthorityReview {
+            schema_id: stream_subscription_authority_review_schema_id(),
+            review_id: stream_subscription_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            registry_revision: self.stream_registry.registry_revision,
+            outcome,
+            accepted,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one stream subscription authority review.
+    ///
+    /// Accepted subscription reviews produce a new `ManifoldAuthoritySnapshot`
+    /// with the authority revision advanced by one and the accepted active
+    /// subscription appended. Rejected reviews produce a machine-readable
+    /// application rejection and leave accepted state unchanged. This is
+    /// source-only: it does not open transports, notify subscribers, or contact
+    /// runtime providers.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_stream_subscription_authority_review(
+        &self,
+        review: ManifoldStreamSubscriptionAuthorityReview,
+    ) -> Result<ManifoldStreamSubscriptionAuthorityApplication, ManifoldAuthorityValidationError>
+    {
+        self.validate_authority_links()?;
+
+        let application_id = stream_subscription_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let from_registry_revision = self.stream_registry.registry_revision;
+        let stream_id = review.audit_event.request.stream_id.clone();
+        let from_active_subscriber_count = self.active_subscription_count(&stream_id);
+
+        let (outcome, applied_snapshot, rejection) = match review.validate_against_snapshot(self) {
+            Err(error) => (
+                ManifoldStreamSubscriptionAuthorityApplicationOutcome::SubscriptionApplicationRejected,
+                None,
+                Some(ManifoldAuthoritySnapshotApplicationRejection {
+                    schema_id: authority_snapshot_application_rejection_schema_id(),
+                    application_id: application_id.clone(),
+                    rejection_code: DottedId::new(error.rejection_code())
+                        .expect("authority rejection code is a valid dotted id"),
+                    message: format!(
+                        "stream subscription review does not match authority snapshot: {error}"
+                    ),
+                    retryable: authority_application_validation_retryable(error.kind()),
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+            Ok(())
+                if review.outcome
+                    == ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionRejected =>
+            {
+                (
+                    ManifoldStreamSubscriptionAuthorityApplicationOutcome::SubscriptionApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new("review_rejected")
+                            .expect("rejection code literal is valid"),
+                        message: "stream subscription review did not accept a subscription"
+                            .to_owned(),
+                        retryable: review
+                            .rejection
+                            .as_ref()
+                            .map(|rejection| rejection.retryable)
+                            .unwrap_or(false),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                )
+            }
+            Ok(()) => {
+                let Some(next_authority_revision) = self.authority_revision.next() else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        self.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                };
+                let accepted_subscription = review.accepted.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut next_snapshot = self.clone();
+                next_snapshot.authority_revision = next_authority_revision;
+                next_snapshot
+                    .active_stream_subscriptions
+                    .push(accepted_subscription);
+                next_snapshot.validate_authority_links()?;
+                (
+                    ManifoldStreamSubscriptionAuthorityApplicationOutcome::SubscriptionApplied,
+                    Some(next_snapshot),
+                    None,
+                )
+            }
+        };
+
+        let application = ManifoldStreamSubscriptionAuthorityApplication {
+            schema_id: stream_subscription_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            from_registry_revision,
+            stream_id,
+            from_active_subscriber_count,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    /// Deterministically reviews one active stream subscription release request.
+    ///
+    /// The review is source-only: it verifies the release preconditions against
+    /// accepted authority state and records the subscription to remove, but it
+    /// does not close transports, notify subscribers, or contact providers.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_stream_subscription_release(
+        &self,
+        request: ManifoldStreamSubscriptionReleaseRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldStreamSubscriptionReleaseAuthorityReview, ManifoldAuthorityValidationError>
+    {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision =
+            self.stream_subscription_release_authority_decision(&request, &recorded_clock);
+        let active_subscriber_count = self.active_subscription_count(&request.stream_id);
+        let (outcome, released, rejection) = match decision {
+            StreamSubscriptionReleaseAuthorityDecision::Released(subscription) => (
+                ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome::SubscriptionReleased,
+                Some(subscription),
+                None,
+            ),
+            StreamSubscriptionReleaseAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                active_subscriber_count,
+            } => (
+                ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome::SubscriptionReleaseRejected,
+                None,
+                Some(ManifoldStreamSubscriptionReleaseRejection {
+                    schema_id: stream_subscription_release_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_authority_revision: self.authority_revision,
+                    current_registry_revision: self.stream_registry.registry_revision,
+                    active_subscriber_count,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldStreamSubscriptionReleaseAuthorityAuditEvent {
+            schema_id: stream_subscription_release_authority_audit_event_schema_id(),
+            event_id: stream_subscription_release_authority_audit_event_id(
+                &request.request_id,
+                outcome,
+            ),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            prior_registry_revision: self.stream_registry.registry_revision,
+            active_subscriber_count,
+            event_kind: outcome.into(),
+            request,
+            released: released.clone(),
+            rejection: rejection.clone(),
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldStreamSubscriptionReleaseAuthorityReview {
+            schema_id: stream_subscription_release_authority_review_schema_id(),
+            review_id: stream_subscription_release_authority_review_id(
+                &audit_event.request.request_id,
+            ),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            registry_revision: self.stream_registry.registry_revision,
+            outcome,
+            released,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one stream subscription release authority review.
+    ///
+    /// Accepted release reviews produce a new `ManifoldAuthoritySnapshot` with
+    /// the authority revision advanced by one and the released subscription
+    /// removed from the active set. Rejected reviews produce a machine-readable
+    /// application rejection and leave accepted state unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_stream_subscription_release_authority_review(
+        &self,
+        review: ManifoldStreamSubscriptionReleaseAuthorityReview,
+    ) -> Result<
+        ManifoldStreamSubscriptionReleaseAuthorityApplication,
+        ManifoldAuthorityValidationError,
+    > {
+        self.validate_authority_links()?;
+
+        let application_id =
+            stream_subscription_release_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let from_registry_revision = self.stream_registry.registry_revision;
+        let stream_id = review.audit_event.request.stream_id.clone();
+        let subscription_id = review.audit_event.request.subscription_id.clone();
+        let from_active_subscriber_count = self.active_subscription_count(&stream_id);
+
+        let (outcome, applied_snapshot, rejection) = match review.validate_against_snapshot(self) {
+            Err(error) => (
+                ManifoldStreamSubscriptionReleaseAuthorityApplicationOutcome::SubscriptionReleaseApplicationRejected,
+                None,
+                Some(ManifoldAuthoritySnapshotApplicationRejection {
+                    schema_id: authority_snapshot_application_rejection_schema_id(),
+                    application_id: application_id.clone(),
+                    rejection_code: DottedId::new(error.rejection_code())
+                        .expect("authority rejection code is a valid dotted id"),
+                    message: format!(
+                        "stream subscription release review does not match authority snapshot: {error}"
+                    ),
+                    retryable: authority_application_validation_retryable(error.kind()),
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+            Ok(())
+                if review.outcome
+                    == ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome::SubscriptionReleaseRejected =>
+            {
+                (
+                    ManifoldStreamSubscriptionReleaseAuthorityApplicationOutcome::SubscriptionReleaseApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new("review_rejected")
+                            .expect("rejection code literal is valid"),
+                        message: "stream subscription release review did not release a subscription"
+                            .to_owned(),
+                        retryable: review
+                            .rejection
+                            .as_ref()
+                            .map(|rejection| rejection.retryable)
+                            .unwrap_or(false),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                )
+            }
+            Ok(()) => {
+                let Some(next_authority_revision) = self.authority_revision.next() else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        self.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                };
+                let released_subscription = review.released.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        "released".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut next_snapshot = self.clone();
+                next_snapshot.authority_revision = next_authority_revision;
+                let Some(position) = next_snapshot
+                    .active_stream_subscriptions
+                    .iter()
+                    .position(|subscription| {
+                        subscription.subscription_id == released_subscription.subscription_id
+                    })
+                else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        released_subscription.subscription_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownSubscription,
+                    ));
+                };
+                next_snapshot.active_stream_subscriptions.remove(position);
+                next_snapshot.validate_authority_links()?;
+                (
+                    ManifoldStreamSubscriptionReleaseAuthorityApplicationOutcome::SubscriptionReleaseApplied,
+                    Some(next_snapshot),
+                    None,
+                )
+            }
+        };
+
+        let application = ManifoldStreamSubscriptionReleaseAuthorityApplication {
+            schema_id: stream_subscription_release_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            from_registry_revision,
+            stream_id,
+            subscription_id,
+            from_active_subscriber_count,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    /// Deterministically reviews one active stream subscription renewal request.
+    ///
+    /// The review is source-only: it verifies renewal preconditions against
+    /// accepted authority state and records the renewed subscription, but it
+    /// does not open transports, notify subscribers, or contact providers.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_stream_subscription_renewal(
+        &self,
+        request: ManifoldStreamSubscriptionRenewalRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldStreamSubscriptionRenewalAuthorityReview, ManifoldAuthorityValidationError>
+    {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision =
+            self.stream_subscription_renewal_authority_decision(&request, &recorded_clock);
+        let active_subscriber_count = self.active_subscription_count(&request.stream_id);
+        let (outcome, renewed, rejection) = match decision {
+            StreamSubscriptionRenewalAuthorityDecision::Renewed(subscription) => (
+                ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome::SubscriptionRenewed,
+                Some(subscription),
+                None,
+            ),
+            StreamSubscriptionRenewalAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                active_subscriber_count,
+                current_expires_at_ms,
+            } => (
+                ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome::SubscriptionRenewalRejected,
+                None,
+                Some(ManifoldStreamSubscriptionRenewalRejection {
+                    schema_id: stream_subscription_renewal_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_authority_revision: self.authority_revision,
+                    current_registry_revision: self.stream_registry.registry_revision,
+                    active_subscriber_count,
+                    current_expires_at_ms,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldStreamSubscriptionRenewalAuthorityAuditEvent {
+            schema_id: stream_subscription_renewal_authority_audit_event_schema_id(),
+            event_id: stream_subscription_renewal_authority_audit_event_id(
+                &request.request_id,
+                outcome,
+            ),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            prior_registry_revision: self.stream_registry.registry_revision,
+            active_subscriber_count,
+            event_kind: outcome.into(),
+            request,
+            renewed: renewed.clone(),
+            rejection: rejection.clone(),
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldStreamSubscriptionRenewalAuthorityReview {
+            schema_id: stream_subscription_renewal_authority_review_schema_id(),
+            review_id: stream_subscription_renewal_authority_review_id(
+                &audit_event.request.request_id,
+            ),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            registry_revision: self.stream_registry.registry_revision,
+            outcome,
+            renewed,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one stream subscription renewal authority review.
+    ///
+    /// Accepted renewal reviews produce a new `ManifoldAuthoritySnapshot` with
+    /// the authority revision advanced by one and the renewed subscription
+    /// replacing the matching active subscription. Rejected reviews produce a
+    /// machine-readable application rejection and leave accepted state unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_stream_subscription_renewal_authority_review(
+        &self,
+        review: ManifoldStreamSubscriptionRenewalAuthorityReview,
+    ) -> Result<
+        ManifoldStreamSubscriptionRenewalAuthorityApplication,
+        ManifoldAuthorityValidationError,
+    > {
+        self.validate_authority_links()?;
+
+        let application_id =
+            stream_subscription_renewal_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let from_registry_revision = self.stream_registry.registry_revision;
+        let stream_id = review.audit_event.request.stream_id.clone();
+        let subscription_id = review.audit_event.request.subscription_id.clone();
+        let from_active_subscriber_count = self.active_subscription_count(&stream_id);
+
+        let (outcome, applied_snapshot, rejection) = match review.validate_against_snapshot(self) {
+            Err(error) => (
+                ManifoldStreamSubscriptionRenewalAuthorityApplicationOutcome::SubscriptionRenewalApplicationRejected,
+                None,
+                Some(ManifoldAuthoritySnapshotApplicationRejection {
+                    schema_id: authority_snapshot_application_rejection_schema_id(),
+                    application_id: application_id.clone(),
+                    rejection_code: DottedId::new(error.rejection_code())
+                        .expect("authority rejection code is a valid dotted id"),
+                    message: format!(
+                        "stream subscription renewal review does not match authority snapshot: {error}"
+                    ),
+                    retryable: authority_application_validation_retryable(error.kind()),
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+            Ok(())
+                if review.outcome
+                    == ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome::SubscriptionRenewalRejected =>
+            {
+                (
+                    ManifoldStreamSubscriptionRenewalAuthorityApplicationOutcome::SubscriptionRenewalApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new("review_rejected")
+                            .expect("rejection code literal is valid"),
+                        message: "stream subscription renewal review did not renew a subscription"
+                            .to_owned(),
+                        retryable: review
+                            .rejection
+                            .as_ref()
+                            .map(|rejection| rejection.retryable)
+                            .unwrap_or(false),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                )
+            }
+            Ok(()) => {
+                let Some(next_authority_revision) = self.authority_revision.next() else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        self.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                };
+                let renewed_subscription = review.renewed.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        "renewed".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut next_snapshot = self.clone();
+                next_snapshot.authority_revision = next_authority_revision;
+                let Some(position) =
+                    next_snapshot
+                        .active_stream_subscriptions
+                        .iter()
+                        .position(|subscription| {
+                            subscription.subscription_id == renewed_subscription.subscription_id
+                        })
+                else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        renewed_subscription.subscription_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownSubscription,
+                    ));
+                };
+                next_snapshot.active_stream_subscriptions[position] = renewed_subscription;
+                next_snapshot.validate_authority_links()?;
+                (
+                    ManifoldStreamSubscriptionRenewalAuthorityApplicationOutcome::SubscriptionRenewalApplied,
+                    Some(next_snapshot),
+                    None,
+                )
+            }
+        };
+
+        let application = ManifoldStreamSubscriptionRenewalAuthorityApplication {
+            schema_id: stream_subscription_renewal_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            from_registry_revision,
+            stream_id,
+            subscription_id,
+            from_active_subscriber_count,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    /// Deterministically reviews one module runtime-state change request.
+    ///
+    /// The review is source-only: it accepts or rejects proposed contract state
+    /// and computes the resulting transition without starting, stopping, or
+    /// contacting a runtime module.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_module_runtime_state_change(
+        &self,
+        request: ManifoldModuleRuntimeStateChangeRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldModuleRuntimeStateAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.module_runtime_state_authority_decision(&request, &recorded_clock);
+        let lease = request
+            .lease_id
+            .as_ref()
+            .and_then(|lease_id| self.active_lease(lease_id))
+            .cloned();
+        let runtime_revision = self
+            .module_runtime_state(&request.module_id)
+            .map(|state| state.runtime_revision);
+        let (outcome, accepted, transition, rejection) = match decision {
+            ModuleRuntimeStateAuthorityDecision::Accepted { state, transition } => (
+                ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateAccepted,
+                Some(state),
+                Some(transition),
+                None,
+            ),
+            ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                current_runtime_revision,
+            } => (
+                ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateRejected,
+                None,
+                None,
+                Some(ManifoldModuleRuntimeStateRejection {
+                    schema_id: module_runtime_state_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_authority_revision: self.authority_revision,
+                    current_runtime_revision,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldModuleRuntimeStateAuthorityAuditEvent {
+            schema_id: module_runtime_state_authority_audit_event_schema_id(),
+            event_id: module_runtime_state_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            module_id: request.module_id.clone(),
+            prior_runtime_revision: runtime_revision,
+            event_kind: outcome.into(),
+            request,
+            accepted: accepted.clone(),
+            transition: transition.clone(),
+            rejection: rejection.clone(),
+            lease,
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldModuleRuntimeStateAuthorityReview {
+            schema_id: module_runtime_state_authority_review_schema_id(),
+            review_id: module_runtime_state_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            module_id: audit_event.module_id.clone(),
+            runtime_revision,
+            outcome,
+            accepted,
+            transition,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one module runtime-state authority review to this snapshot.
+    ///
+    /// Accepted runtime-state reviews produce a new `ManifoldAuthoritySnapshot`
+    /// with the authority revision advanced by one and the accepted module
+    /// runtime state installed. Rejected reviews produce a machine-readable
+    /// application rejection and leave accepted state unchanged. This is
+    /// source-only: it does not start, stop, load, unload, signal, or contact a
+    /// runtime module.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_module_runtime_state_authority_review(
+        &self,
+        review: ManifoldModuleRuntimeStateAuthorityReview,
+    ) -> Result<ManifoldModuleRuntimeStateAuthorityApplication, ManifoldAuthorityValidationError>
+    {
+        self.validate_authority_links()?;
+
+        let application_id = module_runtime_state_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let module_id = review.module_id.clone();
+        let from_runtime_revision = self
+            .module_runtime_state(&module_id)
+            .map(|state| state.runtime_revision);
+
+        let (outcome, applied_snapshot, rejection) =
+            match review.validate_against_snapshot(self) {
+                Err(error) => (
+                    ManifoldModuleRuntimeStateAuthorityApplicationOutcome::RuntimeStateApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new(error.rejection_code())
+                            .expect("authority rejection code is a valid dotted id"),
+                        message: format!(
+                            "module runtime-state review does not match authority snapshot: {error}"
+                        ),
+                        retryable: authority_application_validation_retryable(error.kind()),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                ),
+                Ok(()) if review.outcome
+                    == ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateRejected =>
+                {
+                    (
+                        ManifoldModuleRuntimeStateAuthorityApplicationOutcome::RuntimeStateApplicationRejected,
+                        None,
+                        Some(ManifoldAuthoritySnapshotApplicationRejection {
+                            schema_id: authority_snapshot_application_rejection_schema_id(),
+                            application_id: application_id.clone(),
+                            rejection_code: DottedId::new("review_rejected")
+                                .expect("rejection code literal is valid"),
+                            message: "module runtime-state review did not accept runtime state"
+                                .to_owned(),
+                            retryable: review
+                                .rejection
+                                .as_ref()
+                                .map(|rejection| rejection.retryable)
+                                .unwrap_or(false),
+                            current_authority_revision: self.authority_revision,
+                        }),
+                    )
+                }
+                Ok(()) => {
+                    let Some(next_authority_revision) = self.authority_revision.next() else {
+                        return Err(ManifoldAuthorityValidationError::new(
+                            review.review_id.clone(),
+                            self.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        ));
+                    };
+                    let accepted_state = review.accepted.clone().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            review.review_id.clone(),
+                            "accepted".to_owned(),
+                            ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                        )
+                    })?;
+                    let mut next_snapshot = self.clone();
+                    next_snapshot.authority_revision = next_authority_revision;
+                    let Some(state) = next_snapshot
+                        .module_runtime_states
+                        .iter_mut()
+                        .find(|state| state.module_id == accepted_state.module_id)
+                    else {
+                        return Err(ManifoldAuthorityValidationError::new(
+                            review.review_id.clone(),
+                            accepted_state.module_id.to_string(),
+                            ManifoldAuthorityValidationErrorKind::UnknownModule,
+                        ));
+                    };
+                    *state = accepted_state;
+                    next_snapshot.validate_authority_links()?;
+                    (
+                        ManifoldModuleRuntimeStateAuthorityApplicationOutcome::RuntimeStateApplied,
+                        Some(next_snapshot),
+                        None,
+                    )
+                }
+            };
+
+        let application = ManifoldModuleRuntimeStateAuthorityApplication {
+            schema_id: module_runtime_state_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            module_id,
+            from_runtime_revision,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    /// Deterministically reviews one host manifest change request.
+    ///
+    /// The review is source-only: it accepts or rejects proposed contract state
+    /// and does not start host services, open endpoints, probe permissions, or
+    /// mutate a live host.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_host_manifest_change(
+        &self,
+        request: ManifoldHostManifestChangeRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldHostManifestAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.host_manifest_authority_decision(&request, &recorded_clock);
+        let lease = request
+            .lease_id
+            .as_ref()
+            .and_then(|lease_id| self.active_lease(lease_id))
+            .cloned();
+        let (outcome, accepted, rejection) = match decision {
+            HostManifestAuthorityDecision::Accepted(manifest) => (
+                ManifoldHostManifestAuthorityReviewOutcome::HostManifestAccepted,
+                Some(manifest),
+                None,
+            ),
+            HostManifestAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+            } => (
+                ManifoldHostManifestAuthorityReviewOutcome::HostManifestRejected,
+                None,
+                Some(ManifoldHostManifestRejection {
+                    schema_id: host_manifest_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldHostManifestAuthorityAuditEvent {
+            schema_id: host_manifest_authority_audit_event_schema_id(),
+            event_id: host_manifest_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            host_id: self.host_manifest.host_id.clone(),
+            event_kind: outcome.into(),
+            request,
+            accepted: accepted.clone(),
+            rejection: rejection.clone(),
+            lease,
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldHostManifestAuthorityReview {
+            schema_id: host_manifest_authority_review_schema_id(),
+            review_id: host_manifest_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            host_id: audit_event.host_id.clone(),
+            outcome,
+            accepted,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one host manifest authority review to this snapshot.
+    ///
+    /// Accepted host manifest reviews produce a new `ManifoldAuthoritySnapshot`
+    /// with the authority revision advanced by one and the accepted host
+    /// manifest installed. Rejected reviews produce a machine-readable
+    /// application rejection and leave accepted state unchanged. This is
+    /// source-only: it does not start host services, open endpoints, probe
+    /// permissions, or mutate a live host.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_host_manifest_authority_review(
+        &self,
+        review: ManifoldHostManifestAuthorityReview,
+    ) -> Result<ManifoldHostManifestAuthorityApplication, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        let application_id = host_manifest_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let host_id = review.host_id.clone();
+
+        let (outcome, applied_snapshot, rejection) =
+            match review.validate_against_snapshot(self) {
+                Err(error) => (
+                    ManifoldHostManifestAuthorityApplicationOutcome::HostManifestApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new(error.rejection_code())
+                            .expect("authority rejection code is a valid dotted id"),
+                        message: format!(
+                            "host manifest review does not match authority snapshot: {error}"
+                        ),
+                        retryable: authority_application_validation_retryable(error.kind()),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                ),
+                Ok(()) if review.outcome == ManifoldHostManifestAuthorityReviewOutcome::HostManifestRejected => {
+                    (
+                        ManifoldHostManifestAuthorityApplicationOutcome::HostManifestApplicationRejected,
+                        None,
+                        Some(ManifoldAuthoritySnapshotApplicationRejection {
+                            schema_id: authority_snapshot_application_rejection_schema_id(),
+                            application_id: application_id.clone(),
+                            rejection_code: DottedId::new("review_rejected")
+                                .expect("rejection code literal is valid"),
+                            message: "host manifest review did not accept a host manifest"
+                                .to_owned(),
+                            retryable: review
+                                .rejection
+                                .as_ref()
+                                .map(|rejection| rejection.retryable)
+                                .unwrap_or(false),
+                            current_authority_revision: self.authority_revision,
+                        }),
+                    )
+                }
+                Ok(()) => {
+                    let Some(next_authority_revision) = self.authority_revision.next() else {
+                        return Err(ManifoldAuthorityValidationError::new(
+                            review.review_id.clone(),
+                            self.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        ));
+                    };
+                    let accepted_manifest = review.accepted.clone().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            review.review_id.clone(),
+                            "accepted".to_owned(),
+                            ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                        )
+                    })?;
+                    let mut next_snapshot = self.clone();
+                    next_snapshot.authority_revision = next_authority_revision;
+                    next_snapshot.host_manifest = accepted_manifest;
+                    next_snapshot.validate_authority_links()?;
+                    (
+                        ManifoldHostManifestAuthorityApplicationOutcome::HostManifestApplied,
+                        Some(next_snapshot),
+                        None,
+                    )
+                }
+            };
+
+        let application = ManifoldHostManifestAuthorityApplication {
+            schema_id: host_manifest_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            host_id,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    /// Deterministically reviews one clock snapshot change request.
+    ///
+    /// The review is source-only: it accepts or rejects proposed contract state
+    /// and does not read a live clock, alter host time, start a clock service,
+    /// or contact a platform adapter.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_clock_snapshot_change(
+        &self,
+        request: ManifoldClockSnapshotChangeRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldClockSnapshotAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.clock_snapshot_authority_decision(&request, &recorded_clock);
+        let lease = request
+            .lease_id
+            .as_ref()
+            .and_then(|lease_id| self.active_lease(lease_id))
+            .cloned();
+        let (outcome, accepted, rejection) = match decision {
+            ClockSnapshotAuthorityDecision::Accepted(snapshot) => (
+                ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotAccepted,
+                Some(snapshot),
+                None,
+            ),
+            ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+            } => (
+                ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotRejected,
+                None,
+                Some(ManifoldClockSnapshotRejection {
+                    schema_id: clock_snapshot_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_authority_revision: self.authority_revision,
+                    current_clock_epoch_id: self.clock_snapshot.clock_epoch_id.clone(),
+                    current_clock_sequence: self.clock_snapshot.sequence,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldClockSnapshotAuthorityAuditEvent {
+            schema_id: clock_snapshot_authority_audit_event_schema_id(),
+            event_id: clock_snapshot_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            prior_clock_snapshot: self.clock_snapshot.clone(),
+            event_kind: outcome.into(),
+            request,
+            accepted: accepted.clone(),
+            rejection: rejection.clone(),
+            lease,
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldClockSnapshotAuthorityReview {
+            schema_id: clock_snapshot_authority_review_schema_id(),
+            review_id: clock_snapshot_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            clock_domain: audit_event.prior_clock_snapshot.clock_domain.clone(),
+            clock_epoch_id: audit_event.prior_clock_snapshot.clock_epoch_id.clone(),
+            clock_sequence: audit_event.prior_clock_snapshot.sequence,
+            outcome,
+            accepted,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one clock snapshot authority review to this snapshot.
+    ///
+    /// Accepted clock reviews produce a new `ManifoldAuthoritySnapshot` with
+    /// the authority revision advanced by one and the accepted clock snapshot
+    /// installed. Rejected reviews produce a machine-readable application
+    /// rejection and leave accepted state unchanged. This is source-only: it
+    /// does not read a live clock, alter host time, start a clock service, or
+    /// contact a platform adapter.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_clock_snapshot_authority_review(
+        &self,
+        review: ManifoldClockSnapshotAuthorityReview,
+    ) -> Result<ManifoldClockSnapshotAuthorityApplication, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        let application_id = clock_snapshot_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let from_clock_epoch_id = self.clock_snapshot.clock_epoch_id.clone();
+        let from_clock_sequence = self.clock_snapshot.sequence;
+
+        let (outcome, applied_snapshot, rejection) =
+            match review.validate_against_snapshot(self) {
+                Err(error) => (
+                    ManifoldClockSnapshotAuthorityApplicationOutcome::ClockSnapshotApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new(error.rejection_code())
+                            .expect("authority rejection code is a valid dotted id"),
+                        message: format!(
+                            "clock snapshot review does not match authority snapshot: {error}"
+                        ),
+                        retryable: authority_application_validation_retryable(error.kind()),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                ),
+                Ok(()) if review.outcome
+                    == ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotRejected =>
+                {
+                    (
+                        ManifoldClockSnapshotAuthorityApplicationOutcome::ClockSnapshotApplicationRejected,
+                        None,
+                        Some(ManifoldAuthoritySnapshotApplicationRejection {
+                            schema_id: authority_snapshot_application_rejection_schema_id(),
+                            application_id: application_id.clone(),
+                            rejection_code: DottedId::new("review_rejected")
+                                .expect("rejection code literal is valid"),
+                            message: "clock snapshot review did not accept a clock snapshot"
+                                .to_owned(),
+                            retryable: review
+                                .rejection
+                                .as_ref()
+                                .map(|rejection| rejection.retryable)
+                                .unwrap_or(false),
+                            current_authority_revision: self.authority_revision,
+                        }),
+                    )
+                }
+                Ok(()) => {
+                    let Some(next_authority_revision) = self.authority_revision.next() else {
+                        return Err(ManifoldAuthorityValidationError::new(
+                            review.review_id.clone(),
+                            self.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        ));
+                    };
+                    let accepted_clock = review.accepted.clone().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            review.review_id.clone(),
+                            "accepted".to_owned(),
+                            ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                        )
+                    })?;
+                    let mut next_snapshot = self.clone();
+                    next_snapshot.authority_revision = next_authority_revision;
+                    next_snapshot.clock_snapshot = accepted_clock;
+                    next_snapshot.validate_authority_links()?;
+                    (
+                        ManifoldClockSnapshotAuthorityApplicationOutcome::ClockSnapshotApplied,
+                        Some(next_snapshot),
+                        None,
+                    )
+                }
+            };
+
+        let application = ManifoldClockSnapshotAuthorityApplication {
+            schema_id: clock_snapshot_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            from_clock_epoch_id,
+            from_clock_sequence,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    fn command_descriptor(&self, command_id: &DottedId) -> Option<&ManifoldCommandDescriptor> {
+        self.command_descriptors
+            .iter()
+            .find(|descriptor| &descriptor.command_id == command_id)
+    }
+
+    fn stream_manifest(&self, stream_id: &DottedId) -> Option<&ManifoldStreamManifest> {
+        self.stream_registry
+            .streams
+            .iter()
+            .find(|stream| &stream.stream_id == stream_id)
+    }
+
+    fn module_runtime_state(&self, module_id: &DottedId) -> Option<&ManifoldModuleRuntimeState> {
+        self.module_runtime_states
+            .iter()
+            .find(|state| &state.module_id == module_id)
+    }
+
+    fn active_lease(&self, lease_id: &DottedId) -> Option<&ManifoldControlLease> {
+        self.active_leases
+            .iter()
+            .find(|lease| &lease.lease_id == lease_id)
+    }
+
+    fn active_subscription_count(&self, stream_id: &DottedId) -> u32 {
+        let count = self
+            .active_stream_subscriptions
+            .iter()
+            .filter(|subscription| {
+                subscription.state == ManifoldStreamSubscriptionState::Active
+                    && &subscription.stream_id == stream_id
+            })
+            .count();
+        u32::try_from(count).unwrap_or(u32::MAX)
+    }
+
+    fn active_stream_subscription(
+        &self,
+        subscription_id: &DottedId,
+    ) -> Option<&ManifoldStreamSubscription> {
+        self.active_stream_subscriptions
+            .iter()
+            .find(|subscription| &subscription.subscription_id == subscription_id)
+    }
+
+    fn command_authority_decision(
+        &self,
+        envelope: &ManifoldCommandEnvelope,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> CommandAuthorityDecision {
+        let Some(descriptor) = self.command_descriptor(&envelope.command_id) else {
+            return CommandAuthorityDecision::Rejected {
+                rejection_code: "unknown_command",
+                message: "command is not advertised by this authority".to_owned(),
+                retryable: false,
+            };
+        };
+
+        let active_lease = if let Some(lease_id) = &envelope.lease_id {
+            let Some(lease) = self.active_lease(lease_id) else {
+                return CommandAuthorityDecision::Rejected {
+                    rejection_code: "unknown_lease",
+                    message: "command references an unknown lease".to_owned(),
+                    retryable: true,
+                };
+            };
+            Some(lease)
+        } else {
+            None
+        };
+
+        if let Some(lease) = active_lease {
+            if lease_expired_at(lease, recorded_clock) {
+                return CommandAuthorityDecision::Rejected {
+                    rejection_code: "expired_lease",
+                    message: "command references a lease expired at the review clock".to_owned(),
+                    retryable: true,
+                };
+            }
+        }
+
+        match envelope.validate_request(descriptor, self.authority_revision, active_lease) {
+            Ok(()) => CommandAuthorityDecision::Accepted,
+            Err(error) => CommandAuthorityDecision::Rejected {
+                rejection_code: error.rejection_code(),
+                message: error.message().to_owned(),
+                retryable: command_validation_retryable(error.kind()),
+            },
+        }
+    }
+
+    fn lease_authority_decision(
+        &self,
+        request: &ManifoldControlLeaseRequest,
+    ) -> LeaseAuthorityDecision {
+        if request.expected_revision != self.authority_revision {
+            return LeaseAuthorityDecision::Rejected {
+                rejection_code: "stale_revision",
+                message: "lease request expected revision does not match current revision"
+                    .to_owned(),
+                retryable: true,
+                conflicting_lease_id: None,
+            };
+        }
+
+        if request.requested_ttl_ms == 0 {
+            return LeaseAuthorityDecision::Rejected {
+                rejection_code: "invalid_ttl",
+                message: "lease request ttl must be greater than zero".to_owned(),
+                retryable: false,
+                conflicting_lease_id: None,
+            };
+        }
+
+        if !self
+            .host_manifest
+            .capabilities
+            .iter()
+            .any(|capability| capability == &request.required_capability)
+        {
+            return LeaseAuthorityDecision::Rejected {
+                rejection_code: "capability_not_advertised",
+                message: "lease request capability is not advertised by the authority host"
+                    .to_owned(),
+                retryable: false,
+                conflicting_lease_id: None,
+            };
+        }
+
+        if let Some(conflicting_lease) = self
+            .active_leases
+            .iter()
+            .find(|lease| lease.scope == request.scope && lease.state == LeaseState::Active)
+        {
+            return LeaseAuthorityDecision::Rejected {
+                rejection_code: "lease_scope_busy",
+                message: "lease request scope is already held by an active lease".to_owned(),
+                retryable: true,
+                conflicting_lease_id: Some(conflicting_lease.lease_id.clone()),
+            };
+        }
+
+        LeaseAuthorityDecision::Accepted
+    }
+
+    fn lease_release_authority_decision(
+        &self,
+        request: &ManifoldControlLeaseReleaseRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> LeaseReleaseAuthorityDecision {
+        if request.schema_id != control_lease_release_request_schema_id() {
+            return LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "control lease release request schema is not supported".to_owned(),
+                retryable: false,
+                active_lease_count: self.active_leases.len(),
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message:
+                    "control lease release request expected authority revision does not match current revision"
+                        .to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+            };
+        }
+
+        let Some(lease) = self.active_lease(&request.lease_id) else {
+            return LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code: "unknown_lease".to_owned(),
+                message: "control lease release request references an unknown active lease"
+                    .to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+            };
+        };
+
+        if lease.state != LeaseState::Active {
+            return LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code: "inactive_lease".to_owned(),
+                message: "control lease release request references a non-active lease".to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+            };
+        }
+
+        if lease_expired_at(lease, recorded_clock) {
+            return LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code: "expired_lease".to_owned(),
+                message: "control lease release request references an expired lease".to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+            };
+        }
+
+        if lease.holder_id != request.holder_id {
+            return LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code: "lease_holder_mismatch".to_owned(),
+                message: "control lease release request holder does not own the lease".to_owned(),
+                retryable: false,
+                active_lease_count: self.active_leases.len(),
+            };
+        }
+
+        if lease.scope != request.scope {
+            return LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code: "lease_scope_mismatch".to_owned(),
+                message: "control lease release request scope does not match the active lease"
+                    .to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+            };
+        }
+
+        LeaseReleaseAuthorityDecision::Released(lease.clone())
+    }
+
+    fn lease_renewal_authority_decision(
+        &self,
+        request: &ManifoldControlLeaseRenewalRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> LeaseRenewalAuthorityDecision {
+        if request.schema_id != control_lease_renewal_request_schema_id() {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "control lease renewal request schema is not supported".to_owned(),
+                retryable: false,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: None,
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message:
+                    "control lease renewal request expected authority revision does not match current revision"
+                        .to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: None,
+            };
+        }
+
+        if request.requested_ttl_ms == 0 {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "invalid_ttl".to_owned(),
+                message: "control lease renewal request ttl must be greater than zero".to_owned(),
+                retryable: false,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: None,
+            };
+        }
+
+        let Some(lease) = self.active_lease(&request.lease_id) else {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "unknown_lease".to_owned(),
+                message: "control lease renewal request references an unknown active lease"
+                    .to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: None,
+            };
+        };
+
+        if lease.state != LeaseState::Active {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "inactive_lease".to_owned(),
+                message: "control lease renewal request references a non-active lease".to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: Some(lease.expires_at_ms),
+            };
+        }
+
+        if lease_expired_at(lease, recorded_clock) {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "expired_lease".to_owned(),
+                message: "control lease renewal request references an expired lease".to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: Some(lease.expires_at_ms),
+            };
+        }
+
+        if lease.holder_id != request.holder_id {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "lease_holder_mismatch".to_owned(),
+                message: "control lease renewal request holder does not own the lease".to_owned(),
+                retryable: false,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: Some(lease.expires_at_ms),
+            };
+        }
+
+        if lease.scope != request.scope {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "lease_scope_mismatch".to_owned(),
+                message: "control lease renewal request scope does not match the active lease"
+                    .to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: Some(lease.expires_at_ms),
+            };
+        }
+
+        let renewed_expires_at_ms =
+            wall_unix_ms_u64(recorded_clock).saturating_add(request.requested_ttl_ms);
+        if renewed_expires_at_ms <= lease.expires_at_ms {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "non_extending_renewal".to_owned(),
+                message: "control lease renewal request does not extend the active lease"
+                    .to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: Some(lease.expires_at_ms),
+            };
+        }
+
+        LeaseRenewalAuthorityDecision::Renewed(ManifoldControlLease {
+            schema_id: control_lease_schema_id(),
+            lease_id: lease.lease_id.clone(),
+            holder_id: lease.holder_id.clone(),
+            scope: lease.scope.clone(),
+            state: LeaseState::Active,
+            granted_revision: self.authority_revision,
+            expires_at_ms: renewed_expires_at_ms,
+            required_capability: lease.required_capability.clone(),
+        })
+    }
+
+    fn authority_expiry_sweep_decision(
+        &self,
+        request: &ManifoldAuthorityExpirySweepRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> AuthorityExpirySweepDecision {
+        let expired_leases = self
+            .active_leases
+            .iter()
+            .filter(|lease| lease_expired_at(lease, recorded_clock))
+            .cloned()
+            .collect::<Vec<_>>();
+        let expired_stream_subscriptions = self
+            .active_stream_subscriptions
+            .iter()
+            .filter(|subscription| stream_subscription_expired_at(subscription, recorded_clock))
+            .cloned()
+            .collect::<Vec<_>>();
+        let expired_lease_count = expired_leases.len();
+        let expired_subscription_count = expired_stream_subscriptions.len();
+
+        if request.schema_id != authority_expiry_sweep_request_schema_id() {
+            return AuthorityExpirySweepDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "authority expiry sweep request schema is not supported".to_owned(),
+                retryable: false,
+                expired_lease_count,
+                expired_subscription_count,
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return AuthorityExpirySweepDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message:
+                    "authority expiry sweep request expected authority revision does not match current revision"
+                        .to_owned(),
+                retryable: true,
+                expired_lease_count,
+                expired_subscription_count,
+            };
+        }
+
+        if request.expected_registry_revision != self.stream_registry.registry_revision {
+            return AuthorityExpirySweepDecision::Rejected {
+                rejection_code: "registry_revision_mismatch".to_owned(),
+                message:
+                    "authority expiry sweep request expected registry revision does not match current registry"
+                        .to_owned(),
+                retryable: true,
+                expired_lease_count,
+                expired_subscription_count,
+            };
+        }
+
+        if expired_leases.is_empty() && expired_stream_subscriptions.is_empty() {
+            return AuthorityExpirySweepDecision::Rejected {
+                rejection_code: "no_expired_state".to_owned(),
+                message:
+                    "authority expiry sweep found no expired active leases or stream subscriptions"
+                        .to_owned(),
+                retryable: true,
+                expired_lease_count,
+                expired_subscription_count,
+            };
+        }
+
+        AuthorityExpirySweepDecision::Accepted {
+            expired_leases,
+            expired_stream_subscriptions,
+        }
+    }
+
+    fn stream_registry_authority_decision(
+        &self,
+        request: &ManifoldStreamRegistryChangeRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> StreamRegistryAuthorityDecision {
+        if request.schema_id != stream_registry_change_request_schema_id() {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "stream registry request schema is not supported".to_owned(),
+                retryable: false,
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message: "stream registry request expected authority revision does not match current revision"
+                    .to_owned(),
+                retryable: true,
+            };
+        }
+
+        if !self
+            .host_manifest
+            .capabilities
+            .iter()
+            .any(|capability| capability == &request.required_capability)
+        {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "capability_not_advertised".to_owned(),
+                message:
+                    "stream registry request capability is not advertised by the authority host"
+                        .to_owned(),
+                retryable: false,
+            };
+        }
+
+        let Some(lease_id) = &request.lease_id else {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "missing_lease".to_owned(),
+                message: "stream registry change requires an active registry lease".to_owned(),
+                retryable: true,
+            };
+        };
+
+        let Some(lease) = self.active_lease(lease_id) else {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "unknown_lease".to_owned(),
+                message: "stream registry request references an unknown lease".to_owned(),
+                retryable: true,
+            };
+        };
+
+        if lease.state != LeaseState::Active {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "inactive_lease".to_owned(),
+                message: "stream registry lease is not active".to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease_expired_at(lease, recorded_clock) {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "expired_lease".to_owned(),
+                message: "stream registry lease is expired at the review clock".to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease.granted_revision > self.authority_revision {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "lease_revision_ahead".to_owned(),
+                message: "stream registry lease was granted after this authority revision"
+                    .to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease.holder_id != request.holder_id
+            || lease.scope != registry_lease_scope()
+            || lease.required_capability != request.required_capability
+        {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "lease_mismatch".to_owned(),
+                message: "stream registry request does not match the active lease".to_owned(),
+                retryable: true,
+            };
+        }
+
+        match self.apply_stream_registry_diff(&request.diff) {
+            Ok(snapshot) => StreamRegistryAuthorityDecision::Accepted(snapshot),
+            Err(rejection) => StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: rejection.rejection_code,
+                message: rejection.message,
+                retryable: rejection.retryable,
+            },
+        }
+    }
+
+    fn apply_stream_registry_diff(
+        &self,
+        diff: &ManifoldStreamRegistryDiff,
+    ) -> Result<ManifoldStreamRegistrySnapshot, StreamRegistryDiffRejection> {
+        if diff.schema_id != stream_registry_diff_schema_id() {
+            return Err(StreamRegistryDiffRejection::new(
+                "unsupported_schema",
+                "stream registry diff schema is not supported",
+                false,
+            ));
+        }
+
+        if diff.from_revision != self.stream_registry.registry_revision {
+            return Err(StreamRegistryDiffRejection::new(
+                "registry_revision_mismatch",
+                "stream registry diff from_revision does not match current registry revision",
+                true,
+            ));
+        }
+
+        let Some(next_revision) = self.stream_registry.registry_revision.next() else {
+            return Err(StreamRegistryDiffRejection::new(
+                "registry_revision_mismatch",
+                "stream registry revision cannot advance",
+                false,
+            ));
+        };
+        if diff.to_revision != next_revision {
+            return Err(StreamRegistryDiffRejection::new(
+                "registry_revision_mismatch",
+                "stream registry diff to_revision must advance by one",
+                true,
+            ));
+        }
+
+        if diff.added_streams.is_empty()
+            && diff.removed_streams.is_empty()
+            && diff.changed_streams.is_empty()
+        {
+            return Err(StreamRegistryDiffRejection::new(
+                "empty_registry_diff",
+                "stream registry diff has no changes",
+                false,
+            ));
+        }
+
+        let mut streams = self.stream_registry.streams.clone();
+
+        for removed in &diff.removed_streams {
+            if self.active_stream_id(&removed.stream_id) {
+                return Err(StreamRegistryDiffRejection::new(
+                    "active_stream_conflict",
+                    "stream registry diff removes a stream still active in module runtime state",
+                    true,
+                ));
+            }
+
+            if self.active_subscription_count(&removed.stream_id) > 0 {
+                return Err(StreamRegistryDiffRejection::new(
+                    "active_subscription_conflict",
+                    "stream registry diff removes a stream with active subscriptions",
+                    true,
+                ));
+            }
+
+            let Some(index) = streams
+                .iter()
+                .position(|stream| stream.stream_id == removed.stream_id)
+            else {
+                return Err(StreamRegistryDiffRejection::new(
+                    "unknown_stream",
+                    "stream registry diff removes a stream absent from the current registry",
+                    true,
+                ));
+            };
+
+            if streams[index] != *removed {
+                return Err(StreamRegistryDiffRejection::new(
+                    "stream_diff_mismatch",
+                    "stream registry diff remove entry does not match the current stream",
+                    true,
+                ));
+            }
+
+            streams.remove(index);
+        }
+
+        for change in &diff.changed_streams {
+            if change.before.stream_id != change.stream_id
+                || change.after.stream_id != change.stream_id
+            {
+                return Err(StreamRegistryDiffRejection::new(
+                    "stream_diff_mismatch",
+                    "stream registry diff change entry has mismatched stream ids",
+                    false,
+                ));
+            }
+
+            let Some(index) = streams
+                .iter()
+                .position(|stream| stream.stream_id == change.stream_id)
+            else {
+                return Err(StreamRegistryDiffRejection::new(
+                    "unknown_stream",
+                    "stream registry diff changes a stream absent from the current registry",
+                    true,
+                ));
+            };
+
+            if streams[index] != change.before {
+                return Err(StreamRegistryDiffRejection::new(
+                    "stream_diff_mismatch",
+                    "stream registry diff before entry does not match the current stream",
+                    true,
+                ));
+            }
+
+            if change.after.source_module_id != change.before.source_module_id
+                && self.active_stream_id(&change.stream_id)
+            {
+                return Err(StreamRegistryDiffRejection::new(
+                    "active_stream_conflict",
+                    "stream registry diff changes the source module for an active stream",
+                    true,
+                ));
+            }
+
+            let active_subscription_count = self.active_subscription_count(&change.stream_id);
+            if active_subscription_count > 0 {
+                for subscription in self
+                    .active_stream_subscriptions
+                    .iter()
+                    .filter(|subscription| subscription.stream_id == change.stream_id)
+                {
+                    let offer_still_available = change.after.transport_offers.iter().any(|offer| {
+                        offer.transport_id == subscription.transport_id
+                            && offer.endpoint_id == subscription.endpoint_id
+                    });
+                    if !offer_still_available {
+                        return Err(StreamRegistryDiffRejection::new(
+                            "active_subscription_conflict",
+                            "stream registry diff removes a transport offer used by an active subscription",
+                            true,
+                        ));
+                    }
+
+                    if subscription.subscriber_kind == ManifoldStreamSubscriberKind::Ui
+                        && !change.after.subscription.ui_subscribable
+                    {
+                        return Err(StreamRegistryDiffRejection::new(
+                            "active_subscription_conflict",
+                            "stream registry diff disables UI subscription policy while UI subscriptions are active",
+                            true,
+                        ));
+                    }
+                }
+
+                if let Some(max_subscribers) = change.after.subscription.max_subscribers {
+                    if active_subscription_count > max_subscribers {
+                        return Err(StreamRegistryDiffRejection::new(
+                            "active_subscription_conflict",
+                            "stream registry diff lowers the subscriber limit below active subscriptions",
+                            true,
+                        ));
+                    }
+                }
+            }
+
+            streams[index] = change.after.clone();
+        }
+
+        for added in &diff.added_streams {
+            if streams
+                .iter()
+                .any(|stream| stream.stream_id == added.stream_id)
+            {
+                return Err(StreamRegistryDiffRejection::new(
+                    "stream_already_exists",
+                    "stream registry diff adds a stream id that already exists",
+                    true,
+                ));
+            }
+            streams.push(added.clone());
+        }
+
+        if let Some(stream_id) = duplicate_stream_id(&streams) {
+            return Err(StreamRegistryDiffRejection::new(
+                "duplicate_stream",
+                format!("stream registry contains duplicate stream id {stream_id}"),
+                false,
+            ));
+        }
+
+        let snapshot = ManifoldStreamRegistrySnapshot {
+            schema_id: stream_registry_snapshot_schema_id(),
+            registry_revision: diff.to_revision,
+            streams,
+        };
+        let module_ids = self
+            .module_runtime_states
+            .iter()
+            .map(|state| state.module_id.clone())
+            .collect::<Vec<_>>();
+        if let Err(error) = snapshot.validate_source_modules(&module_ids) {
+            return Err(StreamRegistryDiffRejection::new(
+                error.rejection_code(),
+                format!(
+                    "stream registry diff references unknown source module {}",
+                    error.rejected_id()
+                ),
+                false,
+            ));
+        }
+
+        let endpoint_ids = self
+            .host_manifest
+            .endpoints
+            .iter()
+            .map(|endpoint| endpoint.endpoint_id.clone())
+            .collect::<Vec<_>>();
+        if let Err(error) = snapshot.validate_transport_endpoints(&endpoint_ids) {
+            return Err(StreamRegistryDiffRejection::new(
+                error.rejection_code(),
+                format!(
+                    "stream registry diff references unknown transport endpoint {}",
+                    error.rejected_id()
+                ),
+                false,
+            ));
+        }
+
+        Ok(snapshot)
+    }
+
+    fn stream_subscription_authority_decision(
+        &self,
+        request: &ManifoldStreamSubscriptionRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> StreamSubscriptionAuthorityDecision {
+        if request.schema_id != stream_subscription_request_schema_id() {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "stream subscription request schema is not supported".to_owned(),
+                retryable: false,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message:
+                    "stream subscription request expected authority revision does not match current revision"
+                        .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+            };
+        }
+
+        if request.expected_registry_revision != self.stream_registry.registry_revision {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "registry_revision_mismatch".to_owned(),
+                message:
+                    "stream subscription request expected registry revision does not match current registry"
+                        .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+            };
+        }
+
+        if request.requested_ttl_ms == 0 {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "invalid_ttl".to_owned(),
+                message: "stream subscription ttl must be greater than zero".to_owned(),
+                retryable: false,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+            };
+        }
+
+        if !self
+            .host_manifest
+            .capabilities
+            .iter()
+            .any(|capability| capability == &request.required_capability)
+        {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "capability_not_advertised".to_owned(),
+                message:
+                    "stream subscription request capability is not advertised by the authority host"
+                        .to_owned(),
+                retryable: false,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+            };
+        }
+
+        let active_subscriber_count = self.active_subscription_count(&request.stream_id);
+        let Some(stream) = self.stream_manifest(&request.stream_id) else {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "unknown_stream".to_owned(),
+                message: "stream subscription request references an unknown stream".to_owned(),
+                retryable: true,
+                active_subscriber_count,
+            };
+        };
+
+        if request.subscriber_kind == ManifoldStreamSubscriberKind::Ui
+            && !stream.subscription.ui_subscribable
+        {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "subscription_not_allowed".to_owned(),
+                message: "stream manifest does not allow direct UI subscriptions".to_owned(),
+                retryable: false,
+                active_subscriber_count,
+            };
+        }
+
+        if let Some(max_subscribers) = stream.subscription.max_subscribers {
+            if active_subscriber_count >= max_subscribers {
+                return StreamSubscriptionAuthorityDecision::Rejected {
+                    rejection_code: "subscriber_limit_reached".to_owned(),
+                    message: "stream subscription would exceed the stream subscriber limit"
+                        .to_owned(),
+                    retryable: true,
+                    active_subscriber_count,
+                };
+            }
+        }
+
+        let Some(offer) = stream
+            .transport_offers
+            .iter()
+            .find(|offer| offer.transport_id == request.transport_id)
+        else {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "unknown_transport".to_owned(),
+                message: "stream subscription request selected an unknown transport offer"
+                    .to_owned(),
+                retryable: true,
+                active_subscriber_count,
+            };
+        };
+
+        if let Some(endpoint_id) = &offer.endpoint_id {
+            if !self
+                .host_manifest
+                .endpoints
+                .iter()
+                .any(|endpoint| &endpoint.endpoint_id == endpoint_id)
+            {
+                return StreamSubscriptionAuthorityDecision::Rejected {
+                    rejection_code: "unknown_transport_endpoint".to_owned(),
+                    message:
+                        "stream subscription request selected a transport with an unknown endpoint"
+                            .to_owned(),
+                    retryable: false,
+                    active_subscriber_count,
+                };
+            }
+        }
+
+        StreamSubscriptionAuthorityDecision::Accepted(ManifoldStreamSubscription {
+            schema_id: stream_subscription_schema_id(),
+            subscription_id: stream_subscription_id(&request.request_id),
+            request_id: request.request_id.clone(),
+            subscriber_id: request.subscriber_id.clone(),
+            subscriber_kind: request.subscriber_kind,
+            stream_id: request.stream_id.clone(),
+            transport_id: request.transport_id.clone(),
+            endpoint_id: offer.endpoint_id.clone(),
+            state: ManifoldStreamSubscriptionState::Active,
+            accepted_authority_revision: self.authority_revision,
+            accepted_registry_revision: self.stream_registry.registry_revision,
+            accepted_at_ms: wall_unix_ms_u64(recorded_clock),
+            expires_at_ms: wall_unix_ms_u64(recorded_clock)
+                .saturating_add(request.requested_ttl_ms),
+            required_capability: request.required_capability.clone(),
+        })
+    }
+
+    fn stream_subscription_release_authority_decision(
+        &self,
+        request: &ManifoldStreamSubscriptionReleaseRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> StreamSubscriptionReleaseAuthorityDecision {
+        if request.schema_id != stream_subscription_release_request_schema_id() {
+            return StreamSubscriptionReleaseAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "stream subscription release request schema is not supported".to_owned(),
+                retryable: false,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return StreamSubscriptionReleaseAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message:
+                    "stream subscription release request expected authority revision does not match current revision"
+                        .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+            };
+        }
+
+        if request.expected_registry_revision != self.stream_registry.registry_revision {
+            return StreamSubscriptionReleaseAuthorityDecision::Rejected {
+                rejection_code: "registry_revision_mismatch".to_owned(),
+                message:
+                    "stream subscription release request expected registry revision does not match current registry"
+                        .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+            };
+        }
+
+        let Some(subscription) = self.active_stream_subscription(&request.subscription_id) else {
+            return StreamSubscriptionReleaseAuthorityDecision::Rejected {
+                rejection_code: "unknown_subscription".to_owned(),
+                message:
+                    "stream subscription release request references an unknown active subscription"
+                        .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+            };
+        };
+
+        if subscription.state != ManifoldStreamSubscriptionState::Active {
+            return StreamSubscriptionReleaseAuthorityDecision::Rejected {
+                rejection_code: "inactive_subscription".to_owned(),
+                message: "stream subscription release request references a non-active subscription"
+                    .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&subscription.stream_id),
+            };
+        }
+
+        if stream_subscription_expired_at(subscription, recorded_clock) {
+            return StreamSubscriptionReleaseAuthorityDecision::Rejected {
+                rejection_code: "expired_subscription".to_owned(),
+                message: "stream subscription release request references an expired subscription"
+                    .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&subscription.stream_id),
+            };
+        }
+
+        if subscription.subscriber_id != request.subscriber_id {
+            return StreamSubscriptionReleaseAuthorityDecision::Rejected {
+                rejection_code: "subscriber_mismatch".to_owned(),
+                message:
+                    "stream subscription release request subscriber does not own the subscription"
+                        .to_owned(),
+                retryable: false,
+                active_subscriber_count: self.active_subscription_count(&subscription.stream_id),
+            };
+        }
+
+        if subscription.stream_id != request.stream_id {
+            return StreamSubscriptionReleaseAuthorityDecision::Rejected {
+                rejection_code: "stream_mismatch".to_owned(),
+                message:
+                    "stream subscription release request stream does not match the active subscription"
+                        .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&subscription.stream_id),
+            };
+        }
+
+        StreamSubscriptionReleaseAuthorityDecision::Released(subscription.clone())
+    }
+
+    fn stream_subscription_renewal_authority_decision(
+        &self,
+        request: &ManifoldStreamSubscriptionRenewalRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> StreamSubscriptionRenewalAuthorityDecision {
+        if request.schema_id != stream_subscription_renewal_request_schema_id() {
+            return StreamSubscriptionRenewalAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "stream subscription renewal request schema is not supported".to_owned(),
+                retryable: false,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+                current_expires_at_ms: None,
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return StreamSubscriptionRenewalAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message:
+                    "stream subscription renewal request expected authority revision does not match current revision"
+                        .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+                current_expires_at_ms: None,
+            };
+        }
+
+        if request.expected_registry_revision != self.stream_registry.registry_revision {
+            return StreamSubscriptionRenewalAuthorityDecision::Rejected {
+                rejection_code: "registry_revision_mismatch".to_owned(),
+                message:
+                    "stream subscription renewal request expected registry revision does not match current registry"
+                        .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+                current_expires_at_ms: None,
+            };
+        }
+
+        if request.requested_ttl_ms == 0 {
+            return StreamSubscriptionRenewalAuthorityDecision::Rejected {
+                rejection_code: "invalid_ttl".to_owned(),
+                message: "stream subscription renewal ttl must be greater than zero".to_owned(),
+                retryable: false,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+                current_expires_at_ms: None,
+            };
+        }
+
+        let Some(subscription) = self.active_stream_subscription(&request.subscription_id) else {
+            return StreamSubscriptionRenewalAuthorityDecision::Rejected {
+                rejection_code: "unknown_subscription".to_owned(),
+                message:
+                    "stream subscription renewal request references an unknown active subscription"
+                        .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+                current_expires_at_ms: None,
+            };
+        };
+
+        if subscription.state != ManifoldStreamSubscriptionState::Active {
+            return StreamSubscriptionRenewalAuthorityDecision::Rejected {
+                rejection_code: "inactive_subscription".to_owned(),
+                message: "stream subscription renewal request references a non-active subscription"
+                    .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&subscription.stream_id),
+                current_expires_at_ms: Some(subscription.expires_at_ms),
+            };
+        }
+
+        if stream_subscription_expired_at(subscription, recorded_clock) {
+            return StreamSubscriptionRenewalAuthorityDecision::Rejected {
+                rejection_code: "expired_subscription".to_owned(),
+                message: "stream subscription renewal request references an expired subscription"
+                    .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&subscription.stream_id),
+                current_expires_at_ms: Some(subscription.expires_at_ms),
+            };
+        }
+
+        if subscription.subscriber_id != request.subscriber_id {
+            return StreamSubscriptionRenewalAuthorityDecision::Rejected {
+                rejection_code: "subscriber_mismatch".to_owned(),
+                message:
+                    "stream subscription renewal request subscriber does not own the subscription"
+                        .to_owned(),
+                retryable: false,
+                active_subscriber_count: self.active_subscription_count(&subscription.stream_id),
+                current_expires_at_ms: Some(subscription.expires_at_ms),
+            };
+        }
+
+        if subscription.stream_id != request.stream_id {
+            return StreamSubscriptionRenewalAuthorityDecision::Rejected {
+                rejection_code: "stream_mismatch".to_owned(),
+                message:
+                    "stream subscription renewal request stream does not match the active subscription"
+                        .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&subscription.stream_id),
+                current_expires_at_ms: Some(subscription.expires_at_ms),
+            };
+        }
+
+        if subscription.transport_id != request.transport_id {
+            return StreamSubscriptionRenewalAuthorityDecision::Rejected {
+                rejection_code: "transport_mismatch".to_owned(),
+                message:
+                    "stream subscription renewal request transport does not match the active subscription"
+                        .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&subscription.stream_id),
+                current_expires_at_ms: Some(subscription.expires_at_ms),
+            };
+        }
+
+        let renewed_expires_at_ms =
+            wall_unix_ms_u64(recorded_clock).saturating_add(request.requested_ttl_ms);
+        if renewed_expires_at_ms <= subscription.expires_at_ms {
+            return StreamSubscriptionRenewalAuthorityDecision::Rejected {
+                rejection_code: "non_extending_renewal".to_owned(),
+                message:
+                    "stream subscription renewal request does not extend the active subscription"
+                        .to_owned(),
+                retryable: false,
+                active_subscriber_count: self.active_subscription_count(&subscription.stream_id),
+                current_expires_at_ms: Some(subscription.expires_at_ms),
+            };
+        }
+
+        StreamSubscriptionRenewalAuthorityDecision::Renewed(ManifoldStreamSubscription {
+            schema_id: stream_subscription_schema_id(),
+            subscription_id: subscription.subscription_id.clone(),
+            request_id: subscription.request_id.clone(),
+            subscriber_id: subscription.subscriber_id.clone(),
+            subscriber_kind: subscription.subscriber_kind,
+            stream_id: subscription.stream_id.clone(),
+            transport_id: subscription.transport_id.clone(),
+            endpoint_id: subscription.endpoint_id.clone(),
+            state: ManifoldStreamSubscriptionState::Active,
+            accepted_authority_revision: self.authority_revision,
+            accepted_registry_revision: subscription.accepted_registry_revision,
+            accepted_at_ms: wall_unix_ms_u64(recorded_clock),
+            expires_at_ms: renewed_expires_at_ms,
+            required_capability: subscription.required_capability.clone(),
+        })
+    }
+
+    fn active_stream_id(&self, stream_id: &DottedId) -> bool {
+        self.module_runtime_states.iter().any(|state| {
+            state
+                .active_streams
+                .iter()
+                .any(|active| active == stream_id)
+        })
+    }
+
+    fn host_manifest_authority_decision(
+        &self,
+        request: &ManifoldHostManifestChangeRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> HostManifestAuthorityDecision {
+        if request.schema_id != host_manifest_change_request_schema_id() {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "host manifest request schema is not supported".to_owned(),
+                retryable: false,
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message:
+                    "host manifest request expected authority revision does not match current revision"
+                        .to_owned(),
+                retryable: true,
+            };
+        }
+
+        if !self
+            .host_manifest
+            .capabilities
+            .iter()
+            .any(|capability| capability == &request.required_capability)
+        {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "capability_not_advertised".to_owned(),
+                message: "host manifest request capability is not advertised by the authority host"
+                    .to_owned(),
+                retryable: false,
+            };
+        }
+
+        let Some(lease_id) = &request.lease_id else {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "missing_lease".to_owned(),
+                message: "host manifest change requires an active host-manifest lease".to_owned(),
+                retryable: true,
+            };
+        };
+
+        let Some(lease) = self.active_lease(lease_id) else {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "unknown_lease".to_owned(),
+                message: "host manifest request references an unknown lease".to_owned(),
+                retryable: true,
+            };
+        };
+
+        if lease.state != LeaseState::Active {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "inactive_lease".to_owned(),
+                message: "host manifest lease is not active".to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease_expired_at(lease, recorded_clock) {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "expired_lease".to_owned(),
+                message: "host manifest lease is expired at the review clock".to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease.granted_revision > self.authority_revision {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "lease_revision_ahead".to_owned(),
+                message: "host manifest lease was granted after this authority revision".to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease.holder_id != request.holder_id
+            || lease.scope != host_manifest_lease_scope()
+            || lease.required_capability != request.required_capability
+        {
+            return HostManifestAuthorityDecision::Rejected {
+                rejection_code: "lease_mismatch".to_owned(),
+                message: "host manifest request does not match the active lease".to_owned(),
+                retryable: true,
+            };
+        }
+
+        match self.validate_proposed_host_manifest(&request.proposed_manifest) {
+            Ok(()) => HostManifestAuthorityDecision::Accepted(request.proposed_manifest.clone()),
+            Err(rejection) => HostManifestAuthorityDecision::Rejected {
+                rejection_code: rejection.rejection_code,
+                message: rejection.message,
+                retryable: rejection.retryable,
+            },
+        }
+    }
+
+    fn validate_proposed_host_manifest(
+        &self,
+        proposed: &ManifoldHostManifest,
+    ) -> Result<(), HostManifestRejection> {
+        if proposed.schema_id != host_manifest_schema_id() {
+            return Err(HostManifestRejection::new(
+                "unsupported_schema",
+                "host manifest schema is not supported",
+                false,
+            ));
+        }
+
+        if proposed.host_id != self.host_manifest.host_id {
+            return Err(HostManifestRejection::new(
+                "host_id_mismatch",
+                "host manifest proposal cannot change the authority host id",
+                false,
+            ));
+        }
+
+        if proposed.authority_role == AuthorityRole::None {
+            return Err(HostManifestRejection::new(
+                "missing_authority_role",
+                "host manifest proposal must advertise an authority role",
+                false,
+            ));
+        }
+
+        if proposed.clock_domain != self.clock_snapshot.clock_domain {
+            return Err(HostManifestRejection::new(
+                "clock_domain_mismatch",
+                "host manifest proposal clock domain does not match the authority clock",
+                true,
+            ));
+        }
+
+        if let Err(error) = proposed.validate_endpoint_security() {
+            return Err(HostManifestRejection::new(
+                "endpoint_security_mismatch",
+                format!(
+                    "host manifest proposal endpoint {} has an unsafe visibility/security pairing",
+                    error.endpoint_id()
+                ),
+                false,
+            ));
+        }
+
+        if let Some(endpoint_id) = duplicate_endpoint_id(&proposed.endpoints) {
+            return Err(HostManifestRejection::new(
+                "duplicate_endpoint",
+                format!("host manifest proposal duplicates endpoint id {endpoint_id}"),
+                false,
+            ));
+        }
+
+        if let Some(capability) = duplicate_id(&proposed.capabilities) {
+            return Err(HostManifestRejection::new(
+                "duplicate_capability",
+                format!("host manifest proposal duplicates capability {capability}"),
+                false,
+            ));
+        }
+
+        if let Some(backend) = duplicate_id(&proposed.supported_backends) {
+            return Err(HostManifestRejection::new(
+                "duplicate_backend",
+                format!("host manifest proposal duplicates backend {backend}"),
+                false,
+            ));
+        }
+
+        for endpoint in &self.host_manifest.endpoints {
+            if !proposed
+                .endpoints
+                .iter()
+                .any(|known| known.endpoint_id == endpoint.endpoint_id)
+            {
+                return Err(HostManifestRejection::new(
+                    "endpoint_in_use",
+                    format!(
+                        "host manifest proposal removes advertised endpoint {}",
+                        endpoint.endpoint_id
+                    ),
+                    true,
+                ));
+            }
+        }
+
+        for stream in &self.stream_registry.streams {
+            for offer in &stream.transport_offers {
+                if let Some(endpoint_id) = &offer.endpoint_id {
+                    if !proposed
+                        .endpoints
+                        .iter()
+                        .any(|known| &known.endpoint_id == endpoint_id)
+                    {
+                        return Err(HostManifestRejection::new(
+                            "endpoint_in_use",
+                            format!(
+                                "host manifest proposal removes endpoint {endpoint_id} used by stream {}",
+                                stream.stream_id
+                            ),
+                            true,
+                        ));
+                    }
+                }
+            }
+        }
+
+        for lease in &self.active_leases {
+            if !proposed
+                .capabilities
+                .iter()
+                .any(|capability| capability == &lease.required_capability)
+            {
+                return Err(HostManifestRejection::new(
+                    "capability_in_use",
+                    format!(
+                        "host manifest proposal removes capability {} used by active lease {}",
+                        lease.required_capability, lease.lease_id
+                    ),
+                    true,
+                ));
+            }
+        }
+
+        for descriptor in &self.command_descriptors {
+            if !proposed
+                .capabilities
+                .iter()
+                .any(|capability| capability == &descriptor.required_capability)
+            {
+                return Err(HostManifestRejection::new(
+                    "capability_in_use",
+                    format!(
+                        "host manifest proposal removes capability {} used by command {}",
+                        descriptor.required_capability, descriptor.command_id
+                    ),
+                    true,
+                ));
+            }
+        }
+
+        for subscription in &self.active_stream_subscriptions {
+            if !proposed
+                .capabilities
+                .iter()
+                .any(|capability| capability == &subscription.required_capability)
+            {
+                return Err(HostManifestRejection::new(
+                    "capability_in_use",
+                    format!(
+                        "host manifest proposal removes capability {} used by active stream subscription {}",
+                        subscription.required_capability, subscription.subscription_id
+                    ),
+                    true,
+                ));
+            }
+        }
+
+        for state in &self.module_runtime_states {
+            if let Some(backend) = &state.selected_backend {
+                if !proposed
+                    .supported_backends
+                    .iter()
+                    .any(|known| known == backend)
+                {
+                    return Err(HostManifestRejection::new(
+                        "backend_in_use",
+                        format!(
+                            "host manifest proposal removes backend {backend} used by module {}",
+                            state.module_id
+                        ),
+                        true,
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn clock_snapshot_authority_decision(
+        &self,
+        request: &ManifoldClockSnapshotChangeRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> ClockSnapshotAuthorityDecision {
+        if request.schema_id != clock_snapshot_change_request_schema_id() {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "clock snapshot request schema is not supported".to_owned(),
+                retryable: false,
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message:
+                    "clock snapshot request expected authority revision does not match current revision"
+                        .to_owned(),
+                retryable: true,
+            };
+        }
+
+        if !self
+            .host_manifest
+            .capabilities
+            .iter()
+            .any(|capability| capability == &request.required_capability)
+        {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "capability_not_advertised".to_owned(),
+                message:
+                    "clock snapshot request capability is not advertised by the authority host"
+                        .to_owned(),
+                retryable: false,
+            };
+        }
+
+        let Some(lease_id) = &request.lease_id else {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "missing_lease".to_owned(),
+                message: "clock snapshot change requires an active clock lease".to_owned(),
+                retryable: true,
+            };
+        };
+
+        let Some(lease) = self.active_lease(lease_id) else {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "unknown_lease".to_owned(),
+                message: "clock snapshot request references an unknown lease".to_owned(),
+                retryable: true,
+            };
+        };
+
+        if lease.state != LeaseState::Active {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "inactive_lease".to_owned(),
+                message: "clock snapshot lease is not active".to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease_expired_at(lease, recorded_clock) {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "expired_lease".to_owned(),
+                message: "clock snapshot lease is expired at the review clock".to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease.granted_revision > self.authority_revision {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "lease_revision_ahead".to_owned(),
+                message: "clock snapshot lease was granted after this authority revision"
+                    .to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease.holder_id != request.holder_id
+            || lease.scope != clock_snapshot_lease_scope()
+            || lease.required_capability != request.required_capability
+        {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "lease_mismatch".to_owned(),
+                message: "clock snapshot request does not match the active lease".to_owned(),
+                retryable: true,
+            };
+        }
+
+        match self.validate_proposed_clock_snapshot(request) {
+            Ok(()) => ClockSnapshotAuthorityDecision::Accepted(request.proposed_snapshot.clone()),
+            Err(rejection) => ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: rejection.rejection_code,
+                message: rejection.message,
+                retryable: rejection.retryable,
+            },
+        }
+    }
+
+    fn validate_proposed_clock_snapshot(
+        &self,
+        request: &ManifoldClockSnapshotChangeRequest,
+    ) -> Result<(), ClockSnapshotRejection> {
+        let proposed = &request.proposed_snapshot;
+        if proposed.schema_id != clock_snapshot_schema_id() {
+            return Err(ClockSnapshotRejection::new(
+                "unsupported_schema",
+                "clock snapshot schema is not supported",
+                false,
+            ));
+        }
+
+        if request.from_clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || request.from_clock_sequence != self.clock_snapshot.sequence
+        {
+            return Err(ClockSnapshotRejection::new(
+                "clock_precondition_mismatch",
+                "clock snapshot request precondition does not match the accepted clock snapshot",
+                true,
+            ));
+        }
+
+        if proposed.clock_domain != self.clock_snapshot.clock_domain
+            || proposed.clock_domain != self.host_manifest.clock_domain
+        {
+            return Err(ClockSnapshotRejection::new(
+                "clock_domain_mismatch",
+                "clock snapshot proposal clock domain does not match the authority clock domain",
+                true,
+            ));
+        }
+
+        if proposed.clock_epoch_id != self.clock_snapshot.clock_epoch_id {
+            return Err(ClockSnapshotRejection::new(
+                "clock_epoch_mismatch",
+                "clock snapshot proposal changes the clock epoch without an epoch transition contract",
+                true,
+            ));
+        }
+
+        let Some(next_sequence) = self.clock_snapshot.sequence.checked_add(1) else {
+            return Err(ClockSnapshotRejection::new(
+                "clock_sequence_mismatch",
+                "accepted clock sequence cannot advance",
+                false,
+            ));
+        };
+        if proposed.sequence != next_sequence {
+            return Err(ClockSnapshotRejection::new(
+                "clock_sequence_mismatch",
+                "clock snapshot proposal must advance the clock sequence by one",
+                true,
+            ));
+        }
+
+        if proposed.monotonic_elapsed_ns <= self.clock_snapshot.monotonic_elapsed_ns {
+            return Err(ClockSnapshotRejection::new(
+                "monotonic_time_regression",
+                "clock snapshot proposal must advance monotonic elapsed time",
+                true,
+            ));
+        }
+
+        if proposed.wall_clock_adjustment_count < self.clock_snapshot.wall_clock_adjustment_count {
+            return Err(ClockSnapshotRejection::new(
+                "wall_clock_adjustment_regression",
+                "clock snapshot proposal cannot reduce the wall-clock adjustment count",
+                true,
+            ));
+        }
+
+        Ok(())
+    }
+
+    fn module_runtime_state_authority_decision(
+        &self,
+        request: &ManifoldModuleRuntimeStateChangeRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> ModuleRuntimeStateAuthorityDecision {
+        if request.schema_id != module_runtime_state_change_request_schema_id() {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "module runtime-state request schema is not supported".to_owned(),
+                retryable: false,
+                current_runtime_revision: self
+                    .module_runtime_state(&request.module_id)
+                    .map(|state| state.runtime_revision),
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message: "module runtime-state request expected authority revision does not match current revision"
+                    .to_owned(),
+                retryable: true,
+                current_runtime_revision: self
+                    .module_runtime_state(&request.module_id)
+                    .map(|state| state.runtime_revision),
+            };
+        }
+
+        if !self
+            .host_manifest
+            .capabilities
+            .iter()
+            .any(|capability| capability == &request.required_capability)
+        {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "capability_not_advertised".to_owned(),
+                message:
+                    "module runtime-state request capability is not advertised by the authority host"
+                        .to_owned(),
+                retryable: false,
+                current_runtime_revision: self
+                    .module_runtime_state(&request.module_id)
+                    .map(|state| state.runtime_revision),
+            };
+        }
+
+        if request.proposed_state.module_id != request.module_id {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "module_id_mismatch".to_owned(),
+                message: "module runtime-state request module id does not match proposed state"
+                    .to_owned(),
+                retryable: false,
+                current_runtime_revision: self
+                    .module_runtime_state(&request.module_id)
+                    .map(|state| state.runtime_revision),
+            };
+        }
+
+        let Some(current_state) = self.module_runtime_state(&request.module_id) else {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "unknown_module".to_owned(),
+                message:
+                    "module runtime-state request targets a module absent from authority state"
+                        .to_owned(),
+                retryable: true,
+                current_runtime_revision: None,
+            };
+        };
+
+        let Some(lease_id) = &request.lease_id else {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "missing_lease".to_owned(),
+                message: "module runtime-state change requires an active module lease".to_owned(),
+                retryable: true,
+                current_runtime_revision: Some(current_state.runtime_revision),
+            };
+        };
+
+        let Some(lease) = self.active_lease(lease_id) else {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "unknown_lease".to_owned(),
+                message: "module runtime-state request references an unknown lease".to_owned(),
+                retryable: true,
+                current_runtime_revision: Some(current_state.runtime_revision),
+            };
+        };
+
+        if lease.state != LeaseState::Active {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "inactive_lease".to_owned(),
+                message: "module runtime-state lease is not active".to_owned(),
+                retryable: true,
+                current_runtime_revision: Some(current_state.runtime_revision),
+            };
+        }
+
+        if lease_expired_at(lease, recorded_clock) {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "expired_lease".to_owned(),
+                message: "module runtime-state lease is expired at the review clock".to_owned(),
+                retryable: true,
+                current_runtime_revision: Some(current_state.runtime_revision),
+            };
+        }
+
+        if lease.granted_revision > self.authority_revision {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "lease_revision_ahead".to_owned(),
+                message: "module runtime-state lease was granted after this authority revision"
+                    .to_owned(),
+                retryable: true,
+                current_runtime_revision: Some(current_state.runtime_revision),
+            };
+        }
+
+        if lease.holder_id != request.holder_id
+            || lease.scope != request.module_id
+            || lease.required_capability != request.required_capability
+        {
+            return ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: "lease_mismatch".to_owned(),
+                message: "module runtime-state request does not match the active lease".to_owned(),
+                retryable: true,
+                current_runtime_revision: Some(current_state.runtime_revision),
+            };
+        }
+
+        match self.validate_proposed_module_runtime_state(current_state, &request.proposed_state) {
+            Ok(transition) => ModuleRuntimeStateAuthorityDecision::Accepted {
+                state: request.proposed_state.clone(),
+                transition,
+            },
+            Err(rejection) => ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code: rejection.rejection_code,
+                message: rejection.message,
+                retryable: rejection.retryable,
+                current_runtime_revision: Some(current_state.runtime_revision),
+            },
+        }
+    }
+
+    fn validate_proposed_module_runtime_state(
+        &self,
+        current_state: &ManifoldModuleRuntimeState,
+        proposed_state: &ManifoldModuleRuntimeState,
+    ) -> Result<ManifoldModuleRuntimeTransition, ModuleRuntimeStateRejection> {
+        if proposed_state.schema_id != module_runtime_state_schema_id() {
+            return Err(ModuleRuntimeStateRejection::new(
+                "unsupported_schema",
+                "module runtime-state schema is not supported",
+                false,
+            ));
+        }
+
+        if proposed_state.module_id != current_state.module_id {
+            return Err(ModuleRuntimeStateRejection::new(
+                "module_id_mismatch",
+                "module runtime-state proposal targets a different module",
+                false,
+            ));
+        }
+
+        if proposed_state.runtime_revision
+            != current_state.runtime_revision.next().ok_or_else(|| {
+                ModuleRuntimeStateRejection::new(
+                    "runtime_revision_mismatch",
+                    "module runtime revision cannot advance",
+                    false,
+                )
+            })?
+        {
+            return Err(ModuleRuntimeStateRejection::new(
+                "runtime_revision_mismatch",
+                "module runtime-state proposal must advance the runtime revision by one",
+                true,
+            ));
+        }
+
+        if let Some(backend) = &proposed_state.selected_backend {
+            if !self
+                .host_manifest
+                .supported_backends
+                .iter()
+                .any(|known| known == backend)
+            {
+                return Err(ModuleRuntimeStateRejection::new(
+                    "missing_backend",
+                    "module runtime-state proposal selects a backend absent from the authority host",
+                    false,
+                ));
+            }
+        }
+
+        if proposed_state.lifecycle == ModuleLifecycleState::Stopped
+            && !proposed_state.active_streams.is_empty()
+        {
+            return Err(ModuleRuntimeStateRejection::new(
+                "lifecycle_state_conflict",
+                "stopped module runtime-state cannot report active streams",
+                true,
+            ));
+        }
+
+        for stream_id in &proposed_state.active_streams {
+            let Some(stream) = self
+                .stream_registry
+                .streams
+                .iter()
+                .find(|stream| &stream.stream_id == stream_id)
+            else {
+                return Err(ModuleRuntimeStateRejection::new(
+                    "unknown_stream",
+                    "module runtime-state proposal references an unknown active stream",
+                    true,
+                ));
+            };
+
+            if stream.source_module_id != proposed_state.module_id {
+                return Err(ModuleRuntimeStateRejection::new(
+                    "stream_owner_mismatch",
+                    "module runtime-state proposal claims a stream owned by another module",
+                    false,
+                ));
+            }
+        }
+
+        for command_id in &proposed_state.active_commands {
+            if !self.command_ids.iter().any(|known| known == command_id) {
+                return Err(ModuleRuntimeStateRejection::new(
+                    "unknown_command",
+                    "module runtime-state proposal references an unknown active command",
+                    true,
+                ));
+            }
+        }
+
+        let transition = proposed_state.transition_from(current_state);
+        if module_runtime_transition_is_empty(&transition) {
+            return Err(ModuleRuntimeStateRejection::new(
+                "empty_runtime_transition",
+                "module runtime-state proposal has no lifecycle, health, backend, stream, command, or issue changes",
+                false,
+            ));
+        }
+
+        Ok(transition)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum CommandAuthorityDecision {
+    Accepted,
+    Rejected {
+        rejection_code: &'static str,
+        message: String,
+        retryable: bool,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum LeaseAuthorityDecision {
+    Accepted,
+    Rejected {
+        rejection_code: &'static str,
+        message: String,
+        retryable: bool,
+        conflicting_lease_id: Option<DottedId>,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum LeaseReleaseAuthorityDecision {
+    Released(ManifoldControlLease),
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+        active_lease_count: usize,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum LeaseRenewalAuthorityDecision {
+    Renewed(ManifoldControlLease),
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+        active_lease_count: usize,
+        current_expires_at_ms: Option<u64>,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum StreamRegistryAuthorityDecision {
+    Accepted(ManifoldStreamRegistrySnapshot),
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum StreamSubscriptionAuthorityDecision {
+    Accepted(ManifoldStreamSubscription),
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+        active_subscriber_count: u32,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum StreamSubscriptionReleaseAuthorityDecision {
+    Released(ManifoldStreamSubscription),
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+        active_subscriber_count: u32,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum StreamSubscriptionRenewalAuthorityDecision {
+    Renewed(ManifoldStreamSubscription),
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+        active_subscriber_count: u32,
+        current_expires_at_ms: Option<u64>,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum AuthorityExpirySweepDecision {
+    Accepted {
+        expired_leases: Vec<ManifoldControlLease>,
+        expired_stream_subscriptions: Vec<ManifoldStreamSubscription>,
+    },
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+        expired_lease_count: usize,
+        expired_subscription_count: usize,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ModuleRuntimeStateAuthorityDecision {
+    Accepted {
+        state: ManifoldModuleRuntimeState,
+        transition: ManifoldModuleRuntimeTransition,
+    },
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+        current_runtime_revision: Option<Revision>,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum HostManifestAuthorityDecision {
+    Accepted(ManifoldHostManifest),
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ClockSnapshotAuthorityDecision {
+    Accepted(ManifoldClockSnapshot),
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct StreamRegistryDiffRejection {
+    rejection_code: String,
+    message: String,
+    retryable: bool,
+}
+
+impl StreamRegistryDiffRejection {
+    fn new(rejection_code: impl Into<String>, message: impl Into<String>, retryable: bool) -> Self {
+        Self {
+            rejection_code: rejection_code.into(),
+            message: message.into(),
+            retryable,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct HostManifestRejection {
+    rejection_code: String,
+    message: String,
+    retryable: bool,
+}
+
+impl HostManifestRejection {
+    fn new(rejection_code: impl Into<String>, message: impl Into<String>, retryable: bool) -> Self {
+        Self {
+            rejection_code: rejection_code.into(),
+            message: message.into(),
+            retryable,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ClockSnapshotRejection {
+    rejection_code: String,
+    message: String,
+    retryable: bool,
+}
+
+impl ClockSnapshotRejection {
+    fn new(rejection_code: impl Into<String>, message: impl Into<String>, retryable: bool) -> Self {
+        Self {
+            rejection_code: rejection_code.into(),
+            message: message.into(),
+            retryable,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ModuleRuntimeStateRejection {
+    rejection_code: String,
+    message: String,
+    retryable: bool,
+}
+
+impl ModuleRuntimeStateRejection {
+    fn new(rejection_code: impl Into<String>, message: impl Into<String>, retryable: bool) -> Self {
+        Self {
+            rejection_code: rejection_code.into(),
+            message: message.into(),
+            retryable,
+        }
+    }
+}
+
+/// Audit event for one command authority decision.
+///
+/// The event carries the request envelope plus exactly one accepted or rejected
+/// result. It records enough local authority context for deterministic
+/// validation without depending on the legacy broker runtime.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldCommandAuthorityAuditEvent {
+    /// Schema identifier for this audit event.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable event id.
+    pub event_id: DottedId,
+    /// Authority that made the decision.
+    pub authority_id: DottedId,
+    /// Authority revision observed before the decision.
+    pub prior_authority_revision: Revision,
+    /// Event kind.
+    pub event_kind: ManifoldCommandAuthorityAuditEventKind,
+    /// Command request reviewed by authority.
+    pub envelope: ManifoldCommandEnvelope,
+    /// Accepted result. Present only for accepted events.
+    pub accepted: Option<ManifoldCommandAck>,
+    /// Rejected result. Present only for rejected events.
+    pub rejection: Option<ManifoldCommandRejection>,
+    /// Lease recorded with the decision, when a lease was presented.
+    pub lease: Option<ManifoldControlLease>,
+    /// Clock snapshot recorded with the decision.
+    pub recorded_clock: ManifoldClockSnapshot,
+    /// Stable ids for fixtures, scorecards, or logs backing the event.
+    pub evidence_refs: Vec<DottedId>,
+}
+
+/// Deterministic review result for one command authority decision.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldCommandAuthorityReview {
+    /// Schema identifier for this review.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable review id.
+    pub review_id: DottedId,
+    /// Authority that reviewed the command.
+    pub authority_id: DottedId,
+    /// Authority revision used by this review.
+    pub authority_revision: Revision,
+    /// Review outcome.
+    pub outcome: ManifoldCommandAuthorityReviewOutcome,
+    /// Accepted command result. Present only for accepted reviews.
+    pub accepted: Option<ManifoldCommandAck>,
+    /// Rejected command result. Present only for rejected reviews.
+    pub rejection: Option<ManifoldCommandRejection>,
+    /// Audit event for the same command decision.
+    pub audit_event: ManifoldCommandAuthorityAuditEvent,
+}
+
+impl ManifoldCommandAuthorityReview {
+    /// Validates that this review matches the supplied authority snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when review fields and the
+    /// nested audit event disagree, or when the event is not valid for the snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.command_review.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.audit_event.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.authority_revision != snapshot.authority_revision
+            || self.authority_revision != self.audit_event.prior_authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        match self.outcome {
+            ManifoldCommandAuthorityReviewOutcome::CommandAccepted => {
+                if self.accepted.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldCommandAuthorityReviewOutcome::CommandRejected => {
+                if self.accepted.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        if self.accepted != self.audit_event.accepted
+            || self.rejection != self.audit_event.rejection
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        if ManifoldCommandAuthorityAuditEventKind::from(self.outcome) != self.audit_event.event_kind
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        self.audit_event.validate_against_snapshot(snapshot)
+    }
+}
+
+/// Rejection for a command dispatch receipt.
+///
+/// Dispatch rejection is distinct from command authority rejection. It reports
+/// why a reviewed command was not handed to downstream transport or execution,
+/// without mutating authority state or running the command.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldCommandDispatchRejection {
+    /// Schema identifier for this dispatch rejection.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Dispatch receipt id this rejection belongs to.
+    pub dispatch_id: DottedId,
+    /// Stable rejection code.
+    pub rejection_code: DottedId,
+    /// Human-readable explanation.
+    pub message: String,
+    /// Whether retrying after refreshing authority state may help.
+    pub retryable: bool,
+    /// Current authority revision.
+    pub current_authority_revision: Revision,
+}
+
+/// Source-only receipt preparing a reviewed command for downstream dispatch.
+///
+/// This is a handoff contract between Manifold authority and a later transport
+/// or executor. It confirms ack/rejection shape and review provenance without
+/// opening a transport, contacting a host, executing the command, or mutating
+/// accepted authority state.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldCommandDispatchReceipt {
+    /// Schema identifier for this dispatch receipt.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable dispatch receipt id.
+    pub dispatch_id: DottedId,
+    /// Authority that prepared the dispatch receipt.
+    pub authority_id: DottedId,
+    /// Authority revision used by this receipt.
+    pub authority_revision: Revision,
+    /// Command id being prepared for dispatch.
+    pub command_id: DottedId,
+    /// Command request id being prepared for dispatch.
+    pub request_id: DottedId,
+    /// Dispatch receipt outcome.
+    pub outcome: ManifoldCommandDispatchReceiptOutcome,
+    /// Accepted command ack. Present only for ready receipts.
+    pub ack: Option<ManifoldCommandAck>,
+    /// Dispatch rejection. Present only for rejected receipts.
+    pub rejection: Option<ManifoldCommandDispatchRejection>,
+    /// Command authority review being handed off.
+    pub review: ManifoldCommandAuthorityReview,
+}
+
+impl ManifoldCommandDispatchReceipt {
+    /// Validates that this dispatch receipt matches the supplied snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the receipt does not
+    /// represent a deterministic command dispatch handoff for the supplied
+    /// authority snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.command_dispatch_receipt.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.dispatch_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.review.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.dispatch_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.authority_revision != snapshot.authority_revision
+            || self.authority_revision != self.review.authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.dispatch_id.clone(),
+                self.authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.command_id != self.review.audit_event.envelope.command_id
+            || self.request_id != self.review.audit_event.envelope.request_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.dispatch_id.clone(),
+                self.command_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+            ));
+        }
+
+        self.review.validate_against_snapshot(snapshot)?;
+
+        match self.outcome {
+            ManifoldCommandDispatchReceiptOutcome::CommandDispatchReady => {
+                if self.ack.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.dispatch_id.clone(),
+                        "ack".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                if self.review.outcome != ManifoldCommandAuthorityReviewOutcome::CommandAccepted {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.dispatch_id.clone(),
+                        self.review.review_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let ack = self.ack.as_ref().expect("ack presence checked");
+                if Some(ack) != self.review.accepted.as_ref() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.dispatch_id.clone(),
+                        self.request_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let expected_accepted_revision =
+                    snapshot.authority_revision.next().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            self.dispatch_id.clone(),
+                            snapshot.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        )
+                    })?;
+                if ack.accepted_revision != expected_accepted_revision {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.dispatch_id.clone(),
+                        ack.accepted_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                }
+
+                Ok(())
+            }
+            ManifoldCommandDispatchReceiptOutcome::CommandDispatchRejected => {
+                if self.ack.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.dispatch_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                if self.review.outcome != ManifoldCommandAuthorityReviewOutcome::CommandRejected {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.dispatch_id.clone(),
+                        self.review.review_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let rejection = self
+                    .rejection
+                    .as_ref()
+                    .expect("dispatch rejection presence checked");
+                if rejection.schema_id.as_str()
+                    != "rusty.manifold.authority.command_dispatch_rejection.v1"
+                    || rejection.dispatch_id != self.dispatch_id
+                    || rejection.current_authority_revision != snapshot.authority_revision
+                    || rejection.rejection_code.as_str() != "review_rejected"
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.dispatch_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Audit event for one control lease authority decision.
+///
+/// The event carries the lease request plus exactly one accepted or rejected
+/// result. It records enough local authority context for deterministic
+/// validation without owning runtime mutation.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldControlLeaseAuthorityAuditEvent {
+    /// Schema identifier for this audit event.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable event id.
+    pub event_id: DottedId,
+    /// Authority that made the decision.
+    pub authority_id: DottedId,
+    /// Authority revision observed before the decision.
+    pub prior_authority_revision: Revision,
+    /// Event kind.
+    pub event_kind: ManifoldControlLeaseAuthorityAuditEventKind,
+    /// Lease request reviewed by authority.
+    pub request: ManifoldControlLeaseRequest,
+    /// Accepted lease. Present only for accepted events.
+    pub accepted: Option<ManifoldControlLease>,
+    /// Rejected lease result. Present only for rejected events.
+    pub rejection: Option<ManifoldControlLeaseRejection>,
+    /// Clock snapshot recorded with the decision.
+    pub recorded_clock: ManifoldClockSnapshot,
+    /// Stable ids for fixtures, scorecards, or logs backing the event.
+    pub evidence_refs: Vec<DottedId>,
+}
+
+/// Deterministic review result for one control lease authority decision.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldControlLeaseAuthorityReview {
+    /// Schema identifier for this review.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable review id.
+    pub review_id: DottedId,
+    /// Authority that reviewed the lease request.
+    pub authority_id: DottedId,
+    /// Authority revision used by this review.
+    pub authority_revision: Revision,
+    /// Review outcome.
+    pub outcome: ManifoldControlLeaseAuthorityReviewOutcome,
+    /// Accepted lease. Present only for accepted reviews.
+    pub accepted: Option<ManifoldControlLease>,
+    /// Rejected lease result. Present only for rejected reviews.
+    pub rejection: Option<ManifoldControlLeaseRejection>,
+    /// Audit event for the same lease decision.
+    pub audit_event: ManifoldControlLeaseAuthorityAuditEvent,
+}
+
+impl ManifoldControlLeaseAuthorityReview {
+    /// Validates that this review matches the supplied authority snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when review fields and the
+    /// nested audit event disagree, or when the event is not valid for the snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.lease_review.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.audit_event.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.authority_revision != snapshot.authority_revision
+            || self.authority_revision != self.audit_event.prior_authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        match self.outcome {
+            ManifoldControlLeaseAuthorityReviewOutcome::LeaseAccepted => {
+                if self.accepted.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldControlLeaseAuthorityReviewOutcome::LeaseRejected => {
+                if self.accepted.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        if self.accepted != self.audit_event.accepted
+            || self.rejection != self.audit_event.rejection
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        if ManifoldControlLeaseAuthorityAuditEventKind::from(self.outcome)
+            != self.audit_event.event_kind
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        self.audit_event.validate_against_snapshot(snapshot)
+    }
+}
+
+/// Deterministic application result for one control-lease authority review.
+///
+/// This records the bridge from review-time lease authority to accepted
+/// authority state without owning command execution, lease renewal timers, or
+/// host/runtime mutation.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldControlLeaseAuthorityApplication {
+    /// Schema identifier for this application receipt.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable application id.
+    pub application_id: DottedId,
+    /// Authority that attempted the application.
+    pub authority_id: DottedId,
+    /// Authority revision before applying the review.
+    pub from_authority_revision: Revision,
+    /// Lease request reviewed by authority.
+    pub request_id: DottedId,
+    /// Lease scope requested.
+    pub lease_scope: DottedId,
+    /// Number of active leases before applying the review.
+    pub from_active_lease_count: usize,
+    /// Application outcome.
+    pub outcome: ManifoldControlLeaseAuthorityApplicationOutcome,
+    /// Next accepted authority snapshot. Present only for applied outcomes.
+    pub applied_snapshot: Option<ManifoldAuthoritySnapshot>,
+    /// Rejection. Present only for rejected application outcomes.
+    pub rejection: Option<ManifoldAuthoritySnapshotApplicationRejection>,
+    /// Review that was applied or rejected for application.
+    pub review: ManifoldControlLeaseAuthorityReview,
+}
+
+impl ManifoldControlLeaseAuthorityApplication {
+    /// Validates that this application receipt matches the supplied prior snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the receipt does not
+    /// represent a deterministic state transition or deterministic application
+    /// rejection for the supplied prior authority snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.lease_application.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.review.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.from_authority_revision != snapshot.authority_revision
+            || self.from_authority_revision != self.review.authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.request_id != self.review.audit_event.request.request_id
+            || self.lease_scope != self.review.audit_event.request.scope
+            || self.from_active_lease_count != snapshot.active_leases.len()
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.lease_scope.to_string(),
+                ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+            ));
+        }
+
+        self.review.validate_against_snapshot(snapshot)?;
+
+        match self.outcome {
+            ManifoldControlLeaseAuthorityApplicationOutcome::LeaseApplied => {
+                if self.applied_snapshot.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "applied_snapshot".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                if self.review.outcome != ManifoldControlLeaseAuthorityReviewOutcome::LeaseAccepted
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.review.review_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let applied = self
+                    .applied_snapshot
+                    .as_ref()
+                    .expect("applied snapshot presence checked");
+                let expected_authority_revision =
+                    snapshot.authority_revision.next().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            self.application_id.clone(),
+                            snapshot.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        )
+                    })?;
+
+                if applied.authority_revision != expected_authority_revision {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                }
+
+                if applied.authority_id != snapshot.authority_id
+                    || applied.host_manifest != snapshot.host_manifest
+                    || applied.clock_snapshot != snapshot.clock_snapshot
+                    || applied.stream_registry != snapshot.stream_registry
+                    || applied.module_runtime_states != snapshot.module_runtime_states
+                    || applied.command_ids != snapshot.command_ids
+                    || applied.command_descriptors != snapshot.command_descriptors
+                    || applied.active_stream_subscriptions != snapshot.active_stream_subscriptions
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                    ));
+                }
+
+                let accepted_lease = self.review.accepted.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut expected_leases = snapshot.active_leases.clone();
+                expected_leases.push(accepted_lease);
+                if applied.active_leases != expected_leases {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.lease_scope.to_string(),
+                        ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                    ));
+                }
+
+                applied.validate_authority_links()
+            }
+            ManifoldControlLeaseAuthorityApplicationOutcome::LeaseApplicationRejected => {
+                if self.applied_snapshot.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let rejection = self
+                    .rejection
+                    .as_ref()
+                    .expect("application rejection presence checked");
+                if rejection.schema_id.as_str()
+                    != "rusty.manifold.authority.snapshot_application_rejection.v1"
+                    || rejection.application_id != self.application_id
+                    || rejection.current_authority_revision != snapshot.authority_revision
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                if self.review.outcome == ManifoldControlLeaseAuthorityReviewOutcome::LeaseRejected
+                    && rejection.rejection_code.as_str() != "review_rejected"
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Audit event for one control lease release authority decision.
+///
+/// The event carries the lease release request plus exactly one released lease
+/// or rejected result. It records enough local authority context for
+/// deterministic validation without owning timers or runtime mutation.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldControlLeaseReleaseAuthorityAuditEvent {
+    /// Schema identifier for this audit event.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable event id.
+    pub event_id: DottedId,
+    /// Authority that made the decision.
+    pub authority_id: DottedId,
+    /// Authority revision observed before the decision.
+    pub prior_authority_revision: Revision,
+    /// Active lease count observed before the decision.
+    pub active_lease_count: usize,
+    /// Event kind.
+    pub event_kind: ManifoldControlLeaseReleaseAuthorityAuditEventKind,
+    /// Lease release request reviewed by authority.
+    pub request: ManifoldControlLeaseReleaseRequest,
+    /// Released lease. Present only for released events.
+    pub released: Option<ManifoldControlLease>,
+    /// Rejected lease release result. Present only for rejected events.
+    pub rejection: Option<ManifoldControlLeaseReleaseRejection>,
+    /// Clock snapshot recorded with the decision.
+    pub recorded_clock: ManifoldClockSnapshot,
+    /// Stable ids for fixtures, scorecards, or logs backing the event.
+    pub evidence_refs: Vec<DottedId>,
+}
+
+/// Deterministic review result for one control lease release authority decision.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldControlLeaseReleaseAuthorityReview {
+    /// Schema identifier for this review.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable review id.
+    pub review_id: DottedId,
+    /// Authority that reviewed the lease release request.
+    pub authority_id: DottedId,
+    /// Authority revision used by this review.
+    pub authority_revision: Revision,
+    /// Review outcome.
+    pub outcome: ManifoldControlLeaseReleaseAuthorityReviewOutcome,
+    /// Released lease. Present only for accepted release reviews.
+    pub released: Option<ManifoldControlLease>,
+    /// Rejected lease release result. Present only for rejected release reviews.
+    pub rejection: Option<ManifoldControlLeaseReleaseRejection>,
+    /// Audit event for the same lease release decision.
+    pub audit_event: ManifoldControlLeaseReleaseAuthorityAuditEvent,
+}
+
+impl ManifoldControlLeaseReleaseAuthorityReview {
+    /// Validates that this review matches the supplied authority snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when review fields and the
+    /// nested audit event disagree, or when the event is not valid for the snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.lease_release_review.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.audit_event.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.authority_revision != snapshot.authority_revision
+            || self.authority_revision != self.audit_event.prior_authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        match self.outcome {
+            ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleased => {
+                if self.released.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "released".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleaseRejected => {
+                if self.released.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        if self.released != self.audit_event.released
+            || self.rejection != self.audit_event.rejection
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        if ManifoldControlLeaseReleaseAuthorityAuditEventKind::from(self.outcome)
+            != self.audit_event.event_kind
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        self.audit_event.validate_against_snapshot(snapshot)
+    }
+}
+
+impl ManifoldControlLeaseReleaseAuthorityAuditEvent {
+    /// Validates this event against the authority snapshot it claims to use.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the event is not a
+    /// consistent lease release or rejection for the supplied snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.lease_release_audit_event.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        snapshot.validate_authority_links()?;
+
+        if self.authority_id != snapshot.authority_id {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.prior_authority_revision != snapshot.authority_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.active_lease_count != snapshot.active_leases.len() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.active_lease_count.to_string(),
+                ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+            ));
+        }
+
+        if self.recorded_clock.clock_domain != snapshot.clock_snapshot.clock_domain
+            || self.recorded_clock.clock_epoch_id != snapshot.clock_snapshot.clock_epoch_id
+            || self.recorded_clock.sequence < snapshot.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if self.evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        match self.event_kind {
+            ManifoldControlLeaseReleaseAuthorityAuditEventKind::LeaseReleased => {
+                if self.released.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "released".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldControlLeaseReleaseAuthorityAuditEventKind::LeaseReleaseRejected => {
+                if self.released.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        let expected_decision =
+            snapshot.lease_release_authority_decision(&self.request, &self.recorded_clock);
+
+        if let Some(released) = &self.released {
+            let LeaseReleaseAuthorityDecision::Released(expected_lease) = &expected_decision else {
+                let rejected_value = match &expected_decision {
+                    LeaseReleaseAuthorityDecision::Rejected { rejection_code, .. } => {
+                        rejection_code.clone()
+                    }
+                    LeaseReleaseAuthorityDecision::Released(_) => "released".to_owned(),
+                };
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejected_value.clone(),
+                    authority_error_kind_for_lease_release_rejection_code(&rejected_value),
+                ));
+            };
+
+            if released != expected_lease {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    released.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+        }
+
+        if let Some(rejection) = &self.rejection {
+            let LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                active_lease_count,
+            } = &expected_decision
+            else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    self.request.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                ));
+            };
+
+            if rejection.request_id != self.request.request_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+                ));
+            }
+
+            if rejection.current_revision != self.prior_authority_revision {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.current_revision.get().to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionRevisionMismatch,
+                ));
+            }
+
+            if rejection.active_lease_count != *active_lease_count
+                || rejection.rejection_code.as_str() != rejection_code
+                || rejection.message != *message
+                || rejection.retryable != *retryable
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.rejection_code.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Deterministic application result for one control lease release authority review.
+///
+/// This records the bridge from review-time lease release authority to
+/// accepted authority state without owning command execution, lease renewal
+/// timers, or host/runtime mutation.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldControlLeaseReleaseAuthorityApplication {
+    /// Schema identifier for this application receipt.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable application id.
+    pub application_id: DottedId,
+    /// Authority that attempted the application.
+    pub authority_id: DottedId,
+    /// Authority revision before applying the review.
+    pub from_authority_revision: Revision,
+    /// Lease released by the reviewed request.
+    pub lease_id: DottedId,
+    /// Lease scope released.
+    pub lease_scope: DottedId,
+    /// Number of active leases before applying the review.
+    pub from_active_lease_count: usize,
+    /// Application outcome.
+    pub outcome: ManifoldControlLeaseReleaseAuthorityApplicationOutcome,
+    /// Next accepted authority snapshot. Present only for applied outcomes.
+    pub applied_snapshot: Option<ManifoldAuthoritySnapshot>,
+    /// Rejection. Present only for rejected application outcomes.
+    pub rejection: Option<ManifoldAuthoritySnapshotApplicationRejection>,
+    /// Review that was applied or rejected for application.
+    pub review: ManifoldControlLeaseReleaseAuthorityReview,
+}
+
+impl ManifoldControlLeaseReleaseAuthorityApplication {
+    /// Validates that this application receipt matches the supplied prior snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the receipt does not
+    /// represent a deterministic state transition or deterministic application
+    /// rejection for the supplied prior authority snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.lease_release_application.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.review.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.from_authority_revision != snapshot.authority_revision
+            || self.from_authority_revision != self.review.authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.lease_id != self.review.audit_event.request.lease_id
+            || self.lease_scope != self.review.audit_event.request.scope
+            || self.from_active_lease_count != snapshot.active_leases.len()
+            || self.from_active_lease_count != self.review.audit_event.active_lease_count
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.lease_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+            ));
+        }
+
+        self.review.validate_against_snapshot(snapshot)?;
+
+        match self.outcome {
+            ManifoldControlLeaseReleaseAuthorityApplicationOutcome::LeaseReleaseApplied => {
+                if self.applied_snapshot.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "applied_snapshot".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    != ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleased
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.review.review_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let applied = self
+                    .applied_snapshot
+                    .as_ref()
+                    .expect("applied snapshot presence checked");
+                let expected_authority_revision =
+                    snapshot.authority_revision.next().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            self.application_id.clone(),
+                            snapshot.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        )
+                    })?;
+
+                if applied.authority_revision != expected_authority_revision {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                }
+
+                if applied.authority_id != snapshot.authority_id
+                    || applied.host_manifest != snapshot.host_manifest
+                    || applied.clock_snapshot != snapshot.clock_snapshot
+                    || applied.stream_registry != snapshot.stream_registry
+                    || applied.module_runtime_states != snapshot.module_runtime_states
+                    || applied.command_ids != snapshot.command_ids
+                    || applied.command_descriptors != snapshot.command_descriptors
+                    || applied.active_stream_subscriptions != snapshot.active_stream_subscriptions
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                    ));
+                }
+
+                let released_lease = self.review.released.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "released".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut expected_leases = snapshot.active_leases.clone();
+                let Some(position) = expected_leases
+                    .iter()
+                    .position(|lease| lease.lease_id == released_lease.lease_id)
+                else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        released_lease.lease_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownLease,
+                    ));
+                };
+                let removed = expected_leases.remove(position);
+                if removed != released_lease || applied.active_leases != expected_leases {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.lease_scope.to_string(),
+                        ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                    ));
+                }
+
+                applied.validate_authority_links()
+            }
+            ManifoldControlLeaseReleaseAuthorityApplicationOutcome::LeaseReleaseApplicationRejected => {
+                if self.applied_snapshot.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let rejection = self
+                    .rejection
+                    .as_ref()
+                    .expect("application rejection presence checked");
+                if rejection.schema_id.as_str()
+                    != "rusty.manifold.authority.snapshot_application_rejection.v1"
+                    || rejection.application_id != self.application_id
+                    || rejection.current_authority_revision != snapshot.authority_revision
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    == ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleaseRejected
+                    && rejection.rejection_code.as_str() != "review_rejected"
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Audit event for one control lease renewal authority decision.
+///
+/// The event carries the lease renewal request plus exactly one renewed lease
+/// or rejected result. It records enough local authority context for
+/// deterministic validation without owning timers or runtime mutation.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldControlLeaseRenewalAuthorityAuditEvent {
+    /// Schema identifier for this audit event.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable event id.
+    pub event_id: DottedId,
+    /// Authority that made the decision.
+    pub authority_id: DottedId,
+    /// Authority revision observed before the decision.
+    pub prior_authority_revision: Revision,
+    /// Active lease count observed before the decision.
+    pub active_lease_count: usize,
+    /// Event kind.
+    pub event_kind: ManifoldControlLeaseRenewalAuthorityAuditEventKind,
+    /// Lease renewal request reviewed by authority.
+    pub request: ManifoldControlLeaseRenewalRequest,
+    /// Renewed lease. Present only for renewed events.
+    pub renewed: Option<ManifoldControlLease>,
+    /// Rejected lease renewal result. Present only for rejected events.
+    pub rejection: Option<ManifoldControlLeaseRenewalRejection>,
+    /// Clock snapshot recorded with the decision.
+    pub recorded_clock: ManifoldClockSnapshot,
+    /// Stable ids for fixtures, scorecards, or logs backing the event.
+    pub evidence_refs: Vec<DottedId>,
+}
+
+/// Deterministic review result for one control lease renewal authority decision.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldControlLeaseRenewalAuthorityReview {
+    /// Schema identifier for this review.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable review id.
+    pub review_id: DottedId,
+    /// Authority that reviewed the lease renewal request.
+    pub authority_id: DottedId,
+    /// Authority revision used by this review.
+    pub authority_revision: Revision,
+    /// Review outcome.
+    pub outcome: ManifoldControlLeaseRenewalAuthorityReviewOutcome,
+    /// Renewed lease. Present only for accepted renewal reviews.
+    pub renewed: Option<ManifoldControlLease>,
+    /// Rejected lease renewal result. Present only for rejected renewal reviews.
+    pub rejection: Option<ManifoldControlLeaseRenewalRejection>,
+    /// Audit event for the same lease renewal decision.
+    pub audit_event: ManifoldControlLeaseRenewalAuthorityAuditEvent,
+}
+
+impl ManifoldControlLeaseRenewalAuthorityReview {
+    /// Validates that this review matches the supplied authority snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when review fields and the
+    /// nested audit event disagree, or when the event is not valid for the snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.lease_renewal_review.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.audit_event.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.authority_revision != snapshot.authority_revision
+            || self.authority_revision != self.audit_event.prior_authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        match self.outcome {
+            ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewed => {
+                if self.renewed.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "renewed".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewalRejected => {
+                if self.renewed.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        if self.renewed != self.audit_event.renewed || self.rejection != self.audit_event.rejection
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        if ManifoldControlLeaseRenewalAuthorityAuditEventKind::from(self.outcome)
+            != self.audit_event.event_kind
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        self.audit_event.validate_against_snapshot(snapshot)
+    }
+}
+
+impl ManifoldControlLeaseRenewalAuthorityAuditEvent {
+    /// Validates this event against the authority snapshot it claims to use.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the event is not a
+    /// consistent lease renewal or rejection for the supplied snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.lease_renewal_audit_event.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        snapshot.validate_authority_links()?;
+
+        if self.authority_id != snapshot.authority_id {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.prior_authority_revision != snapshot.authority_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.active_lease_count != snapshot.active_leases.len() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.active_lease_count.to_string(),
+                ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+            ));
+        }
+
+        if self.recorded_clock.clock_domain != snapshot.clock_snapshot.clock_domain
+            || self.recorded_clock.clock_epoch_id != snapshot.clock_snapshot.clock_epoch_id
+            || self.recorded_clock.sequence < snapshot.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if self.evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        match self.event_kind {
+            ManifoldControlLeaseRenewalAuthorityAuditEventKind::LeaseRenewed => {
+                if self.renewed.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "renewed".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldControlLeaseRenewalAuthorityAuditEventKind::LeaseRenewalRejected => {
+                if self.renewed.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        let expected_decision =
+            snapshot.lease_renewal_authority_decision(&self.request, &self.recorded_clock);
+
+        if let Some(renewed) = &self.renewed {
+            let LeaseRenewalAuthorityDecision::Renewed(expected_lease) = &expected_decision else {
+                let rejected_value = match &expected_decision {
+                    LeaseRenewalAuthorityDecision::Rejected { rejection_code, .. } => {
+                        rejection_code.clone()
+                    }
+                    LeaseRenewalAuthorityDecision::Renewed(_) => "renewed".to_owned(),
+                };
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejected_value.clone(),
+                    authority_error_kind_for_lease_renewal_rejection_code(&rejected_value),
+                ));
+            };
+
+            if renewed != expected_lease {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    renewed.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+        }
+
+        if let Some(rejection) = &self.rejection {
+            let LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                active_lease_count,
+                current_expires_at_ms,
+            } = &expected_decision
+            else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    self.request.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                ));
+            };
+
+            if rejection.request_id != self.request.request_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+                ));
+            }
+
+            if rejection.current_revision != self.prior_authority_revision {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.current_revision.get().to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionRevisionMismatch,
+                ));
+            }
+
+            if rejection.rejection_code.as_str() != rejection_code
+                || rejection.message != *message
+                || rejection.retryable != *retryable
+                || rejection.active_lease_count != *active_lease_count
+                || rejection.current_expires_at_ms != *current_expires_at_ms
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.rejection_code.to_string(),
+                    authority_error_kind_for_lease_renewal_rejection_code(rejection_code),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Deterministic application result for one control lease renewal authority review.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldControlLeaseRenewalAuthorityApplication {
+    /// Schema identifier for this application receipt.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable application id.
+    pub application_id: DottedId,
+    /// Authority that attempted the application.
+    pub authority_id: DottedId,
+    /// Authority revision before applying the review.
+    pub from_authority_revision: Revision,
+    /// Lease renewed by the reviewed request.
+    pub lease_id: DottedId,
+    /// Lease scope renewed.
+    pub lease_scope: DottedId,
+    /// Number of active leases before applying the review.
+    pub from_active_lease_count: usize,
+    /// Application outcome.
+    pub outcome: ManifoldControlLeaseRenewalAuthorityApplicationOutcome,
+    /// Next accepted authority snapshot. Present only for applied outcomes.
+    pub applied_snapshot: Option<ManifoldAuthoritySnapshot>,
+    /// Rejection. Present only for rejected application outcomes.
+    pub rejection: Option<ManifoldAuthoritySnapshotApplicationRejection>,
+    /// Review that was applied or rejected for application.
+    pub review: ManifoldControlLeaseRenewalAuthorityReview,
+}
+
+impl ManifoldControlLeaseRenewalAuthorityApplication {
+    /// Validates that this application receipt matches the supplied prior snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the receipt does not
+    /// represent a deterministic state transition or deterministic application
+    /// rejection for the supplied prior authority snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.lease_renewal_application.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.review.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.from_authority_revision != snapshot.authority_revision
+            || self.from_authority_revision != self.review.authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.lease_id != self.review.audit_event.request.lease_id
+            || self.lease_scope != self.review.audit_event.request.scope
+            || self.from_active_lease_count != snapshot.active_leases.len()
+            || self.from_active_lease_count != self.review.audit_event.active_lease_count
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.lease_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+            ));
+        }
+
+        self.review.validate_against_snapshot(snapshot)?;
+
+        match self.outcome {
+            ManifoldControlLeaseRenewalAuthorityApplicationOutcome::LeaseRenewalApplied => {
+                if self.applied_snapshot.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "applied_snapshot".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    != ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewed
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.review.review_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let applied = self
+                    .applied_snapshot
+                    .as_ref()
+                    .expect("applied snapshot presence checked");
+                let expected_authority_revision =
+                    snapshot.authority_revision.next().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            self.application_id.clone(),
+                            snapshot.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        )
+                    })?;
+
+                if applied.authority_revision != expected_authority_revision {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                }
+
+                if applied.authority_id != snapshot.authority_id
+                    || applied.host_manifest != snapshot.host_manifest
+                    || applied.clock_snapshot != snapshot.clock_snapshot
+                    || applied.stream_registry != snapshot.stream_registry
+                    || applied.module_runtime_states != snapshot.module_runtime_states
+                    || applied.command_ids != snapshot.command_ids
+                    || applied.command_descriptors != snapshot.command_descriptors
+                    || applied.active_stream_subscriptions != snapshot.active_stream_subscriptions
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                    ));
+                }
+
+                let renewed_lease = self.review.renewed.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "renewed".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut expected_leases = snapshot.active_leases.clone();
+                let Some(position) = expected_leases
+                    .iter()
+                    .position(|lease| lease.lease_id == renewed_lease.lease_id)
+                else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        renewed_lease.lease_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownLease,
+                    ));
+                };
+                expected_leases[position] = renewed_lease;
+                if applied.active_leases != expected_leases {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.lease_scope.to_string(),
+                        ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                    ));
+                }
+
+                applied.validate_authority_links()
+            }
+            ManifoldControlLeaseRenewalAuthorityApplicationOutcome::LeaseRenewalApplicationRejected => {
+                if self.applied_snapshot.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let rejection = self
+                    .rejection
+                    .as_ref()
+                    .expect("application rejection presence checked");
+                if rejection.schema_id.as_str()
+                    != "rusty.manifold.authority.snapshot_application_rejection.v1"
+                    || rejection.application_id != self.application_id
+                    || rejection.current_authority_revision != snapshot.authority_revision
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    == ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewalRejected
+                    && rejection.rejection_code.as_str() != "review_rejected"
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Audit event for one authority expiry sweep decision.
+///
+/// The event carries the sweep request plus exactly one accepted expired-state
+/// set or rejected result. It records enough authority context to validate
+/// cleanup deterministically without owning timers, transports, or callbacks.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldAuthorityExpirySweepAuthorityAuditEvent {
+    /// Schema identifier for this audit event.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable event id.
+    pub event_id: DottedId,
+    /// Authority that made the decision.
+    pub authority_id: DottedId,
+    /// Authority revision observed before the decision.
+    pub prior_authority_revision: Revision,
+    /// Stream-registry revision observed before the decision.
+    pub prior_registry_revision: Revision,
+    /// Event kind.
+    pub event_kind: ManifoldAuthorityExpirySweepAuthorityAuditEventKind,
+    /// Sweep request reviewed by authority.
+    pub request: ManifoldAuthorityExpirySweepRequest,
+    /// Expired active leases found at the review clock. Present only for accepted events.
+    pub expired_leases: Vec<ManifoldControlLease>,
+    /// Expired active stream subscriptions found at the review clock. Present only for accepted events.
+    pub expired_stream_subscriptions: Vec<ManifoldStreamSubscription>,
+    /// Rejected sweep result. Present only for rejected events.
+    pub rejection: Option<ManifoldAuthorityExpirySweepRejection>,
+    /// Clock snapshot recorded with the decision.
+    pub recorded_clock: ManifoldClockSnapshot,
+    /// Stable ids for fixtures, scorecards, or logs backing the event.
+    pub evidence_refs: Vec<DottedId>,
+}
+
+/// Deterministic review result for one authority expiry sweep decision.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldAuthorityExpirySweepAuthorityReview {
+    /// Schema identifier for this review.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable review id.
+    pub review_id: DottedId,
+    /// Authority that reviewed the sweep.
+    pub authority_id: DottedId,
+    /// Authority revision used by this review.
+    pub authority_revision: Revision,
+    /// Stream-registry revision used by this review.
+    pub registry_revision: Revision,
+    /// Review outcome.
+    pub outcome: ManifoldAuthorityExpirySweepAuthorityReviewOutcome,
+    /// Expired active leases accepted for removal.
+    pub expired_leases: Vec<ManifoldControlLease>,
+    /// Expired active stream subscriptions accepted for removal.
+    pub expired_stream_subscriptions: Vec<ManifoldStreamSubscription>,
+    /// Rejected sweep result. Present only for rejected reviews.
+    pub rejection: Option<ManifoldAuthorityExpirySweepRejection>,
+    /// Audit event for the same sweep decision.
+    pub audit_event: ManifoldAuthorityExpirySweepAuthorityAuditEvent,
+}
+
+impl ManifoldAuthorityExpirySweepAuthorityReview {
+    /// Validates that this review matches the supplied authority snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when review fields and the
+    /// nested audit event disagree, or when the event is not valid for the snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.expiry_sweep_review.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.audit_event.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.authority_revision != snapshot.authority_revision
+            || self.authority_revision != self.audit_event.prior_authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.registry_revision != snapshot.stream_registry.registry_revision
+            || self.registry_revision != self.audit_event.prior_registry_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        match self.outcome {
+            ManifoldAuthorityExpirySweepAuthorityReviewOutcome::ExpiredStateAccepted => {
+                if (self.expired_leases.is_empty() && self.expired_stream_subscriptions.is_empty())
+                    || self.rejection.is_some()
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "expired_state".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldAuthorityExpirySweepAuthorityReviewOutcome::ExpirySweepRejected => {
+                if !self.expired_leases.is_empty()
+                    || !self.expired_stream_subscriptions.is_empty()
+                    || self.rejection.is_none()
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        if self.expired_leases != self.audit_event.expired_leases
+            || self.expired_stream_subscriptions != self.audit_event.expired_stream_subscriptions
+            || self.rejection != self.audit_event.rejection
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        if ManifoldAuthorityExpirySweepAuthorityAuditEventKind::from(self.outcome)
+            != self.audit_event.event_kind
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        self.audit_event.validate_against_snapshot(snapshot)
+    }
+}
+
+impl ManifoldAuthorityExpirySweepAuthorityAuditEvent {
+    /// Validates this event against the authority snapshot it claims to use.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the event is not a
+    /// consistent expiry sweep acceptance or rejection for the supplied snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.expiry_sweep_audit_event.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        snapshot.validate_authority_links()?;
+
+        if self.authority_id != snapshot.authority_id {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.prior_authority_revision != snapshot.authority_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.prior_registry_revision != snapshot.stream_registry.registry_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        if self.recorded_clock.clock_domain != snapshot.clock_snapshot.clock_domain
+            || self.recorded_clock.clock_epoch_id != snapshot.clock_snapshot.clock_epoch_id
+            || self.recorded_clock.sequence < snapshot.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if self.evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        match self.event_kind {
+            ManifoldAuthorityExpirySweepAuthorityAuditEventKind::ExpiredStateAccepted => {
+                if (self.expired_leases.is_empty() && self.expired_stream_subscriptions.is_empty())
+                    || self.rejection.is_some()
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "expired_state".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldAuthorityExpirySweepAuthorityAuditEventKind::ExpirySweepRejected => {
+                if !self.expired_leases.is_empty()
+                    || !self.expired_stream_subscriptions.is_empty()
+                    || self.rejection.is_none()
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        let expected_decision =
+            snapshot.authority_expiry_sweep_decision(&self.request, &self.recorded_clock);
+
+        match (&self.event_kind, expected_decision) {
+            (
+                ManifoldAuthorityExpirySweepAuthorityAuditEventKind::ExpiredStateAccepted,
+                AuthorityExpirySweepDecision::Accepted {
+                    expired_leases,
+                    expired_stream_subscriptions,
+                },
+            ) => {
+                if self.expired_leases != expired_leases
+                    || self.expired_stream_subscriptions != expired_stream_subscriptions
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        self.request.request_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                    ));
+                }
+            }
+            (
+                ManifoldAuthorityExpirySweepAuthorityAuditEventKind::ExpirySweepRejected,
+                AuthorityExpirySweepDecision::Rejected {
+                    rejection_code,
+                    message,
+                    retryable,
+                    expired_lease_count,
+                    expired_subscription_count,
+                },
+            ) => {
+                let rejection = self.rejection.as_ref().expect("rejection presence checked");
+                if rejection.request_id != self.request.request_id {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        rejection.request_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+                    ));
+                }
+
+                if rejection.current_authority_revision != self.prior_authority_revision
+                    || rejection.current_registry_revision != self.prior_registry_revision
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        rejection.current_authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionRevisionMismatch,
+                    ));
+                }
+
+                if rejection.rejection_code.as_str() != rejection_code
+                    || rejection.message != message
+                    || rejection.retryable != retryable
+                    || rejection.expired_lease_count != expired_lease_count
+                    || rejection.expired_subscription_count != expired_subscription_count
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        authority_error_kind_for_expiry_sweep_rejection_code(&rejection_code),
+                    ));
+                }
+            }
+            (_, AuthorityExpirySweepDecision::Accepted { .. }) => {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    self.request.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                ));
+            }
+            (_, AuthorityExpirySweepDecision::Rejected { rejection_code, .. }) => {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection_code.clone(),
+                    authority_error_kind_for_expiry_sweep_rejection_code(&rejection_code),
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Deterministic application result for one authority expiry sweep review.
+///
+/// This records the bridge from review-time expiry authority to accepted
+/// authority state without owning live timer, holder, subscriber, transport,
+/// provider, or host behavior.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldAuthorityExpirySweepAuthorityApplication {
+    /// Schema identifier for this application receipt.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable application id.
+    pub application_id: DottedId,
+    /// Authority that attempted the application.
+    pub authority_id: DottedId,
+    /// Authority revision before applying the review.
+    pub from_authority_revision: Revision,
+    /// Stream-registry revision before applying the review.
+    pub from_registry_revision: Revision,
+    /// Request applied or rejected.
+    pub request_id: DottedId,
+    /// Number of active leases before applying the review.
+    pub from_active_lease_count: usize,
+    /// Number of active stream subscriptions before applying the review.
+    pub from_active_subscription_count: usize,
+    /// Number of leases removed by an accepted application.
+    pub expired_lease_count: usize,
+    /// Number of stream subscriptions removed by an accepted application.
+    pub expired_subscription_count: usize,
+    /// Application outcome.
+    pub outcome: ManifoldAuthorityExpirySweepAuthorityApplicationOutcome,
+    /// Next accepted authority snapshot. Present only for applied outcomes.
+    pub applied_snapshot: Option<ManifoldAuthoritySnapshot>,
+    /// Rejection. Present only for rejected application outcomes.
+    pub rejection: Option<ManifoldAuthoritySnapshotApplicationRejection>,
+    /// Review that was applied or rejected for application.
+    pub review: ManifoldAuthorityExpirySweepAuthorityReview,
+}
+
+impl ManifoldAuthorityExpirySweepAuthorityApplication {
+    /// Validates that this application receipt matches the supplied prior snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the receipt does not
+    /// represent a deterministic state transition or deterministic application
+    /// rejection for the supplied prior authority snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.expiry_sweep_application.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.review.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.from_authority_revision != snapshot.authority_revision
+            || self.from_authority_revision != self.review.authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.from_registry_revision != snapshot.stream_registry.registry_revision
+            || self.from_registry_revision != self.review.registry_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        if self.request_id != self.review.audit_event.request.request_id
+            || self.from_active_lease_count != snapshot.active_leases.len()
+            || self.from_active_subscription_count != snapshot.active_stream_subscriptions.len()
+            || self.expired_lease_count != self.review.expired_leases.len()
+            || self.expired_subscription_count != self.review.expired_stream_subscriptions.len()
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.request_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        self.review.validate_against_snapshot(snapshot)?;
+
+        match self.outcome {
+            ManifoldAuthorityExpirySweepAuthorityApplicationOutcome::ExpiredStateApplied => {
+                if self.applied_snapshot.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "applied_snapshot".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    != ManifoldAuthorityExpirySweepAuthorityReviewOutcome::ExpiredStateAccepted
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.review.review_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let applied = self
+                    .applied_snapshot
+                    .as_ref()
+                    .expect("applied snapshot presence checked");
+                let expected_authority_revision =
+                    snapshot.authority_revision.next().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            self.application_id.clone(),
+                            snapshot.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        )
+                    })?;
+
+                if applied.authority_revision != expected_authority_revision {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                }
+
+                if applied.authority_id != snapshot.authority_id
+                    || applied.host_manifest != snapshot.host_manifest
+                    || applied.clock_snapshot != snapshot.clock_snapshot
+                    || applied.stream_registry != snapshot.stream_registry
+                    || applied.module_runtime_states != snapshot.module_runtime_states
+                    || applied.command_ids != snapshot.command_ids
+                    || applied.command_descriptors != snapshot.command_descriptors
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let expired_lease_ids = self
+                    .review
+                    .expired_leases
+                    .iter()
+                    .map(|lease| lease.lease_id.clone())
+                    .collect::<Vec<_>>();
+                let mut expected_leases = snapshot.active_leases.clone();
+                expected_leases
+                    .retain(|lease| !expired_lease_ids.iter().any(|id| id == &lease.lease_id));
+                if applied.active_leases != expected_leases {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.request_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                    ));
+                }
+
+                let expired_subscription_ids = self
+                    .review
+                    .expired_stream_subscriptions
+                    .iter()
+                    .map(|subscription| subscription.subscription_id.clone())
+                    .collect::<Vec<_>>();
+                let mut expected_subscriptions = snapshot.active_stream_subscriptions.clone();
+                expected_subscriptions.retain(|subscription| {
+                    !expired_subscription_ids
+                        .iter()
+                        .any(|id| id == &subscription.subscription_id)
+                });
+                if applied.active_stream_subscriptions != expected_subscriptions {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.request_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+                    ));
+                }
+
+                applied.validate_authority_links()
+            }
+            ManifoldAuthorityExpirySweepAuthorityApplicationOutcome::ExpirySweepApplicationRejected => {
+                if self.applied_snapshot.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let rejection = self
+                    .rejection
+                    .as_ref()
+                    .expect("application rejection presence checked");
+                if rejection.schema_id.as_str()
+                    != "rusty.manifold.authority.snapshot_application_rejection.v1"
+                    || rejection.application_id != self.application_id
+                    || rejection.current_authority_revision != snapshot.authority_revision
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    == ManifoldAuthorityExpirySweepAuthorityReviewOutcome::ExpirySweepRejected
+                    && rejection.rejection_code.as_str() != "review_rejected"
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Audit event for one stream-registry authority decision.
+///
+/// The event carries the registry change request plus exactly one accepted
+/// snapshot or rejected result. It records enough authority context for
+/// deterministic validation without publishing streams or opening transports.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamRegistryAuthorityAuditEvent {
+    /// Schema identifier for this audit event.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable event id.
+    pub event_id: DottedId,
+    /// Authority that made the decision.
+    pub authority_id: DottedId,
+    /// Authority revision observed before the decision.
+    pub prior_authority_revision: Revision,
+    /// Stream-registry revision observed before the decision.
+    pub prior_registry_revision: Revision,
+    /// Event kind.
+    pub event_kind: ManifoldStreamRegistryAuthorityAuditEventKind,
+    /// Registry change request reviewed by authority.
+    pub request: ManifoldStreamRegistryChangeRequest,
+    /// Accepted registry snapshot. Present only for accepted events.
+    pub accepted: Option<ManifoldStreamRegistrySnapshot>,
+    /// Rejected registry result. Present only for rejected events.
+    pub rejection: Option<ManifoldStreamRegistryRejection>,
+    /// Lease recorded with the decision, when a lease was presented.
+    pub lease: Option<ManifoldControlLease>,
+    /// Clock snapshot recorded with the decision.
+    pub recorded_clock: ManifoldClockSnapshot,
+    /// Stable ids for fixtures, scorecards, or logs backing the event.
+    pub evidence_refs: Vec<DottedId>,
+}
+
+/// Deterministic review result for one stream-registry authority decision.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamRegistryAuthorityReview {
+    /// Schema identifier for this review.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable review id.
+    pub review_id: DottedId,
+    /// Authority that reviewed the registry change.
+    pub authority_id: DottedId,
+    /// Authority revision used by this review.
+    pub authority_revision: Revision,
+    /// Stream-registry revision used by this review.
+    pub registry_revision: Revision,
+    /// Review outcome.
+    pub outcome: ManifoldStreamRegistryAuthorityReviewOutcome,
+    /// Accepted registry snapshot. Present only for accepted reviews.
+    pub accepted: Option<ManifoldStreamRegistrySnapshot>,
+    /// Rejected registry result. Present only for rejected reviews.
+    pub rejection: Option<ManifoldStreamRegistryRejection>,
+    /// Audit event for the same registry decision.
+    pub audit_event: ManifoldStreamRegistryAuthorityAuditEvent,
+}
+
+impl ManifoldStreamRegistryAuthorityReview {
+    /// Validates that this review matches the supplied authority snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when review fields and the
+    /// nested audit event disagree, or when the event is not valid for the snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.stream_registry_review.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.audit_event.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.authority_revision != snapshot.authority_revision
+            || self.authority_revision != self.audit_event.prior_authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.registry_revision != snapshot.stream_registry.registry_revision
+            || self.registry_revision != self.audit_event.prior_registry_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        match self.outcome {
+            ManifoldStreamRegistryAuthorityReviewOutcome::RegistryAccepted => {
+                if self.accepted.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldStreamRegistryAuthorityReviewOutcome::RegistryRejected => {
+                if self.accepted.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        if self.accepted != self.audit_event.accepted
+            || self.rejection != self.audit_event.rejection
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        if ManifoldStreamRegistryAuthorityAuditEventKind::from(self.outcome)
+            != self.audit_event.event_kind
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        self.audit_event.validate_against_snapshot(snapshot)
+    }
+}
+
+/// Machine-readable rejection for applying an authority review to accepted state.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldAuthoritySnapshotApplicationRejection {
+    /// Schema identifier for this rejection.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Application that was rejected.
+    pub application_id: DottedId,
+    /// Stable rejection code.
+    pub rejection_code: DottedId,
+    /// Display-safe rejection message.
+    pub message: String,
+    /// Whether retrying after refreshing state may help.
+    pub retryable: bool,
+    /// Current authority revision observed by the application attempt.
+    pub current_authority_revision: Revision,
+}
+
+/// Deterministic application result for one stream-registry authority review.
+///
+/// This records the bridge from review-time authority to accepted authority
+/// state without owning live publication, transport, or runtime mutation.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamRegistryAuthorityApplication {
+    /// Schema identifier for this application receipt.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable application id.
+    pub application_id: DottedId,
+    /// Authority that attempted the application.
+    pub authority_id: DottedId,
+    /// Authority revision before applying the review.
+    pub from_authority_revision: Revision,
+    /// Stream-registry revision before applying the review.
+    pub from_registry_revision: Revision,
+    /// Application outcome.
+    pub outcome: ManifoldStreamRegistryAuthorityApplicationOutcome,
+    /// Next accepted authority snapshot. Present only for applied outcomes.
+    pub applied_snapshot: Option<ManifoldAuthoritySnapshot>,
+    /// Rejection. Present only for rejected application outcomes.
+    pub rejection: Option<ManifoldAuthoritySnapshotApplicationRejection>,
+    /// Review that was applied or rejected for application.
+    pub review: ManifoldStreamRegistryAuthorityReview,
+}
+
+impl ManifoldStreamRegistryAuthorityApplication {
+    /// Validates that this application receipt matches the supplied prior snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the receipt does not
+    /// represent a deterministic state transition or deterministic application
+    /// rejection for the supplied prior authority snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.stream_registry_application.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.review.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.from_authority_revision != snapshot.authority_revision
+            || self.from_authority_revision != self.review.authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.from_registry_revision != snapshot.stream_registry.registry_revision
+            || self.from_registry_revision != self.review.registry_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        self.review.validate_against_snapshot(snapshot)?;
+
+        match self.outcome {
+            ManifoldStreamRegistryAuthorityApplicationOutcome::RegistrySnapshotApplied => {
+                if self.applied_snapshot.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "applied_snapshot".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    != ManifoldStreamRegistryAuthorityReviewOutcome::RegistryAccepted
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.review.review_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let applied = self
+                    .applied_snapshot
+                    .as_ref()
+                    .expect("applied snapshot presence checked");
+                let expected_authority_revision =
+                    snapshot.authority_revision.next().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            self.application_id.clone(),
+                            snapshot.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        )
+                    })?;
+
+                if applied.authority_revision != expected_authority_revision {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                }
+
+                if applied.authority_id != snapshot.authority_id
+                    || applied.host_manifest != snapshot.host_manifest
+                    || applied.clock_snapshot != snapshot.clock_snapshot
+                    || applied.module_runtime_states != snapshot.module_runtime_states
+                    || applied.command_ids != snapshot.command_ids
+                    || applied.command_descriptors != snapshot.command_descriptors
+                    || applied.active_leases != snapshot.active_leases
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RegistryMismatch,
+                    ));
+                }
+
+                if applied.stream_registry
+                    != self
+                        .review
+                        .accepted
+                        .clone()
+                        .unwrap_or_else(|| snapshot.stream_registry.clone())
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.stream_registry.registry_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::RegistryMismatch,
+                    ));
+                }
+
+                applied.validate_authority_links()
+            }
+            ManifoldStreamRegistryAuthorityApplicationOutcome::RegistryApplicationRejected => {
+                if self.applied_snapshot.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let rejection = self
+                    .rejection
+                    .as_ref()
+                    .expect("application rejection presence checked");
+                if rejection.schema_id.as_str()
+                    != "rusty.manifold.authority.snapshot_application_rejection.v1"
+                    || rejection.application_id != self.application_id
+                    || rejection.current_authority_revision != snapshot.authority_revision
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    == ManifoldStreamRegistryAuthorityReviewOutcome::RegistryRejected
+                {
+                    if rejection.rejection_code.as_str() != "review_rejected" {
+                        return Err(ManifoldAuthorityValidationError::new(
+                            self.application_id.clone(),
+                            rejection.rejection_code.to_string(),
+                            ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                        ));
+                    }
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Audit event for one stream subscription authority decision.
+///
+/// The event carries the subscription request plus exactly one accepted
+/// subscription or rejected result. It records enough authority context for
+/// deterministic validation without opening transports or notifying subscribers.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionAuthorityAuditEvent {
+    /// Schema identifier for this audit event.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable event id.
+    pub event_id: DottedId,
+    /// Authority that made the decision.
+    pub authority_id: DottedId,
+    /// Authority revision observed before the decision.
+    pub prior_authority_revision: Revision,
+    /// Stream-registry revision observed before the decision.
+    pub prior_registry_revision: Revision,
+    /// Active subscriber count observed for the requested stream.
+    pub active_subscriber_count: u32,
+    /// Event kind.
+    pub event_kind: ManifoldStreamSubscriptionAuthorityAuditEventKind,
+    /// Subscription request reviewed by authority.
+    pub request: ManifoldStreamSubscriptionRequest,
+    /// Accepted subscription. Present only for accepted events.
+    pub accepted: Option<ManifoldStreamSubscription>,
+    /// Rejected subscription result. Present only for rejected events.
+    pub rejection: Option<ManifoldStreamSubscriptionRejection>,
+    /// Clock snapshot recorded with the decision.
+    pub recorded_clock: ManifoldClockSnapshot,
+    /// Stable ids for fixtures, scorecards, or logs backing the event.
+    pub evidence_refs: Vec<DottedId>,
+}
+
+/// Deterministic review result for one stream subscription authority decision.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionAuthorityReview {
+    /// Schema identifier for this review.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable review id.
+    pub review_id: DottedId,
+    /// Authority that reviewed the subscription request.
+    pub authority_id: DottedId,
+    /// Authority revision used by this review.
+    pub authority_revision: Revision,
+    /// Stream-registry revision used by this review.
+    pub registry_revision: Revision,
+    /// Review outcome.
+    pub outcome: ManifoldStreamSubscriptionAuthorityReviewOutcome,
+    /// Accepted subscription. Present only for accepted reviews.
+    pub accepted: Option<ManifoldStreamSubscription>,
+    /// Rejected subscription result. Present only for rejected reviews.
+    pub rejection: Option<ManifoldStreamSubscriptionRejection>,
+    /// Audit event for the same subscription decision.
+    pub audit_event: ManifoldStreamSubscriptionAuthorityAuditEvent,
+}
+
+impl ManifoldStreamSubscriptionAuthorityReview {
+    /// Validates that this review matches the supplied authority snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when review fields and the
+    /// nested audit event disagree, or when the event is not valid for the snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.stream_subscription_review.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.audit_event.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.authority_revision != snapshot.authority_revision
+            || self.authority_revision != self.audit_event.prior_authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.registry_revision != snapshot.stream_registry.registry_revision
+            || self.registry_revision != self.audit_event.prior_registry_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        match self.outcome {
+            ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionAccepted => {
+                if self.accepted.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionRejected => {
+                if self.accepted.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        if self.accepted != self.audit_event.accepted
+            || self.rejection != self.audit_event.rejection
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        if ManifoldStreamSubscriptionAuthorityAuditEventKind::from(self.outcome)
+            != self.audit_event.event_kind
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        self.audit_event.validate_against_snapshot(snapshot)
+    }
+}
+
+impl ManifoldStreamSubscriptionAuthorityAuditEvent {
+    /// Validates this event against the authority snapshot it claims to use.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the event is not a
+    /// consistent subscription acceptance or rejection for the supplied snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.stream_subscription_audit_event.v1"
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        snapshot.validate_authority_links()?;
+
+        if self.authority_id != snapshot.authority_id {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.prior_authority_revision != snapshot.authority_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.prior_registry_revision != snapshot.stream_registry.registry_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        if self.active_subscriber_count
+            != snapshot.active_subscription_count(&self.request.stream_id)
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.active_subscriber_count.to_string(),
+                ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+            ));
+        }
+
+        if self.recorded_clock.clock_domain != snapshot.clock_snapshot.clock_domain
+            || self.recorded_clock.clock_epoch_id != snapshot.clock_snapshot.clock_epoch_id
+            || self.recorded_clock.sequence < snapshot.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if self.evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        match self.event_kind {
+            ManifoldStreamSubscriptionAuthorityAuditEventKind::SubscriptionAccepted => {
+                if self.accepted.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldStreamSubscriptionAuthorityAuditEventKind::SubscriptionRejected => {
+                if self.accepted.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        let expected_decision =
+            snapshot.stream_subscription_authority_decision(&self.request, &self.recorded_clock);
+
+        if let Some(accepted) = &self.accepted {
+            let StreamSubscriptionAuthorityDecision::Accepted(expected_subscription) =
+                &expected_decision
+            else {
+                let rejected_value = match &expected_decision {
+                    StreamSubscriptionAuthorityDecision::Rejected { rejection_code, .. } => {
+                        rejection_code.clone()
+                    }
+                    StreamSubscriptionAuthorityDecision::Accepted(_) => "accepted".to_owned(),
+                };
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejected_value.clone(),
+                    authority_error_kind_for_stream_subscription_rejection_code(&rejected_value),
+                ));
+            };
+
+            if accepted != expected_subscription {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    accepted.subscription_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+                ));
+            }
+        }
+
+        if let Some(rejection) = &self.rejection {
+            let StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                active_subscriber_count,
+            } = &expected_decision
+            else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    self.request.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                ));
+            };
+
+            if rejection.request_id != self.request.request_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+                ));
+            }
+
+            if rejection.current_authority_revision != self.prior_authority_revision
+                || rejection.current_registry_revision != self.prior_registry_revision
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.current_registry_revision.get().to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionRevisionMismatch,
+                ));
+            }
+
+            if rejection.active_subscriber_count != *active_subscriber_count
+                || rejection.rejection_code.as_str() != rejection_code
+                || rejection.message != *message
+                || rejection.retryable != *retryable
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.rejection_code.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Deterministic application result for one stream subscription authority review.
+///
+/// This records the bridge from review-time subscription authority to accepted
+/// authority state without owning live transport, callbacks, or provider runtime
+/// work.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionAuthorityApplication {
+    /// Schema identifier for this application receipt.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable application id.
+    pub application_id: DottedId,
+    /// Authority that attempted the application.
+    pub authority_id: DottedId,
+    /// Authority revision before applying the review.
+    pub from_authority_revision: Revision,
+    /// Stream-registry revision before applying the review.
+    pub from_registry_revision: Revision,
+    /// Stream whose subscriber set was reviewed.
+    pub stream_id: DottedId,
+    /// Active subscriber count before applying the review.
+    pub from_active_subscriber_count: u32,
+    /// Application outcome.
+    pub outcome: ManifoldStreamSubscriptionAuthorityApplicationOutcome,
+    /// Next accepted authority snapshot. Present only for applied outcomes.
+    pub applied_snapshot: Option<ManifoldAuthoritySnapshot>,
+    /// Rejection. Present only for rejected application outcomes.
+    pub rejection: Option<ManifoldAuthoritySnapshotApplicationRejection>,
+    /// Review that was applied or rejected for application.
+    pub review: ManifoldStreamSubscriptionAuthorityReview,
+}
+
+impl ManifoldStreamSubscriptionAuthorityApplication {
+    /// Validates that this application receipt matches the supplied prior snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the receipt does not
+    /// represent a deterministic state transition or deterministic application
+    /// rejection for the supplied prior authority snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.stream_subscription_application.v1"
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.review.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.from_authority_revision != snapshot.authority_revision
+            || self.from_authority_revision != self.review.authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.from_registry_revision != snapshot.stream_registry.registry_revision
+            || self.from_registry_revision != self.review.registry_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        if self.stream_id != self.review.audit_event.request.stream_id {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.stream_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+            ));
+        }
+
+        let snapshot_active_count = snapshot.active_subscription_count(&self.stream_id);
+        if self.from_active_subscriber_count != snapshot_active_count
+            || self.from_active_subscriber_count != self.review.audit_event.active_subscriber_count
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_active_subscriber_count.to_string(),
+                ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+            ));
+        }
+
+        self.review.validate_against_snapshot(snapshot)?;
+
+        match self.outcome {
+            ManifoldStreamSubscriptionAuthorityApplicationOutcome::SubscriptionApplied => {
+                if self.applied_snapshot.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "applied_snapshot".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    != ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionAccepted
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.review.review_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let applied = self
+                    .applied_snapshot
+                    .as_ref()
+                    .expect("applied snapshot presence checked");
+                let expected_authority_revision =
+                    snapshot.authority_revision.next().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            self.application_id.clone(),
+                            snapshot.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        )
+                    })?;
+
+                if applied.authority_revision != expected_authority_revision {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                }
+
+                if applied.authority_id != snapshot.authority_id
+                    || applied.host_manifest != snapshot.host_manifest
+                    || applied.clock_snapshot != snapshot.clock_snapshot
+                    || applied.stream_registry != snapshot.stream_registry
+                    || applied.module_runtime_states != snapshot.module_runtime_states
+                    || applied.command_ids != snapshot.command_ids
+                    || applied.command_descriptors != snapshot.command_descriptors
+                    || applied.active_leases != snapshot.active_leases
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+                    ));
+                }
+
+                let accepted_subscription = self.review.accepted.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut expected_subscriptions = snapshot.active_stream_subscriptions.clone();
+                expected_subscriptions.push(accepted_subscription);
+                if applied.active_stream_subscriptions != expected_subscriptions {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.stream_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+                    ));
+                }
+
+                applied.validate_authority_links()
+            }
+            ManifoldStreamSubscriptionAuthorityApplicationOutcome::SubscriptionApplicationRejected => {
+                if self.applied_snapshot.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let rejection = self
+                    .rejection
+                    .as_ref()
+                    .expect("application rejection presence checked");
+                if rejection.schema_id.as_str()
+                    != "rusty.manifold.authority.snapshot_application_rejection.v1"
+                    || rejection.application_id != self.application_id
+                    || rejection.current_authority_revision != snapshot.authority_revision
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    == ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionRejected
+                    && rejection.rejection_code.as_str() != "review_rejected"
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Stream subscription release authority audit event.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionReleaseAuthorityAuditEvent {
+    /// Schema identifier for this audit event.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable event id.
+    pub event_id: DottedId,
+    /// Authority that made the decision.
+    pub authority_id: DottedId,
+    /// Authority revision observed before the decision.
+    pub prior_authority_revision: Revision,
+    /// Stream-registry revision observed before the decision.
+    pub prior_registry_revision: Revision,
+    /// Active subscriber count observed for the requested stream.
+    pub active_subscriber_count: u32,
+    /// Event kind.
+    pub event_kind: ManifoldStreamSubscriptionReleaseAuthorityAuditEventKind,
+    /// Release request reviewed by authority.
+    pub request: ManifoldStreamSubscriptionReleaseRequest,
+    /// Released subscription. Present only for released events.
+    pub released: Option<ManifoldStreamSubscription>,
+    /// Rejected release result. Present only for rejected events.
+    pub rejection: Option<ManifoldStreamSubscriptionReleaseRejection>,
+    /// Clock snapshot recorded with the decision.
+    pub recorded_clock: ManifoldClockSnapshot,
+    /// Stable ids for fixtures, scorecards, or logs backing the event.
+    pub evidence_refs: Vec<DottedId>,
+}
+
+/// Deterministic review result for one stream subscription release authority decision.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionReleaseAuthorityReview {
+    /// Schema identifier for this review.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable review id.
+    pub review_id: DottedId,
+    /// Authority that reviewed the release request.
+    pub authority_id: DottedId,
+    /// Authority revision used by this review.
+    pub authority_revision: Revision,
+    /// Stream-registry revision used by this review.
+    pub registry_revision: Revision,
+    /// Review outcome.
+    pub outcome: ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome,
+    /// Released subscription. Present only for accepted release reviews.
+    pub released: Option<ManifoldStreamSubscription>,
+    /// Rejected release result. Present only for rejected release reviews.
+    pub rejection: Option<ManifoldStreamSubscriptionReleaseRejection>,
+    /// Audit event for the same release decision.
+    pub audit_event: ManifoldStreamSubscriptionReleaseAuthorityAuditEvent,
+}
+
+impl ManifoldStreamSubscriptionReleaseAuthorityReview {
+    /// Validates that this review matches the supplied authority snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when review fields and the
+    /// nested audit event disagree, or when the event is not valid for the snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str()
+            != "rusty.manifold.authority.stream_subscription_release_review.v1"
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.audit_event.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.authority_revision != snapshot.authority_revision
+            || self.authority_revision != self.audit_event.prior_authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.registry_revision != snapshot.stream_registry.registry_revision
+            || self.registry_revision != self.audit_event.prior_registry_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        match self.outcome {
+            ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome::SubscriptionReleased => {
+                if self.released.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "released".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome::SubscriptionReleaseRejected => {
+                if self.released.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        if self.released != self.audit_event.released
+            || self.rejection != self.audit_event.rejection
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        if ManifoldStreamSubscriptionReleaseAuthorityAuditEventKind::from(self.outcome)
+            != self.audit_event.event_kind
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        self.audit_event.validate_against_snapshot(snapshot)
+    }
+}
+
+impl ManifoldStreamSubscriptionReleaseAuthorityAuditEvent {
+    /// Validates this event against the authority snapshot it claims to use.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the event is not a
+    /// consistent subscription release or rejection for the supplied snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str()
+            != "rusty.manifold.authority.stream_subscription_release_audit_event.v1"
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        snapshot.validate_authority_links()?;
+
+        if self.authority_id != snapshot.authority_id {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.prior_authority_revision != snapshot.authority_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.prior_registry_revision != snapshot.stream_registry.registry_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        if self.active_subscriber_count
+            != snapshot.active_subscription_count(&self.request.stream_id)
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.active_subscriber_count.to_string(),
+                ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+            ));
+        }
+
+        if self.recorded_clock.clock_domain != snapshot.clock_snapshot.clock_domain
+            || self.recorded_clock.clock_epoch_id != snapshot.clock_snapshot.clock_epoch_id
+            || self.recorded_clock.sequence < snapshot.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if self.evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        match self.event_kind {
+            ManifoldStreamSubscriptionReleaseAuthorityAuditEventKind::SubscriptionReleased => {
+                if self.released.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "released".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldStreamSubscriptionReleaseAuthorityAuditEventKind::SubscriptionReleaseRejected => {
+                if self.released.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        let expected_decision = snapshot
+            .stream_subscription_release_authority_decision(&self.request, &self.recorded_clock);
+
+        if let Some(released) = &self.released {
+            let StreamSubscriptionReleaseAuthorityDecision::Released(expected_subscription) =
+                &expected_decision
+            else {
+                let rejected_value = match &expected_decision {
+                    StreamSubscriptionReleaseAuthorityDecision::Rejected {
+                        rejection_code, ..
+                    } => rejection_code.clone(),
+                    StreamSubscriptionReleaseAuthorityDecision::Released(_) => {
+                        "released".to_owned()
+                    }
+                };
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejected_value.clone(),
+                    authority_error_kind_for_stream_subscription_release_rejection_code(
+                        &rejected_value,
+                    ),
+                ));
+            };
+
+            if released != expected_subscription {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    released.subscription_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+                ));
+            }
+        }
+
+        if let Some(rejection) = &self.rejection {
+            let StreamSubscriptionReleaseAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                active_subscriber_count,
+            } = &expected_decision
+            else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    self.request.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                ));
+            };
+
+            if rejection.request_id != self.request.request_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+                ));
+            }
+
+            if rejection.current_authority_revision != self.prior_authority_revision
+                || rejection.current_registry_revision != self.prior_registry_revision
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.current_registry_revision.get().to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionRevisionMismatch,
+                ));
+            }
+
+            if rejection.active_subscriber_count != *active_subscriber_count
+                || rejection.rejection_code.as_str() != rejection_code
+                || rejection.message != *message
+                || rejection.retryable != *retryable
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.rejection_code.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Deterministic application result for one stream subscription release authority review.
+///
+/// This records the bridge from review-time release authority to accepted
+/// authority state without owning live transport teardown, callbacks, or
+/// provider runtime work.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionReleaseAuthorityApplication {
+    /// Schema identifier for this application receipt.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable application id.
+    pub application_id: DottedId,
+    /// Authority that attempted the application.
+    pub authority_id: DottedId,
+    /// Authority revision before applying the review.
+    pub from_authority_revision: Revision,
+    /// Stream-registry revision before applying the review.
+    pub from_registry_revision: Revision,
+    /// Stream whose subscriber set was reviewed.
+    pub stream_id: DottedId,
+    /// Subscription released by the reviewed request.
+    pub subscription_id: DottedId,
+    /// Active subscriber count before applying the review.
+    pub from_active_subscriber_count: u32,
+    /// Application outcome.
+    pub outcome: ManifoldStreamSubscriptionReleaseAuthorityApplicationOutcome,
+    /// Next accepted authority snapshot. Present only for applied outcomes.
+    pub applied_snapshot: Option<ManifoldAuthoritySnapshot>,
+    /// Rejection. Present only for rejected application outcomes.
+    pub rejection: Option<ManifoldAuthoritySnapshotApplicationRejection>,
+    /// Review that was applied or rejected for application.
+    pub review: ManifoldStreamSubscriptionReleaseAuthorityReview,
+}
+
+impl ManifoldStreamSubscriptionReleaseAuthorityApplication {
+    /// Validates that this application receipt matches the supplied prior snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the receipt does not
+    /// represent a deterministic state transition or deterministic application
+    /// rejection for the supplied prior authority snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str()
+            != "rusty.manifold.authority.stream_subscription_release_application.v1"
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.review.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.from_authority_revision != snapshot.authority_revision
+            || self.from_authority_revision != self.review.authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.from_registry_revision != snapshot.stream_registry.registry_revision
+            || self.from_registry_revision != self.review.registry_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        if self.stream_id != self.review.audit_event.request.stream_id
+            || self.subscription_id != self.review.audit_event.request.subscription_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.subscription_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+            ));
+        }
+
+        let snapshot_active_count = snapshot.active_subscription_count(&self.stream_id);
+        if self.from_active_subscriber_count != snapshot_active_count
+            || self.from_active_subscriber_count != self.review.audit_event.active_subscriber_count
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_active_subscriber_count.to_string(),
+                ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+            ));
+        }
+
+        self.review.validate_against_snapshot(snapshot)?;
+
+        match self.outcome {
+            ManifoldStreamSubscriptionReleaseAuthorityApplicationOutcome::SubscriptionReleaseApplied => {
+                if self.applied_snapshot.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "applied_snapshot".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    != ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome::SubscriptionReleased
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.review.review_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let applied = self
+                    .applied_snapshot
+                    .as_ref()
+                    .expect("applied snapshot presence checked");
+                let expected_authority_revision =
+                    snapshot.authority_revision.next().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            self.application_id.clone(),
+                            snapshot.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        )
+                    })?;
+
+                if applied.authority_revision != expected_authority_revision {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                }
+
+                if applied.authority_id != snapshot.authority_id
+                    || applied.host_manifest != snapshot.host_manifest
+                    || applied.clock_snapshot != snapshot.clock_snapshot
+                    || applied.stream_registry != snapshot.stream_registry
+                    || applied.module_runtime_states != snapshot.module_runtime_states
+                    || applied.command_ids != snapshot.command_ids
+                    || applied.command_descriptors != snapshot.command_descriptors
+                    || applied.active_leases != snapshot.active_leases
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+                    ));
+                }
+
+                let released_subscription = self.review.released.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "released".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut expected_subscriptions = snapshot.active_stream_subscriptions.clone();
+                let Some(position) = expected_subscriptions.iter().position(|subscription| {
+                    subscription.subscription_id == released_subscription.subscription_id
+                }) else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        released_subscription.subscription_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownSubscription,
+                    ));
+                };
+                let removed = expected_subscriptions.remove(position);
+                if removed != released_subscription
+                    || applied.active_stream_subscriptions != expected_subscriptions
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.stream_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+                    ));
+                }
+
+                applied.validate_authority_links()
+            }
+            ManifoldStreamSubscriptionReleaseAuthorityApplicationOutcome::SubscriptionReleaseApplicationRejected => {
+                if self.applied_snapshot.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let rejection = self
+                    .rejection
+                    .as_ref()
+                    .expect("application rejection presence checked");
+                if rejection.schema_id.as_str()
+                    != "rusty.manifold.authority.snapshot_application_rejection.v1"
+                    || rejection.application_id != self.application_id
+                    || rejection.current_authority_revision != snapshot.authority_revision
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    == ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome::SubscriptionReleaseRejected
+                    && rejection.rejection_code.as_str() != "review_rejected"
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Stream subscription renewal authority audit event.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionRenewalAuthorityAuditEvent {
+    /// Schema identifier for this audit event.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable event id.
+    pub event_id: DottedId,
+    /// Authority that made the decision.
+    pub authority_id: DottedId,
+    /// Authority revision observed before the decision.
+    pub prior_authority_revision: Revision,
+    /// Stream-registry revision observed before the decision.
+    pub prior_registry_revision: Revision,
+    /// Active subscriber count observed for the requested stream.
+    pub active_subscriber_count: u32,
+    /// Event kind.
+    pub event_kind: ManifoldStreamSubscriptionRenewalAuthorityAuditEventKind,
+    /// Renewal request reviewed by authority.
+    pub request: ManifoldStreamSubscriptionRenewalRequest,
+    /// Renewed subscription. Present only for accepted renewal events.
+    pub renewed: Option<ManifoldStreamSubscription>,
+    /// Rejected renewal result. Present only for rejected events.
+    pub rejection: Option<ManifoldStreamSubscriptionRenewalRejection>,
+    /// Clock snapshot recorded with the decision.
+    pub recorded_clock: ManifoldClockSnapshot,
+    /// Stable ids for fixtures, scorecards, or logs backing the event.
+    pub evidence_refs: Vec<DottedId>,
+}
+
+/// Deterministic review result for one stream subscription renewal authority decision.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionRenewalAuthorityReview {
+    /// Schema identifier for this review.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable review id.
+    pub review_id: DottedId,
+    /// Authority that reviewed the renewal request.
+    pub authority_id: DottedId,
+    /// Authority revision used by this review.
+    pub authority_revision: Revision,
+    /// Stream-registry revision used by this review.
+    pub registry_revision: Revision,
+    /// Review outcome.
+    pub outcome: ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome,
+    /// Renewed subscription. Present only for accepted renewal reviews.
+    pub renewed: Option<ManifoldStreamSubscription>,
+    /// Rejected renewal result. Present only for rejected renewal reviews.
+    pub rejection: Option<ManifoldStreamSubscriptionRenewalRejection>,
+    /// Audit event for the same renewal decision.
+    pub audit_event: ManifoldStreamSubscriptionRenewalAuthorityAuditEvent,
+}
+
+impl ManifoldStreamSubscriptionRenewalAuthorityReview {
+    /// Validates that this review matches the supplied authority snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when review fields and the
+    /// nested audit event disagree, or when the event is not valid for the snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str()
+            != "rusty.manifold.authority.stream_subscription_renewal_review.v1"
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.audit_event.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.authority_revision != snapshot.authority_revision
+            || self.authority_revision != self.audit_event.prior_authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.registry_revision != snapshot.stream_registry.registry_revision
+            || self.registry_revision != self.audit_event.prior_registry_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        match self.outcome {
+            ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome::SubscriptionRenewed => {
+                if self.renewed.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "renewed".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome::SubscriptionRenewalRejected => {
+                if self.renewed.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        if self.renewed != self.audit_event.renewed || self.rejection != self.audit_event.rejection
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        if ManifoldStreamSubscriptionRenewalAuthorityAuditEventKind::from(self.outcome)
+            != self.audit_event.event_kind
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        self.audit_event.validate_against_snapshot(snapshot)
+    }
+}
+
+impl ManifoldStreamSubscriptionRenewalAuthorityAuditEvent {
+    /// Validates this event against the authority snapshot it claims to use.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the event is not a
+    /// consistent subscription renewal or rejection for the supplied snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str()
+            != "rusty.manifold.authority.stream_subscription_renewal_audit_event.v1"
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        snapshot.validate_authority_links()?;
+
+        if self.authority_id != snapshot.authority_id {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.prior_authority_revision != snapshot.authority_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.prior_registry_revision != snapshot.stream_registry.registry_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        if self.active_subscriber_count
+            != snapshot.active_subscription_count(&self.request.stream_id)
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.active_subscriber_count.to_string(),
+                ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+            ));
+        }
+
+        if self.recorded_clock.clock_domain != snapshot.clock_snapshot.clock_domain
+            || self.recorded_clock.clock_epoch_id != snapshot.clock_snapshot.clock_epoch_id
+            || self.recorded_clock.sequence < snapshot.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if self.evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        match self.event_kind {
+            ManifoldStreamSubscriptionRenewalAuthorityAuditEventKind::SubscriptionRenewed => {
+                if self.renewed.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "renewed".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldStreamSubscriptionRenewalAuthorityAuditEventKind::SubscriptionRenewalRejected => {
+                if self.renewed.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        let expected_decision = snapshot
+            .stream_subscription_renewal_authority_decision(&self.request, &self.recorded_clock);
+
+        if let Some(renewed) = &self.renewed {
+            let StreamSubscriptionRenewalAuthorityDecision::Renewed(expected_subscription) =
+                &expected_decision
+            else {
+                let rejected_value = match &expected_decision {
+                    StreamSubscriptionRenewalAuthorityDecision::Rejected {
+                        rejection_code, ..
+                    } => rejection_code.clone(),
+                    StreamSubscriptionRenewalAuthorityDecision::Renewed(_) => "renewed".to_owned(),
+                };
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejected_value.clone(),
+                    authority_error_kind_for_stream_subscription_renewal_rejection_code(
+                        &rejected_value,
+                    ),
+                ));
+            };
+
+            if renewed != expected_subscription {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    renewed.subscription_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+                ));
+            }
+        }
+
+        if let Some(rejection) = &self.rejection {
+            let StreamSubscriptionRenewalAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                active_subscriber_count,
+                current_expires_at_ms,
+            } = &expected_decision
+            else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    self.request.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                ));
+            };
+
+            if rejection.request_id != self.request.request_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+                ));
+            }
+
+            if rejection.current_authority_revision != self.prior_authority_revision
+                || rejection.current_registry_revision != self.prior_registry_revision
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.current_registry_revision.get().to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionRevisionMismatch,
+                ));
+            }
+
+            if rejection.active_subscriber_count != *active_subscriber_count
+                || rejection.current_expires_at_ms != *current_expires_at_ms
+                || rejection.rejection_code.as_str() != rejection_code
+                || rejection.message != *message
+                || rejection.retryable != *retryable
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.rejection_code.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Deterministic application result for one stream subscription renewal authority review.
+///
+/// This records the bridge from review-time renewal authority to accepted
+/// authority state without owning live transport setup, callbacks, or provider
+/// runtime work.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldStreamSubscriptionRenewalAuthorityApplication {
+    /// Schema identifier for this application receipt.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable application id.
+    pub application_id: DottedId,
+    /// Authority that attempted the application.
+    pub authority_id: DottedId,
+    /// Authority revision before applying the review.
+    pub from_authority_revision: Revision,
+    /// Stream-registry revision before applying the review.
+    pub from_registry_revision: Revision,
+    /// Stream whose subscriber set was reviewed.
+    pub stream_id: DottedId,
+    /// Subscription renewed by the reviewed request.
+    pub subscription_id: DottedId,
+    /// Active subscriber count before applying the review.
+    pub from_active_subscriber_count: u32,
+    /// Application outcome.
+    pub outcome: ManifoldStreamSubscriptionRenewalAuthorityApplicationOutcome,
+    /// Next accepted authority snapshot. Present only for applied outcomes.
+    pub applied_snapshot: Option<ManifoldAuthoritySnapshot>,
+    /// Rejection. Present only for rejected application outcomes.
+    pub rejection: Option<ManifoldAuthoritySnapshotApplicationRejection>,
+    /// Review that was applied or rejected for application.
+    pub review: ManifoldStreamSubscriptionRenewalAuthorityReview,
+}
+
+impl ManifoldStreamSubscriptionRenewalAuthorityApplication {
+    /// Validates that this application receipt matches the supplied prior snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the receipt does not
+    /// represent a deterministic state transition or deterministic application
+    /// rejection for the supplied prior authority snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str()
+            != "rusty.manifold.authority.stream_subscription_renewal_application.v1"
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.review.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.from_authority_revision != snapshot.authority_revision
+            || self.from_authority_revision != self.review.authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.from_registry_revision != snapshot.stream_registry.registry_revision
+            || self.from_registry_revision != self.review.registry_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        if self.stream_id != self.review.audit_event.request.stream_id
+            || self.subscription_id != self.review.audit_event.request.subscription_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.subscription_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+            ));
+        }
+
+        let snapshot_active_count = snapshot.active_subscription_count(&self.stream_id);
+        if self.from_active_subscriber_count != snapshot_active_count
+            || self.from_active_subscriber_count != self.review.audit_event.active_subscriber_count
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_active_subscriber_count.to_string(),
+                ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+            ));
+        }
+
+        self.review.validate_against_snapshot(snapshot)?;
+
+        match self.outcome {
+            ManifoldStreamSubscriptionRenewalAuthorityApplicationOutcome::SubscriptionRenewalApplied => {
+                if self.applied_snapshot.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "applied_snapshot".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    != ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome::SubscriptionRenewed
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.review.review_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let applied = self
+                    .applied_snapshot
+                    .as_ref()
+                    .expect("applied snapshot presence checked");
+                let expected_authority_revision =
+                    snapshot.authority_revision.next().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            self.application_id.clone(),
+                            snapshot.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        )
+                    })?;
+
+                if applied.authority_revision != expected_authority_revision {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                }
+
+                if applied.authority_id != snapshot.authority_id
+                    || applied.host_manifest != snapshot.host_manifest
+                    || applied.clock_snapshot != snapshot.clock_snapshot
+                    || applied.stream_registry != snapshot.stream_registry
+                    || applied.module_runtime_states != snapshot.module_runtime_states
+                    || applied.command_ids != snapshot.command_ids
+                    || applied.command_descriptors != snapshot.command_descriptors
+                    || applied.active_leases != snapshot.active_leases
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+                    ));
+                }
+
+                let renewed_subscription = self.review.renewed.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "renewed".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut expected_subscriptions = snapshot.active_stream_subscriptions.clone();
+                let Some(position) = expected_subscriptions.iter().position(|subscription| {
+                    subscription.subscription_id == renewed_subscription.subscription_id
+                }) else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        renewed_subscription.subscription_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownSubscription,
+                    ));
+                };
+                expected_subscriptions[position] = renewed_subscription;
+                if applied.active_stream_subscriptions != expected_subscriptions {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.stream_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+                    ));
+                }
+
+                applied.validate_authority_links()
+            }
+            ManifoldStreamSubscriptionRenewalAuthorityApplicationOutcome::SubscriptionRenewalApplicationRejected => {
+                if self.applied_snapshot.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let rejection = self
+                    .rejection
+                    .as_ref()
+                    .expect("application rejection presence checked");
+                if rejection.schema_id.as_str()
+                    != "rusty.manifold.authority.snapshot_application_rejection.v1"
+                    || rejection.application_id != self.application_id
+                    || rejection.current_authority_revision != snapshot.authority_revision
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    == ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome::SubscriptionRenewalRejected
+                    && rejection.rejection_code.as_str() != "review_rejected"
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Deterministic application result for one module runtime-state authority review.
+///
+/// This records the bridge from review-time runtime-state authority to accepted
+/// authority state without owning process lifecycle, module loading, or runtime
+/// signaling.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldModuleRuntimeStateAuthorityApplication {
+    /// Schema identifier for this application receipt.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable application id.
+    pub application_id: DottedId,
+    /// Authority that attempted the application.
+    pub authority_id: DottedId,
+    /// Authority revision before applying the review.
+    pub from_authority_revision: Revision,
+    /// Module whose runtime state was reviewed.
+    pub module_id: DottedId,
+    /// Runtime revision before applying the review, if the module is known.
+    pub from_runtime_revision: Option<Revision>,
+    /// Application outcome.
+    pub outcome: ManifoldModuleRuntimeStateAuthorityApplicationOutcome,
+    /// Next accepted authority snapshot. Present only for applied outcomes.
+    pub applied_snapshot: Option<ManifoldAuthoritySnapshot>,
+    /// Rejection. Present only for rejected application outcomes.
+    pub rejection: Option<ManifoldAuthoritySnapshotApplicationRejection>,
+    /// Review that was applied or rejected for application.
+    pub review: ManifoldModuleRuntimeStateAuthorityReview,
+}
+
+impl ManifoldModuleRuntimeStateAuthorityApplication {
+    /// Validates that this application receipt matches the supplied prior snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the receipt does not
+    /// represent a deterministic state transition or deterministic application
+    /// rejection for the supplied prior authority snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.module_runtime_state_application.v1"
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.review.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.from_authority_revision != snapshot.authority_revision
+            || self.from_authority_revision != self.review.authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        let snapshot_runtime_revision = snapshot
+            .module_runtime_state(&self.module_id)
+            .map(|state| state.runtime_revision);
+        if self.module_id != self.review.module_id
+            || self.module_id != self.review.audit_event.module_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.module_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::ModuleIdMismatch,
+            ));
+        }
+
+        if self.from_runtime_revision != snapshot_runtime_revision
+            || self.from_runtime_revision != self.review.runtime_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_runtime_revision
+                    .map(|revision| revision.get().to_string())
+                    .unwrap_or_else(|| "none".to_owned()),
+                ManifoldAuthorityValidationErrorKind::RuntimeRevisionMismatch,
+            ));
+        }
+
+        self.review.validate_against_snapshot(snapshot)?;
+
+        match self.outcome {
+            ManifoldModuleRuntimeStateAuthorityApplicationOutcome::RuntimeStateApplied => {
+                if self.applied_snapshot.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "applied_snapshot".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    != ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateAccepted
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.review.review_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let applied = self
+                    .applied_snapshot
+                    .as_ref()
+                    .expect("applied snapshot presence checked");
+                let expected_authority_revision =
+                    snapshot.authority_revision.next().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            self.application_id.clone(),
+                            snapshot.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        )
+                    })?;
+
+                if applied.authority_revision != expected_authority_revision {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                }
+
+                if applied.authority_id != snapshot.authority_id
+                    || applied.host_manifest != snapshot.host_manifest
+                    || applied.clock_snapshot != snapshot.clock_snapshot
+                    || applied.stream_registry != snapshot.stream_registry
+                    || applied.command_ids != snapshot.command_ids
+                    || applied.command_descriptors != snapshot.command_descriptors
+                    || applied.active_leases != snapshot.active_leases
+                    || applied.active_stream_subscriptions
+                        != snapshot.active_stream_subscriptions
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::ModuleRuntimeMismatch,
+                    ));
+                }
+
+                let accepted = self.review.accepted.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut expected_runtime_states = snapshot.module_runtime_states.clone();
+                let Some(runtime_state) = expected_runtime_states
+                    .iter_mut()
+                    .find(|state| state.module_id == accepted.module_id)
+                else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        accepted.module_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownModule,
+                    ));
+                };
+                *runtime_state = accepted;
+
+                if applied.module_runtime_states != expected_runtime_states {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.module_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::ModuleRuntimeMismatch,
+                    ));
+                }
+
+                applied.validate_authority_links()
+            }
+            ManifoldModuleRuntimeStateAuthorityApplicationOutcome::RuntimeStateApplicationRejected => {
+                if self.applied_snapshot.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let rejection = self
+                    .rejection
+                    .as_ref()
+                    .expect("application rejection presence checked");
+                if rejection.schema_id.as_str()
+                    != "rusty.manifold.authority.snapshot_application_rejection.v1"
+                    || rejection.application_id != self.application_id
+                    || rejection.current_authority_revision != snapshot.authority_revision
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    == ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateRejected
+                    && rejection.rejection_code.as_str() != "review_rejected"
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Audit event for one module runtime-state authority decision.
+///
+/// The event carries the runtime-state change request plus exactly one accepted
+/// state/transition pair or rejected result. It records enough authority
+/// context for deterministic validation without performing lifecycle work.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldModuleRuntimeStateAuthorityAuditEvent {
+    /// Schema identifier for this audit event.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable event id.
+    pub event_id: DottedId,
+    /// Authority that made the decision.
+    pub authority_id: DottedId,
+    /// Authority revision observed before the decision.
+    pub prior_authority_revision: Revision,
+    /// Module being reviewed.
+    pub module_id: DottedId,
+    /// Runtime revision observed before the decision, if the module is known.
+    pub prior_runtime_revision: Option<Revision>,
+    /// Event kind.
+    pub event_kind: ManifoldModuleRuntimeStateAuthorityAuditEventKind,
+    /// Runtime-state change request reviewed by authority.
+    pub request: ManifoldModuleRuntimeStateChangeRequest,
+    /// Accepted runtime-state snapshot. Present only for accepted events.
+    pub accepted: Option<ManifoldModuleRuntimeState>,
+    /// Computed transition. Present only for accepted events.
+    pub transition: Option<ManifoldModuleRuntimeTransition>,
+    /// Rejected runtime-state result. Present only for rejected events.
+    pub rejection: Option<ManifoldModuleRuntimeStateRejection>,
+    /// Lease recorded with the decision, when a lease was presented.
+    pub lease: Option<ManifoldControlLease>,
+    /// Clock snapshot recorded with the decision.
+    pub recorded_clock: ManifoldClockSnapshot,
+    /// Stable ids for fixtures, scorecards, or logs backing the event.
+    pub evidence_refs: Vec<DottedId>,
+}
+
+/// Deterministic review result for one module runtime-state authority decision.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldModuleRuntimeStateAuthorityReview {
+    /// Schema identifier for this review.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable review id.
+    pub review_id: DottedId,
+    /// Authority that reviewed the runtime-state change.
+    pub authority_id: DottedId,
+    /// Authority revision used by this review.
+    pub authority_revision: Revision,
+    /// Module being reviewed.
+    pub module_id: DottedId,
+    /// Runtime revision used by this review, if the module is known.
+    pub runtime_revision: Option<Revision>,
+    /// Review outcome.
+    pub outcome: ManifoldModuleRuntimeStateAuthorityReviewOutcome,
+    /// Accepted runtime-state snapshot. Present only for accepted reviews.
+    pub accepted: Option<ManifoldModuleRuntimeState>,
+    /// Computed transition. Present only for accepted reviews.
+    pub transition: Option<ManifoldModuleRuntimeTransition>,
+    /// Rejected runtime-state result. Present only for rejected reviews.
+    pub rejection: Option<ManifoldModuleRuntimeStateRejection>,
+    /// Audit event for the same runtime-state decision.
+    pub audit_event: ManifoldModuleRuntimeStateAuthorityAuditEvent,
+}
+
+impl ManifoldModuleRuntimeStateAuthorityReview {
+    /// Validates that this review matches the supplied authority snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when review fields and the
+    /// nested audit event disagree, or when the event is not valid for the snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.module_runtime_state_review.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.audit_event.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.authority_revision != snapshot.authority_revision
+            || self.authority_revision != self.audit_event.prior_authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        let snapshot_runtime_revision = snapshot
+            .module_runtime_state(&self.module_id)
+            .map(|state| state.runtime_revision);
+        if self.module_id != self.audit_event.module_id
+            || self.module_id != self.audit_event.request.module_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.module_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::ModuleIdMismatch,
+            ));
+        }
+
+        if self.runtime_revision != snapshot_runtime_revision
+            || self.runtime_revision != self.audit_event.prior_runtime_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.runtime_revision
+                    .map(|revision| revision.get().to_string())
+                    .unwrap_or_else(|| "none".to_owned()),
+                ManifoldAuthorityValidationErrorKind::RuntimeRevisionMismatch,
+            ));
+        }
+
+        match self.outcome {
+            ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateAccepted => {
+                if self.accepted.is_none() || self.transition.is_none() || self.rejection.is_some()
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateRejected => {
+                if self.accepted.is_some() || self.transition.is_some() || self.rejection.is_none()
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        if self.accepted != self.audit_event.accepted
+            || self.transition != self.audit_event.transition
+            || self.rejection != self.audit_event.rejection
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        if ManifoldModuleRuntimeStateAuthorityAuditEventKind::from(self.outcome)
+            != self.audit_event.event_kind
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        self.audit_event.validate_against_snapshot(snapshot)
+    }
+}
+
+/// Audit event for one host manifest authority decision.
+///
+/// The event carries the host manifest change request plus exactly one accepted
+/// manifest or rejected result. It records enough authority context for
+/// deterministic validation without probing or mutating a host.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldHostManifestAuthorityAuditEvent {
+    /// Schema identifier for this audit event.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable event id.
+    pub event_id: DottedId,
+    /// Authority that made the decision.
+    pub authority_id: DottedId,
+    /// Authority revision observed before the decision.
+    pub prior_authority_revision: Revision,
+    /// Host whose manifest was reviewed.
+    pub host_id: DottedId,
+    /// Event kind.
+    pub event_kind: ManifoldHostManifestAuthorityAuditEventKind,
+    /// Host manifest change request reviewed by authority.
+    pub request: ManifoldHostManifestChangeRequest,
+    /// Accepted host manifest. Present only for accepted events.
+    pub accepted: Option<ManifoldHostManifest>,
+    /// Rejected host manifest result. Present only for rejected events.
+    pub rejection: Option<ManifoldHostManifestRejection>,
+    /// Lease recorded with the decision, when a lease was presented.
+    pub lease: Option<ManifoldControlLease>,
+    /// Clock snapshot recorded with the decision.
+    pub recorded_clock: ManifoldClockSnapshot,
+    /// Stable ids for fixtures, scorecards, or logs backing the event.
+    pub evidence_refs: Vec<DottedId>,
+}
+
+/// Deterministic review result for one host manifest authority decision.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldHostManifestAuthorityReview {
+    /// Schema identifier for this review.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable review id.
+    pub review_id: DottedId,
+    /// Authority that reviewed the host manifest change.
+    pub authority_id: DottedId,
+    /// Authority revision used by this review.
+    pub authority_revision: Revision,
+    /// Host whose manifest was reviewed.
+    pub host_id: DottedId,
+    /// Review outcome.
+    pub outcome: ManifoldHostManifestAuthorityReviewOutcome,
+    /// Accepted host manifest. Present only for accepted reviews.
+    pub accepted: Option<ManifoldHostManifest>,
+    /// Rejected host manifest result. Present only for rejected reviews.
+    pub rejection: Option<ManifoldHostManifestRejection>,
+    /// Audit event for the same host manifest decision.
+    pub audit_event: ManifoldHostManifestAuthorityAuditEvent,
+}
+
+impl ManifoldHostManifestAuthorityReview {
+    /// Validates that this review matches the supplied authority snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when review fields and the
+    /// nested audit event disagree, or when the event is not valid for the snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.host_manifest_review.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.audit_event.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.authority_revision != snapshot.authority_revision
+            || self.authority_revision != self.audit_event.prior_authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.host_id != snapshot.host_manifest.host_id
+            || self.host_id != self.audit_event.host_id
+            || self.host_id != self.audit_event.request.proposed_manifest.host_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.host_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::HostIdMismatch,
+            ));
+        }
+
+        match self.outcome {
+            ManifoldHostManifestAuthorityReviewOutcome::HostManifestAccepted => {
+                if self.accepted.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldHostManifestAuthorityReviewOutcome::HostManifestRejected => {
+                if self.accepted.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        if self.accepted != self.audit_event.accepted
+            || self.rejection != self.audit_event.rejection
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        if ManifoldHostManifestAuthorityAuditEventKind::from(self.outcome)
+            != self.audit_event.event_kind
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        self.audit_event.validate_against_snapshot(snapshot)
+    }
+}
+
+/// Deterministic application result for one host manifest authority review.
+///
+/// This records the bridge from review-time host manifest authority to accepted
+/// authority state without owning host service startup, endpoint opening, or
+/// permission probing.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldHostManifestAuthorityApplication {
+    /// Schema identifier for this application receipt.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable application id.
+    pub application_id: DottedId,
+    /// Authority that attempted the application.
+    pub authority_id: DottedId,
+    /// Authority revision before applying the review.
+    pub from_authority_revision: Revision,
+    /// Host whose manifest was reviewed.
+    pub host_id: DottedId,
+    /// Application outcome.
+    pub outcome: ManifoldHostManifestAuthorityApplicationOutcome,
+    /// Next accepted authority snapshot. Present only for applied outcomes.
+    pub applied_snapshot: Option<ManifoldAuthoritySnapshot>,
+    /// Rejection. Present only for rejected application outcomes.
+    pub rejection: Option<ManifoldAuthoritySnapshotApplicationRejection>,
+    /// Review that was applied or rejected for application.
+    pub review: ManifoldHostManifestAuthorityReview,
+}
+
+impl ManifoldHostManifestAuthorityApplication {
+    /// Validates that this application receipt matches the supplied prior snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the receipt does not
+    /// represent a deterministic state transition or deterministic application
+    /// rejection for the supplied prior authority snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.host_manifest_application.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.review.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.from_authority_revision != snapshot.authority_revision
+            || self.from_authority_revision != self.review.authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.host_id != snapshot.host_manifest.host_id
+            || self.host_id != self.review.host_id
+            || self.host_id != self.review.audit_event.host_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.host_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::HostIdMismatch,
+            ));
+        }
+
+        self.review.validate_against_snapshot(snapshot)?;
+
+        match self.outcome {
+            ManifoldHostManifestAuthorityApplicationOutcome::HostManifestApplied => {
+                if self.applied_snapshot.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "applied_snapshot".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    != ManifoldHostManifestAuthorityReviewOutcome::HostManifestAccepted
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.review.review_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let applied = self
+                    .applied_snapshot
+                    .as_ref()
+                    .expect("applied snapshot presence checked");
+                let expected_authority_revision =
+                    snapshot.authority_revision.next().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            self.application_id.clone(),
+                            snapshot.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        )
+                    })?;
+
+                if applied.authority_revision != expected_authority_revision {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                }
+
+                if applied.authority_id != snapshot.authority_id
+                    || applied.clock_snapshot != snapshot.clock_snapshot
+                    || applied.stream_registry != snapshot.stream_registry
+                    || applied.module_runtime_states != snapshot.module_runtime_states
+                    || applied.command_ids != snapshot.command_ids
+                    || applied.command_descriptors != snapshot.command_descriptors
+                    || applied.active_leases != snapshot.active_leases
+                    || applied.active_stream_subscriptions != snapshot.active_stream_subscriptions
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::HostManifestMismatch,
+                    ));
+                }
+
+                if applied.host_manifest
+                    != self.review.accepted.clone().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            self.application_id.clone(),
+                            "accepted".to_owned(),
+                            ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                        )
+                    })?
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.host_manifest.host_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::HostManifestMismatch,
+                    ));
+                }
+
+                applied.validate_authority_links()
+            }
+            ManifoldHostManifestAuthorityApplicationOutcome::HostManifestApplicationRejected => {
+                if self.applied_snapshot.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let rejection = self
+                    .rejection
+                    .as_ref()
+                    .expect("application rejection presence checked");
+                if rejection.schema_id.as_str()
+                    != "rusty.manifold.authority.snapshot_application_rejection.v1"
+                    || rejection.application_id != self.application_id
+                    || rejection.current_authority_revision != snapshot.authority_revision
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    == ManifoldHostManifestAuthorityReviewOutcome::HostManifestRejected
+                    && rejection.rejection_code.as_str() != "review_rejected"
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+impl ManifoldHostManifestAuthorityAuditEvent {
+    /// Validates this event against the authority snapshot it claims to use.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the event is not a
+    /// consistent host manifest acceptance or rejection for the supplied snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.host_manifest_audit_event.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        snapshot.validate_authority_links()?;
+
+        if self.authority_id != snapshot.authority_id {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.prior_authority_revision != snapshot.authority_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.host_id != snapshot.host_manifest.host_id
+            || self.host_id != self.request.proposed_manifest.host_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.host_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::HostIdMismatch,
+            ));
+        }
+
+        if self.recorded_clock.clock_domain != snapshot.clock_snapshot.clock_domain
+            || self.recorded_clock.clock_epoch_id != snapshot.clock_snapshot.clock_epoch_id
+            || self.recorded_clock.sequence < snapshot.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if self.evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        match self.event_kind {
+            ManifoldHostManifestAuthorityAuditEventKind::HostManifestAccepted => {
+                if self.accepted.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldHostManifestAuthorityAuditEventKind::HostManifestRejected => {
+                if self.accepted.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        let snapshot_lease = self
+            .request
+            .lease_id
+            .as_ref()
+            .and_then(|id| snapshot.active_lease(id));
+        if let Some(recorded_lease) = &self.lease {
+            if self.request.lease_id.as_ref() != Some(&recorded_lease.lease_id) {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+
+            let Some(snapshot_lease) = snapshot_lease else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::UnknownLease,
+                ));
+            };
+
+            if snapshot_lease != recorded_lease {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+        }
+
+        let expected_decision =
+            snapshot.host_manifest_authority_decision(&self.request, &self.recorded_clock);
+
+        if let Some(accepted) = &self.accepted {
+            let HostManifestAuthorityDecision::Accepted(expected_manifest) = &expected_decision
+            else {
+                let rejected_value = match &expected_decision {
+                    HostManifestAuthorityDecision::Rejected { rejection_code, .. } => {
+                        rejection_code.clone()
+                    }
+                    HostManifestAuthorityDecision::Accepted(_) => "accepted".to_owned(),
+                };
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejected_value.clone(),
+                    authority_error_kind_for_host_manifest_rejection_code(&rejected_value),
+                ));
+            };
+
+            if accepted != expected_manifest {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    accepted.host_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::HostManifestMismatch,
+                ));
+            }
+        }
+
+        if let Some(rejection) = &self.rejection {
+            let HostManifestAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+            } = &expected_decision
+            else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    self.request.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                ));
+            };
+
+            if rejection.request_id != self.request.request_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+                ));
+            }
+
+            if rejection.current_authority_revision != self.prior_authority_revision {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.current_authority_revision.get().to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionRevisionMismatch,
+                ));
+            }
+
+            if rejection.rejection_code.as_str() != rejection_code
+                || rejection.message != *message
+                || rejection.retryable != *retryable
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.rejection_code.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// Audit event for one clock snapshot authority decision.
+///
+/// The event carries the clock snapshot change request plus exactly one
+/// accepted snapshot or rejected result. It records enough authority context
+/// for deterministic validation without reading or mutating a live clock.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldClockSnapshotAuthorityAuditEvent {
+    /// Schema identifier for this audit event.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable event id.
+    pub event_id: DottedId,
+    /// Authority that made the decision.
+    pub authority_id: DottedId,
+    /// Authority revision observed before the decision.
+    pub prior_authority_revision: Revision,
+    /// Accepted clock snapshot observed before the decision.
+    pub prior_clock_snapshot: ManifoldClockSnapshot,
+    /// Event kind.
+    pub event_kind: ManifoldClockSnapshotAuthorityAuditEventKind,
+    /// Clock snapshot change request reviewed by authority.
+    pub request: ManifoldClockSnapshotChangeRequest,
+    /// Accepted clock snapshot. Present only for accepted events.
+    pub accepted: Option<ManifoldClockSnapshot>,
+    /// Rejected clock snapshot result. Present only for rejected events.
+    pub rejection: Option<ManifoldClockSnapshotRejection>,
+    /// Lease recorded with the decision, when a lease was presented.
+    pub lease: Option<ManifoldControlLease>,
+    /// Clock snapshot recorded with the decision.
+    pub recorded_clock: ManifoldClockSnapshot,
+    /// Stable ids for fixtures, scorecards, or logs backing the event.
+    pub evidence_refs: Vec<DottedId>,
+}
+
+/// Deterministic review result for one clock snapshot authority decision.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldClockSnapshotAuthorityReview {
+    /// Schema identifier for this review.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable review id.
+    pub review_id: DottedId,
+    /// Authority that reviewed the clock snapshot change.
+    pub authority_id: DottedId,
+    /// Authority revision used by this review.
+    pub authority_revision: Revision,
+    /// Clock domain used by this review.
+    pub clock_domain: DottedId,
+    /// Clock epoch used by this review.
+    pub clock_epoch_id: DottedId,
+    /// Clock sequence used by this review.
+    pub clock_sequence: u64,
+    /// Review outcome.
+    pub outcome: ManifoldClockSnapshotAuthorityReviewOutcome,
+    /// Accepted clock snapshot. Present only for accepted reviews.
+    pub accepted: Option<ManifoldClockSnapshot>,
+    /// Rejected clock snapshot result. Present only for rejected reviews.
+    pub rejection: Option<ManifoldClockSnapshotRejection>,
+    /// Audit event for the same clock snapshot decision.
+    pub audit_event: ManifoldClockSnapshotAuthorityAuditEvent,
+}
+
+impl ManifoldClockSnapshotAuthorityReview {
+    /// Validates that this review matches the supplied authority snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when review fields and the
+    /// nested audit event disagree, or when the event is not valid for the snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.clock_snapshot_review.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.audit_event.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.authority_revision != snapshot.authority_revision
+            || self.authority_revision != self.audit_event.prior_authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.clock_domain != snapshot.clock_snapshot.clock_domain
+            || self.clock_domain != self.audit_event.prior_clock_snapshot.clock_domain
+            || self.clock_epoch_id != snapshot.clock_snapshot.clock_epoch_id
+            || self.clock_epoch_id != self.audit_event.prior_clock_snapshot.clock_epoch_id
+            || self.clock_sequence != snapshot.clock_snapshot.sequence
+            || self.clock_sequence != self.audit_event.prior_clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        match self.outcome {
+            ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotAccepted => {
+                if self.accepted.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotRejected => {
+                if self.accepted.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.review_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        if self.accepted != self.audit_event.accepted
+            || self.rejection != self.audit_event.rejection
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        if ManifoldClockSnapshotAuthorityAuditEventKind::from(self.outcome)
+            != self.audit_event.event_kind
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.review_id.clone(),
+                self.audit_event.event_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+            ));
+        }
+
+        self.audit_event.validate_against_snapshot(snapshot)
+    }
+}
+
+/// Deterministic application result for one clock snapshot authority review.
+///
+/// This records the bridge from review-time clock authority to accepted
+/// authority state without reading live time, mutating host time, or owning a
+/// platform clock adapter.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldClockSnapshotAuthorityApplication {
+    /// Schema identifier for this application receipt.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable application id.
+    pub application_id: DottedId,
+    /// Authority that attempted the application.
+    pub authority_id: DottedId,
+    /// Authority revision before applying the review.
+    pub from_authority_revision: Revision,
+    /// Clock epoch before applying the review.
+    pub from_clock_epoch_id: DottedId,
+    /// Clock sequence before applying the review.
+    pub from_clock_sequence: u64,
+    /// Application outcome.
+    pub outcome: ManifoldClockSnapshotAuthorityApplicationOutcome,
+    /// Next accepted authority snapshot. Present only for applied outcomes.
+    pub applied_snapshot: Option<ManifoldAuthoritySnapshot>,
+    /// Rejection. Present only for rejected application outcomes.
+    pub rejection: Option<ManifoldAuthoritySnapshotApplicationRejection>,
+    /// Review that was applied or rejected for application.
+    pub review: ManifoldClockSnapshotAuthorityReview,
+}
+
+impl ManifoldClockSnapshotAuthorityApplication {
+    /// Validates that this application receipt matches the supplied prior snapshot.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the receipt does not
+    /// represent a deterministic state transition or deterministic application
+    /// rejection for the supplied prior authority snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.clock_snapshot_application.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        if self.authority_id != snapshot.authority_id
+            || self.authority_id != self.review.authority_id
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.from_authority_revision != snapshot.authority_revision
+            || self.from_authority_revision != self.review.authority_revision
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.from_clock_epoch_id != snapshot.clock_snapshot.clock_epoch_id
+            || self.from_clock_epoch_id != self.review.clock_epoch_id
+            || self.from_clock_sequence != snapshot.clock_snapshot.sequence
+            || self.from_clock_sequence != self.review.clock_sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.application_id.clone(),
+                self.from_clock_epoch_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        self.review.validate_against_snapshot(snapshot)?;
+
+        match self.outcome {
+            ManifoldClockSnapshotAuthorityApplicationOutcome::ClockSnapshotApplied => {
+                if self.applied_snapshot.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "applied_snapshot".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    != ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotAccepted
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        self.review.review_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let applied = self
+                    .applied_snapshot
+                    .as_ref()
+                    .expect("applied snapshot presence checked");
+                let expected_authority_revision =
+                    snapshot.authority_revision.next().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            self.application_id.clone(),
+                            snapshot.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        )
+                    })?;
+
+                if applied.authority_revision != expected_authority_revision {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                }
+
+                if applied.authority_id != snapshot.authority_id
+                    || applied.host_manifest != snapshot.host_manifest
+                    || applied.stream_registry != snapshot.stream_registry
+                    || applied.module_runtime_states != snapshot.module_runtime_states
+                    || applied.command_ids != snapshot.command_ids
+                    || applied.command_descriptors != snapshot.command_descriptors
+                    || applied.active_leases != snapshot.active_leases
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.authority_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+                    ));
+                }
+
+                if applied.clock_snapshot
+                    != self.review.accepted.clone().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            self.application_id.clone(),
+                            "accepted".to_owned(),
+                            ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                        )
+                    })?
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        applied.clock_snapshot.clock_domain.to_string(),
+                        ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+                    ));
+                }
+
+                applied.validate_authority_links()
+            }
+            ManifoldClockSnapshotAuthorityApplicationOutcome::ClockSnapshotApplicationRejected => {
+                if self.applied_snapshot.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+
+                let rejection = self
+                    .rejection
+                    .as_ref()
+                    .expect("application rejection presence checked");
+                if rejection.schema_id.as_str()
+                    != "rusty.manifold.authority.snapshot_application_rejection.v1"
+                    || rejection.application_id != self.application_id
+                    || rejection.current_authority_revision != snapshot.authority_revision
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                if self.review.outcome
+                    == ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotRejected
+                    && rejection.rejection_code.as_str() != "review_rejected"
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.application_id.clone(),
+                        rejection.rejection_code.to_string(),
+                        ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                    ));
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+impl ManifoldClockSnapshotAuthorityAuditEvent {
+    /// Validates this event against the authority snapshot it claims to use.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the event is not a
+    /// consistent clock snapshot acceptance or rejection for the supplied snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.clock_snapshot_audit_event.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        snapshot.validate_authority_links()?;
+
+        if self.authority_id != snapshot.authority_id {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.prior_authority_revision != snapshot.authority_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.prior_clock_snapshot != snapshot.clock_snapshot {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_clock_snapshot.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if self.recorded_clock.clock_domain != snapshot.clock_snapshot.clock_domain
+            || self.recorded_clock.clock_epoch_id != snapshot.clock_snapshot.clock_epoch_id
+            || self.recorded_clock.sequence < snapshot.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if self.evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        match self.event_kind {
+            ManifoldClockSnapshotAuthorityAuditEventKind::ClockSnapshotAccepted => {
+                if self.accepted.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldClockSnapshotAuthorityAuditEventKind::ClockSnapshotRejected => {
+                if self.accepted.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        let snapshot_lease = self
+            .request
+            .lease_id
+            .as_ref()
+            .and_then(|id| snapshot.active_lease(id));
+        if let Some(recorded_lease) = &self.lease {
+            if self.request.lease_id.as_ref() != Some(&recorded_lease.lease_id) {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+
+            let Some(snapshot_lease) = snapshot_lease else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::UnknownLease,
+                ));
+            };
+
+            if snapshot_lease != recorded_lease {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+        }
+
+        let expected_decision =
+            snapshot.clock_snapshot_authority_decision(&self.request, &self.recorded_clock);
+
+        if let Some(accepted) = &self.accepted {
+            let ClockSnapshotAuthorityDecision::Accepted(expected_snapshot) = &expected_decision
+            else {
+                let rejected_value = match &expected_decision {
+                    ClockSnapshotAuthorityDecision::Rejected { rejection_code, .. } => {
+                        rejection_code.clone()
+                    }
+                    ClockSnapshotAuthorityDecision::Accepted(_) => "accepted".to_owned(),
+                };
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejected_value.clone(),
+                    authority_error_kind_for_clock_snapshot_rejection_code(&rejected_value),
+                ));
+            };
+
+            if accepted != expected_snapshot {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    accepted.clock_domain.to_string(),
+                    ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+                ));
+            }
+        }
+
+        if let Some(rejection) = &self.rejection {
+            let ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+            } = &expected_decision
+            else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    self.request.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                ));
+            };
+
+            if rejection.request_id != self.request.request_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+                ));
+            }
+
+            if rejection.current_authority_revision != self.prior_authority_revision
+                || rejection.current_clock_epoch_id != self.prior_clock_snapshot.clock_epoch_id
+                || rejection.current_clock_sequence != self.prior_clock_snapshot.sequence
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.current_clock_epoch_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionRevisionMismatch,
+                ));
+            }
+
+            if rejection.rejection_code.as_str() != rejection_code
+                || rejection.message != *message
+                || rejection.retryable != *retryable
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.rejection_code.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl ManifoldModuleRuntimeStateAuthorityAuditEvent {
+    /// Validates this event against the authority snapshot it claims to use.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the event is not a
+    /// consistent runtime-state acceptance or rejection for the supplied snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.module_runtime_state_audit_event.v1"
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        snapshot.validate_authority_links()?;
+
+        if self.authority_id != snapshot.authority_id {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.prior_authority_revision != snapshot.authority_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.module_id != self.request.module_id {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.module_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::ModuleIdMismatch,
+            ));
+        }
+
+        let snapshot_runtime_revision = snapshot
+            .module_runtime_state(&self.module_id)
+            .map(|state| state.runtime_revision);
+        if self.prior_runtime_revision != snapshot_runtime_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_runtime_revision
+                    .map(|revision| revision.get().to_string())
+                    .unwrap_or_else(|| "none".to_owned()),
+                ManifoldAuthorityValidationErrorKind::RuntimeRevisionMismatch,
+            ));
+        }
+
+        if self.recorded_clock.clock_domain != snapshot.clock_snapshot.clock_domain
+            || self.recorded_clock.clock_epoch_id != snapshot.clock_snapshot.clock_epoch_id
+            || self.recorded_clock.sequence < snapshot.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if self.evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        match self.event_kind {
+            ManifoldModuleRuntimeStateAuthorityAuditEventKind::RuntimeStateAccepted => {
+                if self.accepted.is_none() || self.transition.is_none() || self.rejection.is_some()
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldModuleRuntimeStateAuthorityAuditEventKind::RuntimeStateRejected => {
+                if self.accepted.is_some() || self.transition.is_some() || self.rejection.is_none()
+                {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        let snapshot_lease = self
+            .request
+            .lease_id
+            .as_ref()
+            .and_then(|id| snapshot.active_lease(id));
+        if let Some(recorded_lease) = &self.lease {
+            if self.request.lease_id.as_ref() != Some(&recorded_lease.lease_id) {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+
+            let Some(snapshot_lease) = snapshot_lease else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::UnknownLease,
+                ));
+            };
+
+            if snapshot_lease != recorded_lease {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+        }
+
+        let expected_decision =
+            snapshot.module_runtime_state_authority_decision(&self.request, &self.recorded_clock);
+
+        if let Some(accepted) = &self.accepted {
+            let ModuleRuntimeStateAuthorityDecision::Accepted { state, transition } =
+                &expected_decision
+            else {
+                let rejected_value = match &expected_decision {
+                    ModuleRuntimeStateAuthorityDecision::Rejected { rejection_code, .. } => {
+                        rejection_code.clone()
+                    }
+                    ModuleRuntimeStateAuthorityDecision::Accepted { .. } => "accepted".to_owned(),
+                };
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejected_value.clone(),
+                    authority_error_kind_for_module_runtime_rejection_code(&rejected_value),
+                ));
+            };
+
+            if accepted != state {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    accepted.module_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::ModuleRuntimeMismatch,
+                ));
+            }
+
+            if self.transition.as_ref() != Some(transition) {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    accepted.module_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::ModuleRuntimeMismatch,
+                ));
+            }
+        }
+
+        if let Some(rejection) = &self.rejection {
+            let ModuleRuntimeStateAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                current_runtime_revision,
+            } = &expected_decision
+            else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    self.request.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                ));
+            };
+
+            if rejection.request_id != self.request.request_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+                ));
+            }
+
+            if rejection.current_authority_revision != self.prior_authority_revision
+                || rejection.current_runtime_revision != *current_runtime_revision
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection
+                        .current_runtime_revision
+                        .map(|revision| revision.get().to_string())
+                        .unwrap_or_else(|| "none".to_owned()),
+                    ManifoldAuthorityValidationErrorKind::RejectionRevisionMismatch,
+                ));
+            }
+
+            if rejection.rejection_code.as_str() != rejection_code
+                || rejection.message != *message
+                || rejection.retryable != *retryable
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.rejection_code.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl ManifoldStreamRegistryAuthorityAuditEvent {
+    /// Validates this event against the authority snapshot it claims to use.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the event is not a
+    /// consistent registry acceptance or rejection for the supplied snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.stream_registry_audit_event.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        snapshot.validate_authority_links()?;
+
+        if self.authority_id != snapshot.authority_id {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.prior_authority_revision != snapshot.authority_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.prior_registry_revision != snapshot.stream_registry.registry_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_registry_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch,
+            ));
+        }
+
+        if self.recorded_clock.clock_domain != snapshot.clock_snapshot.clock_domain
+            || self.recorded_clock.clock_epoch_id != snapshot.clock_snapshot.clock_epoch_id
+            || self.recorded_clock.sequence < snapshot.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if self.evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        match self.event_kind {
+            ManifoldStreamRegistryAuthorityAuditEventKind::RegistryAccepted => {
+                if self.accepted.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldStreamRegistryAuthorityAuditEventKind::RegistryRejected => {
+                if self.accepted.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        let snapshot_lease = self
+            .request
+            .lease_id
+            .as_ref()
+            .and_then(|id| snapshot.active_lease(id));
+        if let Some(recorded_lease) = &self.lease {
+            if self.request.lease_id.as_ref() != Some(&recorded_lease.lease_id) {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+
+            let Some(snapshot_lease) = snapshot_lease else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::UnknownLease,
+                ));
+            };
+
+            if snapshot_lease != recorded_lease {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+        }
+
+        let expected_decision =
+            snapshot.stream_registry_authority_decision(&self.request, &self.recorded_clock);
+
+        if let Some(accepted) = &self.accepted {
+            let StreamRegistryAuthorityDecision::Accepted(expected_snapshot) = &expected_decision
+            else {
+                let rejected_value = match &expected_decision {
+                    StreamRegistryAuthorityDecision::Rejected { rejection_code, .. } => {
+                        rejection_code.clone()
+                    }
+                    StreamRegistryAuthorityDecision::Accepted(_) => "accepted".to_owned(),
+                };
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejected_value.clone(),
+                    authority_error_kind_for_stream_registry_rejection_code(&rejected_value),
+                ));
+            };
+
+            if accepted != expected_snapshot {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    accepted.registry_revision.get().to_string(),
+                    ManifoldAuthorityValidationErrorKind::RegistryMismatch,
+                ));
+            }
+        }
+
+        if let Some(rejection) = &self.rejection {
+            let StreamRegistryAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+            } = &expected_decision
+            else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    self.request.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                ));
+            };
+
+            if rejection.request_id != self.request.request_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+                ));
+            }
+
+            if rejection.current_authority_revision != self.prior_authority_revision
+                || rejection.current_registry_revision != self.prior_registry_revision
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.current_registry_revision.get().to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionRevisionMismatch,
+                ));
+            }
+
+            if rejection.rejection_code.as_str() != rejection_code
+                || rejection.message != *message
+                || rejection.retryable != *retryable
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.rejection_code.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl ManifoldControlLeaseAuthorityAuditEvent {
+    /// Validates this event against the authority snapshot it claims to use.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the event is not a
+    /// consistent lease acceptance or rejection for the supplied snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.lease_audit_event.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        snapshot.validate_authority_links()?;
+
+        if self.authority_id != snapshot.authority_id {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.prior_authority_revision != snapshot.authority_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.recorded_clock.clock_domain != snapshot.clock_snapshot.clock_domain
+            || self.recorded_clock.clock_epoch_id != snapshot.clock_snapshot.clock_epoch_id
+            || self.recorded_clock.sequence < snapshot.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if self.evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        match self.event_kind {
+            ManifoldControlLeaseAuthorityAuditEventKind::LeaseAccepted => {
+                if self.accepted.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldControlLeaseAuthorityAuditEventKind::LeaseRejected => {
+                if self.accepted.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        let expected_decision = snapshot.lease_authority_decision(&self.request);
+
+        if let Some(accepted) = &self.accepted {
+            if let LeaseAuthorityDecision::Rejected { rejection_code, .. } = &expected_decision {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    (*rejection_code).to_owned(),
+                    authority_error_kind_for_lease_rejection_code(rejection_code),
+                ));
+            }
+
+            if accepted.holder_id != self.request.holder_id
+                || accepted.scope != self.request.scope
+                || accepted.required_capability != self.request.required_capability
+                || accepted.state != LeaseState::Active
+                || accepted.granted_revision != self.prior_authority_revision
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    accepted.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+
+            let expected_expires_at_ms = wall_unix_ms_u64(&self.recorded_clock)
+                .saturating_add(self.request.requested_ttl_ms);
+            if accepted.expires_at_ms != expected_expires_at_ms {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    accepted.expires_at_ms.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+        }
+
+        if let Some(rejection) = &self.rejection {
+            let LeaseAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                conflicting_lease_id,
+            } = &expected_decision
+            else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    self.request.scope.to_string(),
+                    ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                ));
+            };
+
+            if rejection.request_id != self.request.request_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+                ));
+            }
+
+            if rejection.current_revision != self.prior_authority_revision {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.current_revision.get().to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionRevisionMismatch,
+                ));
+            }
+
+            if rejection.rejection_code.as_str() != *rejection_code
+                || rejection.message != *message
+                || rejection.retryable != *retryable
+                || rejection.conflicting_lease_id != *conflicting_lease_id
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.rejection_code.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl ManifoldCommandAuthorityAuditEvent {
+    /// Validates this event against the authority snapshot it claims to use.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the event is not a
+    /// consistent command acceptance or rejection for the supplied snapshot.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldAuthoritySnapshot,
+    ) -> Result<(), ManifoldAuthorityValidationError> {
+        if self.schema_id.as_str() != "rusty.manifold.authority.command_audit_event.v1" {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+
+        snapshot.validate_authority_links()?;
+
+        if self.authority_id != snapshot.authority_id {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.authority_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+            ));
+        }
+
+        if self.prior_authority_revision != snapshot.authority_revision {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.prior_authority_revision.get().to_string(),
+                ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+            ));
+        }
+
+        if self.recorded_clock.clock_domain != snapshot.clock_snapshot.clock_domain
+            || self.recorded_clock.clock_epoch_id != snapshot.clock_snapshot.clock_epoch_id
+            || self.recorded_clock.sequence < snapshot.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                self.recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if self.evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.event_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        match self.event_kind {
+            ManifoldCommandAuthorityAuditEventKind::CommandAccepted => {
+                if self.accepted.is_none() || self.rejection.is_some() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+            ManifoldCommandAuthorityAuditEventKind::CommandRejected => {
+                if self.accepted.is_some() || self.rejection.is_none() {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        "rejection".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    ));
+                }
+            }
+        }
+
+        let snapshot_lease = self
+            .envelope
+            .lease_id
+            .as_ref()
+            .and_then(|id| snapshot.active_lease(id));
+        if let Some(recorded_lease) = &self.lease {
+            if self.envelope.lease_id.as_ref() != Some(&recorded_lease.lease_id) {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+
+            let Some(snapshot_lease) = snapshot_lease else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::UnknownLease,
+                ));
+            };
+
+            if snapshot_lease != recorded_lease {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    recorded_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+        }
+
+        let expected_decision =
+            snapshot.command_authority_decision(&self.envelope, &self.recorded_clock);
+
+        if let Some(accepted) = &self.accepted {
+            if let CommandAuthorityDecision::Rejected { rejection_code, .. } = &expected_decision {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    (*rejection_code).to_owned(),
+                    authority_error_kind_for_rejection_code(rejection_code),
+                ));
+            }
+
+            if accepted.request_id != self.envelope.request_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    accepted.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+                ));
+            }
+
+            if accepted.authority_id != self.authority_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    accepted.authority_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+                ));
+            }
+
+            let expected_accepted_revision =
+                self.prior_authority_revision.next().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        self.event_id.clone(),
+                        self.prior_authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    )
+                })?;
+            if accepted.accepted_revision != expected_accepted_revision {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    accepted.accepted_revision.get().to_string(),
+                    ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                ));
+            }
+
+            if accepted.lease_id != self.envelope.lease_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    "accepted.lease_id".to_owned(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+        }
+
+        if let Some(rejection) = &self.rejection {
+            let CommandAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+            } = &expected_decision
+            else {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    self.envelope.command_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                ));
+            };
+
+            if rejection.request_id != self.envelope.request_id {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.request_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+                ));
+            }
+
+            if rejection.current_revision != Some(self.prior_authority_revision) {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection
+                        .current_revision
+                        .map(|revision| revision.get().to_string())
+                        .unwrap_or_else(|| "none".to_owned()),
+                    ManifoldAuthorityValidationErrorKind::RejectionRevisionMismatch,
+                ));
+            }
+
+            if rejection.rejection_code.as_str() != *rejection_code
+                || rejection.message != *message
+                || rejection.retryable != *retryable
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.event_id.clone(),
+                    rejection.rejection_code.to_string(),
+                    ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+                ));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Validation scorecard for one local validation slot.
@@ -1990,6 +14066,708 @@ pub enum LeaseState {
     Rejected,
 }
 
+/// Command authority audit event kind.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldCommandAuthorityAuditEventKind {
+    /// Authority accepted a command request.
+    CommandAccepted,
+    /// Authority rejected a command request.
+    CommandRejected,
+}
+
+/// Control lease authority audit event kind.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldControlLeaseAuthorityAuditEventKind {
+    /// Authority accepted a lease request.
+    LeaseAccepted,
+    /// Authority rejected a lease request.
+    LeaseRejected,
+}
+
+/// Control lease release authority audit event kind.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldControlLeaseReleaseAuthorityAuditEventKind {
+    /// Authority accepted a lease release request.
+    LeaseReleased,
+    /// Authority rejected a lease release request.
+    LeaseReleaseRejected,
+}
+
+/// Control lease renewal authority audit event kind.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldControlLeaseRenewalAuthorityAuditEventKind {
+    /// Authority accepted a lease renewal request.
+    LeaseRenewed,
+    /// Authority rejected a lease renewal request.
+    LeaseRenewalRejected,
+}
+
+/// Stream-registry authority audit event kind.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldStreamRegistryAuthorityAuditEventKind {
+    /// Authority accepted a registry change request.
+    RegistryAccepted,
+    /// Authority rejected a registry change request.
+    RegistryRejected,
+}
+
+/// Stream subscription authority audit event kind.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldStreamSubscriptionAuthorityAuditEventKind {
+    /// Authority accepted a subscription request.
+    SubscriptionAccepted,
+    /// Authority rejected a subscription request.
+    SubscriptionRejected,
+}
+
+/// Stream subscription release authority audit event kind.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldStreamSubscriptionReleaseAuthorityAuditEventKind {
+    /// Authority accepted a subscription release request.
+    SubscriptionReleased,
+    /// Authority rejected a subscription release request.
+    SubscriptionReleaseRejected,
+}
+
+/// Stream subscription renewal authority audit event kind.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldStreamSubscriptionRenewalAuthorityAuditEventKind {
+    /// Authority accepted a subscription renewal request.
+    SubscriptionRenewed,
+    /// Authority rejected a subscription renewal request.
+    SubscriptionRenewalRejected,
+}
+
+/// Authority expiry sweep audit event kind.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldAuthorityExpirySweepAuthorityAuditEventKind {
+    /// Authority accepted expired state for removal.
+    ExpiredStateAccepted,
+    /// Authority rejected an expiry sweep request.
+    ExpirySweepRejected,
+}
+
+/// Module runtime-state authority audit event kind.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldModuleRuntimeStateAuthorityAuditEventKind {
+    /// Authority accepted a runtime-state change request.
+    RuntimeStateAccepted,
+    /// Authority rejected a runtime-state change request.
+    RuntimeStateRejected,
+}
+
+/// Host manifest authority audit event kind.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldHostManifestAuthorityAuditEventKind {
+    /// Authority accepted a host manifest change request.
+    HostManifestAccepted,
+    /// Authority rejected a host manifest change request.
+    HostManifestRejected,
+}
+
+/// Clock snapshot authority audit event kind.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldClockSnapshotAuthorityAuditEventKind {
+    /// Authority accepted a clock snapshot change request.
+    ClockSnapshotAccepted,
+    /// Authority rejected a clock snapshot change request.
+    ClockSnapshotRejected,
+}
+
+/// Command authority review outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldCommandAuthorityReviewOutcome {
+    /// Authority accepted the command request.
+    CommandAccepted,
+    /// Authority rejected the command request.
+    CommandRejected,
+}
+
+/// Command dispatch receipt outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldCommandDispatchReceiptOutcome {
+    /// Accepted command review is ready for downstream dispatch.
+    CommandDispatchReady,
+    /// Command review was not accepted for downstream dispatch.
+    CommandDispatchRejected,
+}
+
+impl From<ManifoldCommandAuthorityReviewOutcome> for ManifoldCommandAuthorityAuditEventKind {
+    fn from(outcome: ManifoldCommandAuthorityReviewOutcome) -> Self {
+        match outcome {
+            ManifoldCommandAuthorityReviewOutcome::CommandAccepted => Self::CommandAccepted,
+            ManifoldCommandAuthorityReviewOutcome::CommandRejected => Self::CommandRejected,
+        }
+    }
+}
+
+/// Control lease authority review outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldControlLeaseAuthorityReviewOutcome {
+    /// Authority accepted the lease request.
+    LeaseAccepted,
+    /// Authority rejected the lease request.
+    LeaseRejected,
+}
+
+/// Control lease authority application outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldControlLeaseAuthorityApplicationOutcome {
+    /// Accepted lease review was applied to the authority snapshot.
+    LeaseApplied,
+    /// Lease review could not be applied to accepted authority state.
+    LeaseApplicationRejected,
+}
+
+/// Control lease release authority review outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldControlLeaseReleaseAuthorityReviewOutcome {
+    /// Authority accepted the lease release request.
+    LeaseReleased,
+    /// Authority rejected the lease release request.
+    LeaseReleaseRejected,
+}
+
+/// Control lease release authority application outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldControlLeaseReleaseAuthorityApplicationOutcome {
+    /// Accepted lease release review was applied to the authority snapshot.
+    LeaseReleaseApplied,
+    /// Lease release review could not be applied to accepted authority state.
+    LeaseReleaseApplicationRejected,
+}
+
+/// Control lease renewal authority review outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldControlLeaseRenewalAuthorityReviewOutcome {
+    /// Authority accepted the lease renewal request.
+    LeaseRenewed,
+    /// Authority rejected the lease renewal request.
+    LeaseRenewalRejected,
+}
+
+/// Control lease renewal authority application outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldControlLeaseRenewalAuthorityApplicationOutcome {
+    /// Accepted lease renewal review was applied to the authority snapshot.
+    LeaseRenewalApplied,
+    /// Lease renewal review could not be applied to accepted authority state.
+    LeaseRenewalApplicationRejected,
+}
+
+impl From<ManifoldControlLeaseAuthorityReviewOutcome>
+    for ManifoldControlLeaseAuthorityAuditEventKind
+{
+    fn from(outcome: ManifoldControlLeaseAuthorityReviewOutcome) -> Self {
+        match outcome {
+            ManifoldControlLeaseAuthorityReviewOutcome::LeaseAccepted => Self::LeaseAccepted,
+            ManifoldControlLeaseAuthorityReviewOutcome::LeaseRejected => Self::LeaseRejected,
+        }
+    }
+}
+
+impl From<ManifoldControlLeaseReleaseAuthorityReviewOutcome>
+    for ManifoldControlLeaseReleaseAuthorityAuditEventKind
+{
+    fn from(outcome: ManifoldControlLeaseReleaseAuthorityReviewOutcome) -> Self {
+        match outcome {
+            ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleased => Self::LeaseReleased,
+            ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleaseRejected => {
+                Self::LeaseReleaseRejected
+            }
+        }
+    }
+}
+
+impl From<ManifoldControlLeaseRenewalAuthorityReviewOutcome>
+    for ManifoldControlLeaseRenewalAuthorityAuditEventKind
+{
+    fn from(outcome: ManifoldControlLeaseRenewalAuthorityReviewOutcome) -> Self {
+        match outcome {
+            ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewed => Self::LeaseRenewed,
+            ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewalRejected => {
+                Self::LeaseRenewalRejected
+            }
+        }
+    }
+}
+
+/// Stream-registry authority review outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldStreamRegistryAuthorityReviewOutcome {
+    /// Authority accepted the registry change request.
+    RegistryAccepted,
+    /// Authority rejected the registry change request.
+    RegistryRejected,
+}
+
+impl From<ManifoldStreamRegistryAuthorityReviewOutcome>
+    for ManifoldStreamRegistryAuthorityAuditEventKind
+{
+    fn from(outcome: ManifoldStreamRegistryAuthorityReviewOutcome) -> Self {
+        match outcome {
+            ManifoldStreamRegistryAuthorityReviewOutcome::RegistryAccepted => {
+                Self::RegistryAccepted
+            }
+            ManifoldStreamRegistryAuthorityReviewOutcome::RegistryRejected => {
+                Self::RegistryRejected
+            }
+        }
+    }
+}
+
+/// Stream-registry authority application outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldStreamRegistryAuthorityApplicationOutcome {
+    /// Accepted stream-registry review was applied to the authority snapshot.
+    RegistrySnapshotApplied,
+    /// Stream-registry review could not be applied to accepted authority state.
+    RegistryApplicationRejected,
+}
+
+/// Stream subscription authority review outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldStreamSubscriptionAuthorityReviewOutcome {
+    /// Authority accepted the subscription request.
+    SubscriptionAccepted,
+    /// Authority rejected the subscription request.
+    SubscriptionRejected,
+}
+
+impl From<ManifoldStreamSubscriptionAuthorityReviewOutcome>
+    for ManifoldStreamSubscriptionAuthorityAuditEventKind
+{
+    fn from(outcome: ManifoldStreamSubscriptionAuthorityReviewOutcome) -> Self {
+        match outcome {
+            ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionAccepted => {
+                Self::SubscriptionAccepted
+            }
+            ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionRejected => {
+                Self::SubscriptionRejected
+            }
+        }
+    }
+}
+
+/// Stream subscription authority application outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldStreamSubscriptionAuthorityApplicationOutcome {
+    /// Accepted stream subscription review was applied to the authority snapshot.
+    SubscriptionApplied,
+    /// Stream subscription review could not be applied to accepted authority state.
+    SubscriptionApplicationRejected,
+}
+
+/// Stream subscription release authority review outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome {
+    /// Authority accepted the subscription release request.
+    SubscriptionReleased,
+    /// Authority rejected the subscription release request.
+    SubscriptionReleaseRejected,
+}
+
+impl From<ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome>
+    for ManifoldStreamSubscriptionReleaseAuthorityAuditEventKind
+{
+    fn from(outcome: ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome) -> Self {
+        match outcome {
+            ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome::SubscriptionReleased => {
+                Self::SubscriptionReleased
+            }
+            ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome::SubscriptionReleaseRejected => {
+                Self::SubscriptionReleaseRejected
+            }
+        }
+    }
+}
+
+/// Stream subscription release authority application outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldStreamSubscriptionReleaseAuthorityApplicationOutcome {
+    /// Accepted stream subscription release review was applied to the authority snapshot.
+    SubscriptionReleaseApplied,
+    /// Stream subscription release review could not be applied to accepted authority state.
+    SubscriptionReleaseApplicationRejected,
+}
+
+/// Stream subscription renewal authority review outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome {
+    /// Authority accepted the subscription renewal request.
+    SubscriptionRenewed,
+    /// Authority rejected the subscription renewal request.
+    SubscriptionRenewalRejected,
+}
+
+impl From<ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome>
+    for ManifoldStreamSubscriptionRenewalAuthorityAuditEventKind
+{
+    fn from(outcome: ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome) -> Self {
+        match outcome {
+            ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome::SubscriptionRenewed => {
+                Self::SubscriptionRenewed
+            }
+            ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome::SubscriptionRenewalRejected => {
+                Self::SubscriptionRenewalRejected
+            }
+        }
+    }
+}
+
+/// Stream subscription renewal authority application outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldStreamSubscriptionRenewalAuthorityApplicationOutcome {
+    /// Accepted stream subscription renewal review was applied to the authority snapshot.
+    SubscriptionRenewalApplied,
+    /// Stream subscription renewal review could not be applied to accepted authority state.
+    SubscriptionRenewalApplicationRejected,
+}
+
+/// Authority expiry sweep review outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldAuthorityExpirySweepAuthorityReviewOutcome {
+    /// Authority accepted expired state for removal.
+    ExpiredStateAccepted,
+    /// Authority rejected the expiry sweep request.
+    ExpirySweepRejected,
+}
+
+impl From<ManifoldAuthorityExpirySweepAuthorityReviewOutcome>
+    for ManifoldAuthorityExpirySweepAuthorityAuditEventKind
+{
+    fn from(outcome: ManifoldAuthorityExpirySweepAuthorityReviewOutcome) -> Self {
+        match outcome {
+            ManifoldAuthorityExpirySweepAuthorityReviewOutcome::ExpiredStateAccepted => {
+                Self::ExpiredStateAccepted
+            }
+            ManifoldAuthorityExpirySweepAuthorityReviewOutcome::ExpirySweepRejected => {
+                Self::ExpirySweepRejected
+            }
+        }
+    }
+}
+
+/// Authority expiry sweep application outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldAuthorityExpirySweepAuthorityApplicationOutcome {
+    /// Accepted expiry sweep review was applied to the authority snapshot.
+    ExpiredStateApplied,
+    /// Expiry sweep review could not be applied to accepted authority state.
+    ExpirySweepApplicationRejected,
+}
+
+/// Stream subscriber kind.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldStreamSubscriberKind {
+    /// UI or dashboard subscriber.
+    Ui,
+    /// Runtime module subscriber.
+    Runtime,
+    /// Agent or CLI subscriber.
+    Agent,
+}
+
+/// Accepted stream subscription state.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldStreamSubscriptionState {
+    /// Subscription is active and counts against the stream limit.
+    Active,
+    /// Subscription was released by the subscriber or authority.
+    Released,
+    /// Subscription expired by TTL.
+    Expired,
+}
+
+/// Module runtime-state authority application outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldModuleRuntimeStateAuthorityApplicationOutcome {
+    /// Accepted runtime-state review was applied to the authority snapshot.
+    RuntimeStateApplied,
+    /// Runtime-state review could not be applied to accepted authority state.
+    RuntimeStateApplicationRejected,
+}
+
+/// Module runtime-state authority review outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldModuleRuntimeStateAuthorityReviewOutcome {
+    /// Authority accepted the runtime-state change request.
+    RuntimeStateAccepted,
+    /// Authority rejected the runtime-state change request.
+    RuntimeStateRejected,
+}
+
+impl From<ManifoldModuleRuntimeStateAuthorityReviewOutcome>
+    for ManifoldModuleRuntimeStateAuthorityAuditEventKind
+{
+    fn from(outcome: ManifoldModuleRuntimeStateAuthorityReviewOutcome) -> Self {
+        match outcome {
+            ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateAccepted => {
+                Self::RuntimeStateAccepted
+            }
+            ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateRejected => {
+                Self::RuntimeStateRejected
+            }
+        }
+    }
+}
+
+/// Host manifest authority review outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldHostManifestAuthorityReviewOutcome {
+    /// Authority accepted the host manifest change request.
+    HostManifestAccepted,
+    /// Authority rejected the host manifest change request.
+    HostManifestRejected,
+}
+
+/// Host manifest authority application outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldHostManifestAuthorityApplicationOutcome {
+    /// Accepted host manifest review was applied to the authority snapshot.
+    HostManifestApplied,
+    /// Host manifest review could not be applied to accepted authority state.
+    HostManifestApplicationRejected,
+}
+
+impl From<ManifoldHostManifestAuthorityReviewOutcome>
+    for ManifoldHostManifestAuthorityAuditEventKind
+{
+    fn from(outcome: ManifoldHostManifestAuthorityReviewOutcome) -> Self {
+        match outcome {
+            ManifoldHostManifestAuthorityReviewOutcome::HostManifestAccepted => {
+                Self::HostManifestAccepted
+            }
+            ManifoldHostManifestAuthorityReviewOutcome::HostManifestRejected => {
+                Self::HostManifestRejected
+            }
+        }
+    }
+}
+
+/// Clock snapshot authority review outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldClockSnapshotAuthorityReviewOutcome {
+    /// Authority accepted the clock snapshot change request.
+    ClockSnapshotAccepted,
+    /// Authority rejected the clock snapshot change request.
+    ClockSnapshotRejected,
+}
+
+/// Clock snapshot authority application outcome.
+#[cfg_attr(
+    feature = "serde",
+    derive(serde::Deserialize, serde::Serialize),
+    serde(rename_all = "snake_case")
+)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldClockSnapshotAuthorityApplicationOutcome {
+    /// Accepted clock snapshot review was applied to the authority snapshot.
+    ClockSnapshotApplied,
+    /// Clock snapshot review could not be applied to accepted authority state.
+    ClockSnapshotApplicationRejected,
+}
+
+impl From<ManifoldClockSnapshotAuthorityReviewOutcome>
+    for ManifoldClockSnapshotAuthorityAuditEventKind
+{
+    fn from(outcome: ManifoldClockSnapshotAuthorityReviewOutcome) -> Self {
+        match outcome {
+            ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotAccepted => {
+                Self::ClockSnapshotAccepted
+            }
+            ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotRejected => {
+                Self::ClockSnapshotRejected
+            }
+        }
+    }
+}
+
 /// Host authority role.
 #[cfg_attr(
     feature = "serde",
@@ -2330,6 +15108,260 @@ pub enum StreamRegistryValidationErrorKind {
     UnknownTransportEndpoint,
 }
 
+/// Authority snapshot or command audit validation failure.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldAuthorityValidationError {
+    subject_id: DottedId,
+    rejected_value: String,
+    kind: ManifoldAuthorityValidationErrorKind,
+}
+
+impl ManifoldAuthorityValidationError {
+    fn new(
+        subject_id: DottedId,
+        rejected_value: String,
+        kind: ManifoldAuthorityValidationErrorKind,
+    ) -> Self {
+        Self {
+            subject_id,
+            rejected_value,
+            kind,
+        }
+    }
+
+    /// Returns the affected authority, event, module, command, or lease id.
+    #[must_use]
+    pub fn subject_id(&self) -> &DottedId {
+        &self.subject_id
+    }
+
+    /// Returns the rejected value.
+    #[must_use]
+    pub fn rejected_value(&self) -> &str {
+        &self.rejected_value
+    }
+
+    /// Returns the failure kind.
+    #[must_use]
+    pub const fn kind(&self) -> ManifoldAuthorityValidationErrorKind {
+        self.kind
+    }
+
+    /// Returns a stable rejection code.
+    #[must_use]
+    pub const fn rejection_code(&self) -> &'static str {
+        match self.kind {
+            ManifoldAuthorityValidationErrorKind::UnsupportedSchema => "unsupported_schema",
+            ManifoldAuthorityValidationErrorKind::HostHasNoAuthority => "host_has_no_authority",
+            ManifoldAuthorityValidationErrorKind::HostEndpointSecurityMismatch => {
+                "host_endpoint_security_mismatch"
+            }
+            ManifoldAuthorityValidationErrorKind::HostIdMismatch => "host_id_mismatch",
+            ManifoldAuthorityValidationErrorKind::HostManifestMismatch => "host_manifest_mismatch",
+            ManifoldAuthorityValidationErrorKind::HostManifestValidationFailed => {
+                "host_manifest_validation_failed"
+            }
+            ManifoldAuthorityValidationErrorKind::HostEndpointInUse => "host_endpoint_in_use",
+            ManifoldAuthorityValidationErrorKind::HostCapabilityInUse => "host_capability_in_use",
+            ManifoldAuthorityValidationErrorKind::HostBackendInUse => "host_backend_in_use",
+            ManifoldAuthorityValidationErrorKind::ClockDomainMismatch => "clock_domain_mismatch",
+            ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch => {
+                "clock_snapshot_mismatch"
+            }
+            ManifoldAuthorityValidationErrorKind::RegistryRevisionAhead => {
+                "registry_revision_ahead"
+            }
+            ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch => {
+                "registry_revision_mismatch"
+            }
+            ManifoldAuthorityValidationErrorKind::RegistryMismatch => "registry_mismatch",
+            ManifoldAuthorityValidationErrorKind::UnknownStreamModule => "unknown_stream_module",
+            ManifoldAuthorityValidationErrorKind::UnknownModuleStream => "unknown_module_stream",
+            ManifoldAuthorityValidationErrorKind::UnknownModuleCommand => "unknown_module_command",
+            ManifoldAuthorityValidationErrorKind::UnknownModule => "unknown_module",
+            ManifoldAuthorityValidationErrorKind::ModuleIdMismatch => "module_id_mismatch",
+            ManifoldAuthorityValidationErrorKind::RuntimeRevisionMismatch => {
+                "runtime_revision_mismatch"
+            }
+            ManifoldAuthorityValidationErrorKind::ModuleRuntimeMismatch => {
+                "module_runtime_mismatch"
+            }
+            ManifoldAuthorityValidationErrorKind::ModuleRuntimeValidationFailed => {
+                "module_runtime_validation_failed"
+            }
+            ManifoldAuthorityValidationErrorKind::UnknownCommand => "unknown_command",
+            ManifoldAuthorityValidationErrorKind::CapabilityNotAdvertised => {
+                "capability_not_advertised"
+            }
+            ManifoldAuthorityValidationErrorKind::InactiveLease => "inactive_lease",
+            ManifoldAuthorityValidationErrorKind::LeaseRevisionAhead => "lease_revision_ahead",
+            ManifoldAuthorityValidationErrorKind::UnknownLease => "unknown_lease",
+            ManifoldAuthorityValidationErrorKind::LeaseScopeBusy => "lease_scope_busy",
+            ManifoldAuthorityValidationErrorKind::InvalidLeaseTtl => "invalid_lease_ttl",
+            ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch => "authority_id_mismatch",
+            ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch => {
+                "authority_revision_mismatch"
+            }
+            ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch => {
+                "decision_shape_mismatch"
+            }
+            ManifoldAuthorityValidationErrorKind::RequestIdMismatch => "request_id_mismatch",
+            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch => {
+                "acceptance_revision_mismatch"
+            }
+            ManifoldAuthorityValidationErrorKind::RejectionRevisionMismatch => {
+                "rejection_revision_mismatch"
+            }
+            ManifoldAuthorityValidationErrorKind::RejectionMismatch => "rejection_mismatch",
+            ManifoldAuthorityValidationErrorKind::LeaseMismatch => "lease_mismatch",
+            ManifoldAuthorityValidationErrorKind::StreamDiffMismatch => "stream_diff_mismatch",
+            ManifoldAuthorityValidationErrorKind::StreamRegistryValidationFailed => {
+                "stream_registry_validation_failed"
+            }
+            ManifoldAuthorityValidationErrorKind::UnknownStream => "unknown_stream",
+            ManifoldAuthorityValidationErrorKind::UnknownTransport => "unknown_transport",
+            ManifoldAuthorityValidationErrorKind::UnknownSubscription => "unknown_subscription",
+            ManifoldAuthorityValidationErrorKind::SubscriptionNotAllowed => {
+                "subscription_not_allowed"
+            }
+            ManifoldAuthorityValidationErrorKind::SubscriptionLimitReached => {
+                "subscriber_limit_reached"
+            }
+            ManifoldAuthorityValidationErrorKind::InvalidSubscriptionTtl => {
+                "invalid_subscription_ttl"
+            }
+            ManifoldAuthorityValidationErrorKind::SubscriptionMismatch => "subscription_mismatch",
+            ManifoldAuthorityValidationErrorKind::StreamSubscriptionValidationFailed => {
+                "stream_subscription_validation_failed"
+            }
+            ManifoldAuthorityValidationErrorKind::MissingEvidence => "missing_evidence",
+            ManifoldAuthorityValidationErrorKind::CommandValidationFailed => {
+                "command_validation_failed"
+            }
+            ManifoldAuthorityValidationErrorKind::LeaseRequestValidationFailed => {
+                "lease_request_validation_failed"
+            }
+        }
+    }
+}
+
+impl fmt::Display for ManifoldAuthorityValidationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            formatter,
+            "authority validation {} rejected {}: {:?}",
+            self.subject_id, self.rejected_value, self.kind
+        )
+    }
+}
+
+impl std::error::Error for ManifoldAuthorityValidationError {}
+
+/// Authority snapshot or command audit validation failure kind.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ManifoldAuthorityValidationErrorKind {
+    /// The schema id is not supported by this validator.
+    UnsupportedSchema,
+    /// The host manifest does not advertise an authority role.
+    HostHasNoAuthority,
+    /// The nested host manifest contains an unsafe endpoint pairing.
+    HostEndpointSecurityMismatch,
+    /// Host id changed or event/review host ids disagree.
+    HostIdMismatch,
+    /// Accepted host manifest does not match deterministic review.
+    HostManifestMismatch,
+    /// A host manifest proposal fails endpoint, capability, backend, or role validation.
+    HostManifestValidationFailed,
+    /// A host manifest proposal removes an endpoint still considered in use.
+    HostEndpointInUse,
+    /// A host manifest proposal removes a capability still considered in use.
+    HostCapabilityInUse,
+    /// A host manifest proposal removes a backend still considered in use.
+    HostBackendInUse,
+    /// Host and clock snapshot use different clock domains.
+    ClockDomainMismatch,
+    /// Event clock does not match the snapshot clock domain, epoch, or sequence.
+    ClockSnapshotMismatch,
+    /// Stream registry revision is newer than the authority revision.
+    RegistryRevisionAhead,
+    /// Stream registry revision does not match the reviewed request or event.
+    RegistryRevisionMismatch,
+    /// Accepted stream registry snapshot does not match deterministic diff application.
+    RegistryMismatch,
+    /// A stream source module is not present in runtime state.
+    UnknownStreamModule,
+    /// A module runtime state references an unknown active stream.
+    UnknownModuleStream,
+    /// A module runtime state references an unknown active command.
+    UnknownModuleCommand,
+    /// A module runtime-state request targets a module absent from authority state.
+    UnknownModule,
+    /// Runtime-state request and nested proposed state disagree about the module id.
+    ModuleIdMismatch,
+    /// Runtime-state request or event uses the wrong runtime revision.
+    RuntimeRevisionMismatch,
+    /// Accepted runtime-state or transition does not match deterministic review.
+    ModuleRuntimeMismatch,
+    /// A module runtime-state request fails link, backend, lifecycle, or transition validation.
+    ModuleRuntimeValidationFailed,
+    /// A command id or descriptor is unknown to the authority.
+    UnknownCommand,
+    /// A command or lease requires a capability absent from the host.
+    CapabilityNotAdvertised,
+    /// An active-lease set contains a non-active lease.
+    InactiveLease,
+    /// A lease was granted after the authority revision being reviewed.
+    LeaseRevisionAhead,
+    /// A command envelope references a lease absent from the authority snapshot.
+    UnknownLease,
+    /// A lease request targets a scope that already has an active lease.
+    LeaseScopeBusy,
+    /// A lease request ttl is invalid.
+    InvalidLeaseTtl,
+    /// Event and nested result disagree about the authority id.
+    AuthorityIdMismatch,
+    /// Event prior revision does not match the supplied authority snapshot.
+    AuthorityRevisionMismatch,
+    /// Accepted/rejected fields do not match the event kind.
+    DecisionShapeMismatch,
+    /// Accepted or rejected result references the wrong request id.
+    RequestIdMismatch,
+    /// Accepted result did not advance authority revision.
+    AcceptanceRevisionMismatch,
+    /// Rejected result does not report the reviewed authority revision.
+    RejectionRevisionMismatch,
+    /// Rejected result does not match the deterministic rejection code, message, or retryability.
+    RejectionMismatch,
+    /// Event, envelope, lease, or accepted result disagree about the lease.
+    LeaseMismatch,
+    /// A stream-registry diff does not match the current registry.
+    StreamDiffMismatch,
+    /// A stream-registry request fails link, endpoint, or topology validation.
+    StreamRegistryValidationFailed,
+    /// A stream subscription references a stream absent from the registry.
+    UnknownStream,
+    /// A stream subscription references an unknown transport offer or endpoint.
+    UnknownTransport,
+    /// A stream subscription release references an unknown active subscription.
+    UnknownSubscription,
+    /// A stream subscription is disallowed by stream policy.
+    SubscriptionNotAllowed,
+    /// A stream subscription would exceed the stream subscriber limit.
+    SubscriptionLimitReached,
+    /// A stream subscription ttl is invalid.
+    InvalidSubscriptionTtl,
+    /// A stream subscription event, review, or accepted state is inconsistent.
+    SubscriptionMismatch,
+    /// A stream subscription request fails admission validation.
+    StreamSubscriptionValidationFailed,
+    /// The audit event has no backing evidence references.
+    MissingEvidence,
+    /// The command envelope fails deterministic descriptor/revision/lease validation.
+    CommandValidationFailed,
+    /// The lease request fails deterministic revision/capability/scope validation.
+    LeaseRequestValidationFailed,
+}
+
 /// Shell handoff review receipt validation failure.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ShellHandoffReviewReceiptValidationError {
@@ -2533,6 +15565,1018 @@ fn shell_handoff_review_issue(issue_code: DottedId) -> ManifoldIssue {
         message: format!("shell handoff review failed {issue_code}"),
         issue_code,
         severity: IssueSeverity::Error,
+    }
+}
+
+fn host_manifest_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.host.manifest.v1").expect("schema literal is valid")
+}
+
+fn host_manifest_change_request_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.host.manifest_change_request.v1")
+        .expect("schema literal is valid")
+}
+
+fn host_manifest_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.host.manifest_rejection.v1").expect("schema literal is valid")
+}
+
+fn clock_snapshot_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.clock.snapshot.v1").expect("schema literal is valid")
+}
+
+fn clock_snapshot_change_request_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.clock.snapshot_change_request.v1")
+        .expect("schema literal is valid")
+}
+
+fn clock_snapshot_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.clock.snapshot_rejection.v1").expect("schema literal is valid")
+}
+
+fn stream_registry_snapshot_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.stream.registry_snapshot.v1").expect("schema literal is valid")
+}
+
+fn module_runtime_state_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.module.runtime_state.v1").expect("schema literal is valid")
+}
+
+fn module_runtime_state_change_request_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.module.runtime_state_change_request.v1")
+        .expect("schema literal is valid")
+}
+
+fn module_runtime_state_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.module.runtime_state_rejection.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_registry_diff_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.stream.registry_diff.v1").expect("schema literal is valid")
+}
+
+fn stream_registry_change_request_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.stream.registry_change_request.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_registry_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.stream.registry_rejection.v1").expect("schema literal is valid")
+}
+
+fn stream_subscription_request_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.stream.subscription_request.v1").expect("schema literal is valid")
+}
+
+fn stream_subscription_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.stream.subscription.v1").expect("schema literal is valid")
+}
+
+fn stream_subscription_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.stream.subscription_rejection.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_subscription_release_request_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.stream.subscription_release_request.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_subscription_release_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.stream.subscription_release_rejection.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_subscription_renewal_request_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.stream.subscription_renewal_request.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_subscription_renewal_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.stream.subscription_renewal_rejection.v1")
+        .expect("schema literal is valid")
+}
+
+fn command_ack_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.command.ack.v1").expect("schema literal is valid")
+}
+
+fn command_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.command.rejection.v1").expect("schema literal is valid")
+}
+
+fn control_lease_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.command.control_lease.v1").expect("schema literal is valid")
+}
+
+fn control_lease_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.command.lease_rejection.v1").expect("schema literal is valid")
+}
+
+fn control_lease_release_request_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.command.lease_release_request.v1")
+        .expect("schema literal is valid")
+}
+
+fn control_lease_release_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.command.lease_release_rejection.v1")
+        .expect("schema literal is valid")
+}
+
+fn control_lease_renewal_request_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.command.lease_renewal_request.v1")
+        .expect("schema literal is valid")
+}
+
+fn control_lease_renewal_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.command.lease_renewal_rejection.v1")
+        .expect("schema literal is valid")
+}
+
+fn authority_expiry_sweep_request_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.expiry_sweep_request.v1")
+        .expect("schema literal is valid")
+}
+
+fn authority_expiry_sweep_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.expiry_sweep_rejection.v1")
+        .expect("schema literal is valid")
+}
+
+fn command_authority_audit_event_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.command_audit_event.v1")
+        .expect("schema literal is valid")
+}
+
+fn command_authority_review_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.command_review.v1").expect("schema literal is valid")
+}
+
+fn command_dispatch_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.command_dispatch_rejection.v1")
+        .expect("schema literal is valid")
+}
+
+fn command_dispatch_receipt_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.command_dispatch_receipt.v1")
+        .expect("schema literal is valid")
+}
+
+fn control_lease_authority_audit_event_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.lease_audit_event.v1").expect("schema literal is valid")
+}
+
+fn control_lease_authority_review_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.lease_review.v1").expect("schema literal is valid")
+}
+
+fn control_lease_authority_application_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.lease_application.v1").expect("schema literal is valid")
+}
+
+fn control_lease_release_authority_audit_event_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.lease_release_audit_event.v1")
+        .expect("schema literal is valid")
+}
+
+fn control_lease_release_authority_review_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.lease_release_review.v1")
+        .expect("schema literal is valid")
+}
+
+fn control_lease_release_authority_application_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.lease_release_application.v1")
+        .expect("schema literal is valid")
+}
+
+fn control_lease_renewal_authority_audit_event_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.lease_renewal_audit_event.v1")
+        .expect("schema literal is valid")
+}
+
+fn control_lease_renewal_authority_review_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.lease_renewal_review.v1")
+        .expect("schema literal is valid")
+}
+
+fn control_lease_renewal_authority_application_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.lease_renewal_application.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_registry_authority_audit_event_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.stream_registry_audit_event.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_registry_authority_review_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.stream_registry_review.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_registry_authority_application_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.stream_registry_application.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_subscription_authority_audit_event_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.stream_subscription_audit_event.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_subscription_authority_review_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.stream_subscription_review.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_subscription_authority_application_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.stream_subscription_application.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_subscription_release_authority_audit_event_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.stream_subscription_release_audit_event.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_subscription_release_authority_review_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.stream_subscription_release_review.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_subscription_release_authority_application_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.stream_subscription_release_application.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_subscription_renewal_authority_audit_event_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.stream_subscription_renewal_audit_event.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_subscription_renewal_authority_review_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.stream_subscription_renewal_review.v1")
+        .expect("schema literal is valid")
+}
+
+fn stream_subscription_renewal_authority_application_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.stream_subscription_renewal_application.v1")
+        .expect("schema literal is valid")
+}
+
+fn authority_expiry_sweep_authority_audit_event_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.expiry_sweep_audit_event.v1")
+        .expect("schema literal is valid")
+}
+
+fn authority_expiry_sweep_authority_review_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.expiry_sweep_review.v1")
+        .expect("schema literal is valid")
+}
+
+fn authority_expiry_sweep_authority_application_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.expiry_sweep_application.v1")
+        .expect("schema literal is valid")
+}
+
+fn authority_snapshot_application_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.snapshot_application_rejection.v1")
+        .expect("schema literal is valid")
+}
+
+fn module_runtime_state_authority_audit_event_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.module_runtime_state_audit_event.v1")
+        .expect("schema literal is valid")
+}
+
+fn module_runtime_state_authority_review_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.module_runtime_state_review.v1")
+        .expect("schema literal is valid")
+}
+
+fn module_runtime_state_authority_application_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.module_runtime_state_application.v1")
+        .expect("schema literal is valid")
+}
+
+fn host_manifest_authority_audit_event_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.host_manifest_audit_event.v1")
+        .expect("schema literal is valid")
+}
+
+fn host_manifest_authority_review_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.host_manifest_review.v1")
+        .expect("schema literal is valid")
+}
+
+fn host_manifest_authority_application_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.host_manifest_application.v1")
+        .expect("schema literal is valid")
+}
+
+fn clock_snapshot_authority_audit_event_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.clock_snapshot_audit_event.v1")
+        .expect("schema literal is valid")
+}
+
+fn clock_snapshot_authority_review_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.clock_snapshot_review.v1")
+        .expect("schema literal is valid")
+}
+
+fn clock_snapshot_authority_application_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.clock_snapshot_application.v1")
+        .expect("schema literal is valid")
+}
+
+fn command_authority_review_id(request_id: &DottedId) -> DottedId {
+    DottedId::new(format!("command_review.{}", request_id.as_str()))
+        .expect("derived command review id is valid")
+}
+
+fn command_dispatch_receipt_id(review_id: &DottedId) -> DottedId {
+    DottedId::new(format!("command_dispatch.{}", review_id.as_str()))
+        .expect("derived command dispatch id is valid")
+}
+
+fn control_lease_authority_review_id(request_id: &DottedId) -> DottedId {
+    DottedId::new(format!("lease_review.{}", request_id.as_str()))
+        .expect("derived lease review id is valid")
+}
+
+fn control_lease_authority_application_id(review_id: &DottedId) -> DottedId {
+    DottedId::new(format!("lease_application.{}", review_id.as_str()))
+        .expect("derived lease application id is valid")
+}
+
+fn control_lease_release_authority_review_id(request_id: &DottedId) -> DottedId {
+    DottedId::new(format!("lease_release_review.{}", request_id.as_str()))
+        .expect("derived lease release review id is valid")
+}
+
+fn control_lease_release_authority_application_id(review_id: &DottedId) -> DottedId {
+    DottedId::new(format!("lease_release_application.{}", review_id.as_str()))
+        .expect("derived lease release application id is valid")
+}
+
+fn control_lease_renewal_authority_review_id(request_id: &DottedId) -> DottedId {
+    DottedId::new(format!("lease_renewal_review.{}", request_id.as_str()))
+        .expect("derived lease renewal review id is valid")
+}
+
+fn control_lease_renewal_authority_application_id(review_id: &DottedId) -> DottedId {
+    DottedId::new(format!("lease_renewal_application.{}", review_id.as_str()))
+        .expect("derived lease renewal application id is valid")
+}
+
+fn stream_registry_authority_review_id(request_id: &DottedId) -> DottedId {
+    DottedId::new(format!("stream_registry_review.{}", request_id.as_str()))
+        .expect("derived stream-registry review id is valid")
+}
+
+fn stream_registry_authority_application_id(review_id: &DottedId) -> DottedId {
+    DottedId::new(format!(
+        "stream_registry_application.{}",
+        review_id.as_str()
+    ))
+    .expect("derived stream-registry application id is valid")
+}
+
+fn stream_subscription_authority_review_id(request_id: &DottedId) -> DottedId {
+    DottedId::new(format!(
+        "stream_subscription_review.{}",
+        request_id.as_str()
+    ))
+    .expect("derived stream subscription review id is valid")
+}
+
+fn stream_subscription_authority_application_id(review_id: &DottedId) -> DottedId {
+    DottedId::new(format!(
+        "stream_subscription_application.{}",
+        review_id.as_str()
+    ))
+    .expect("derived stream subscription application id is valid")
+}
+
+fn stream_subscription_release_authority_review_id(request_id: &DottedId) -> DottedId {
+    DottedId::new(format!(
+        "stream_subscription_release_review.{}",
+        request_id.as_str()
+    ))
+    .expect("derived stream subscription release review id is valid")
+}
+
+fn stream_subscription_release_authority_application_id(review_id: &DottedId) -> DottedId {
+    DottedId::new(format!(
+        "stream_subscription_release_application.{}",
+        review_id.as_str()
+    ))
+    .expect("derived stream subscription release application id is valid")
+}
+
+fn stream_subscription_renewal_authority_review_id(request_id: &DottedId) -> DottedId {
+    DottedId::new(format!(
+        "stream_subscription_renewal_review.{}",
+        request_id.as_str()
+    ))
+    .expect("derived stream subscription renewal review id is valid")
+}
+
+fn stream_subscription_renewal_authority_application_id(review_id: &DottedId) -> DottedId {
+    DottedId::new(format!(
+        "stream_subscription_renewal_application.{}",
+        review_id.as_str()
+    ))
+    .expect("derived stream subscription renewal application id is valid")
+}
+
+fn authority_expiry_sweep_authority_review_id(request_id: &DottedId) -> DottedId {
+    DottedId::new(format!("expiry_sweep_review.{}", request_id.as_str()))
+        .expect("derived authority expiry sweep review id is valid")
+}
+
+fn authority_expiry_sweep_authority_application_id(review_id: &DottedId) -> DottedId {
+    DottedId::new(format!("expiry_sweep_application.{}", review_id.as_str()))
+        .expect("derived authority expiry sweep application id is valid")
+}
+
+fn module_runtime_state_authority_review_id(request_id: &DottedId) -> DottedId {
+    DottedId::new(format!(
+        "module_runtime_state_review.{}",
+        request_id.as_str()
+    ))
+    .expect("derived module runtime-state review id is valid")
+}
+
+fn module_runtime_state_authority_application_id(review_id: &DottedId) -> DottedId {
+    DottedId::new(format!(
+        "module_runtime_state_application.{}",
+        review_id.as_str()
+    ))
+    .expect("derived module runtime-state application id is valid")
+}
+
+fn host_manifest_authority_review_id(request_id: &DottedId) -> DottedId {
+    DottedId::new(format!("host_manifest_review.{}", request_id.as_str()))
+        .expect("derived host manifest review id is valid")
+}
+
+fn host_manifest_authority_application_id(review_id: &DottedId) -> DottedId {
+    DottedId::new(format!("host_manifest_application.{}", review_id.as_str()))
+        .expect("derived host manifest application id is valid")
+}
+
+fn clock_snapshot_authority_review_id(request_id: &DottedId) -> DottedId {
+    DottedId::new(format!("clock_snapshot_review.{}", request_id.as_str()))
+        .expect("derived clock snapshot review id is valid")
+}
+
+fn clock_snapshot_authority_application_id(review_id: &DottedId) -> DottedId {
+    DottedId::new(format!("clock_snapshot_application.{}", review_id.as_str()))
+        .expect("derived clock snapshot application id is valid")
+}
+
+fn control_lease_id(request_id: &DottedId) -> DottedId {
+    let suffix = request_id
+        .as_str()
+        .strip_prefix("request.")
+        .unwrap_or_else(|| request_id.as_str());
+    DottedId::new(format!("lease.{}", suffix)).expect("derived lease id is valid")
+}
+
+fn stream_subscription_id(request_id: &DottedId) -> DottedId {
+    let suffix = request_id
+        .as_str()
+        .strip_prefix("request.")
+        .unwrap_or_else(|| request_id.as_str());
+    DottedId::new(format!("subscription.{}", suffix)).expect("derived subscription id is valid")
+}
+
+fn registry_lease_scope() -> DottedId {
+    DottedId::new("manifold.stream_registry").expect("registry lease scope is valid")
+}
+
+fn host_manifest_lease_scope() -> DottedId {
+    DottedId::new("manifold.host_manifest").expect("host-manifest lease scope is valid")
+}
+
+fn clock_snapshot_lease_scope() -> DottedId {
+    DottedId::new("manifold.clock").expect("clock lease scope is valid")
+}
+
+fn command_authority_audit_event_id(
+    request_id: &DottedId,
+    outcome: ManifoldCommandAuthorityReviewOutcome,
+) -> DottedId {
+    let suffix = match outcome {
+        ManifoldCommandAuthorityReviewOutcome::CommandAccepted => "accepted",
+        ManifoldCommandAuthorityReviewOutcome::CommandRejected => "rejected",
+    };
+    DottedId::new(format!("audit.command.{}.{}", request_id.as_str(), suffix))
+        .expect("derived command audit event id is valid")
+}
+
+fn control_lease_authority_audit_event_id(
+    request_id: &DottedId,
+    outcome: ManifoldControlLeaseAuthorityReviewOutcome,
+) -> DottedId {
+    let suffix = match outcome {
+        ManifoldControlLeaseAuthorityReviewOutcome::LeaseAccepted => "accepted",
+        ManifoldControlLeaseAuthorityReviewOutcome::LeaseRejected => "rejected",
+    };
+    DottedId::new(format!("audit.lease.{}.{}", request_id.as_str(), suffix))
+        .expect("derived lease audit event id is valid")
+}
+
+fn control_lease_release_authority_audit_event_id(
+    request_id: &DottedId,
+    outcome: ManifoldControlLeaseReleaseAuthorityReviewOutcome,
+) -> DottedId {
+    let suffix = match outcome {
+        ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleased => "released",
+        ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleaseRejected => "rejected",
+    };
+    DottedId::new(format!(
+        "audit.lease_release.{}.{}",
+        request_id.as_str(),
+        suffix
+    ))
+    .expect("derived lease release audit event id is valid")
+}
+
+fn control_lease_renewal_authority_audit_event_id(
+    request_id: &DottedId,
+    outcome: ManifoldControlLeaseRenewalAuthorityReviewOutcome,
+) -> DottedId {
+    let suffix = match outcome {
+        ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewed => "renewed",
+        ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewalRejected => "rejected",
+    };
+    DottedId::new(format!(
+        "audit.lease_renewal.{}.{}",
+        request_id.as_str(),
+        suffix
+    ))
+    .expect("derived lease renewal audit event id is valid")
+}
+
+fn stream_registry_authority_audit_event_id(
+    request_id: &DottedId,
+    outcome: ManifoldStreamRegistryAuthorityReviewOutcome,
+) -> DottedId {
+    let suffix = match outcome {
+        ManifoldStreamRegistryAuthorityReviewOutcome::RegistryAccepted => "accepted",
+        ManifoldStreamRegistryAuthorityReviewOutcome::RegistryRejected => "rejected",
+    };
+    DottedId::new(format!(
+        "audit.stream_registry.{}.{}",
+        request_id.as_str(),
+        suffix
+    ))
+    .expect("derived stream-registry audit event id is valid")
+}
+
+fn stream_subscription_authority_audit_event_id(
+    request_id: &DottedId,
+    outcome: ManifoldStreamSubscriptionAuthorityReviewOutcome,
+) -> DottedId {
+    let suffix = match outcome {
+        ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionAccepted => "accepted",
+        ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionRejected => "rejected",
+    };
+    DottedId::new(format!(
+        "audit.stream_subscription.{}.{}",
+        request_id.as_str(),
+        suffix
+    ))
+    .expect("derived stream subscription audit event id is valid")
+}
+
+fn stream_subscription_release_authority_audit_event_id(
+    request_id: &DottedId,
+    outcome: ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome,
+) -> DottedId {
+    let suffix = match outcome {
+        ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome::SubscriptionReleased => "released",
+        ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome::SubscriptionReleaseRejected => {
+            "rejected"
+        }
+    };
+    DottedId::new(format!(
+        "audit.stream_subscription_release.{}.{}",
+        request_id.as_str(),
+        suffix
+    ))
+    .expect("derived stream subscription release audit event id is valid")
+}
+
+fn stream_subscription_renewal_authority_audit_event_id(
+    request_id: &DottedId,
+    outcome: ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome,
+) -> DottedId {
+    let suffix = match outcome {
+        ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome::SubscriptionRenewed => "renewed",
+        ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome::SubscriptionRenewalRejected => {
+            "rejected"
+        }
+    };
+    DottedId::new(format!(
+        "audit.stream_subscription_renewal.{}.{}",
+        request_id.as_str(),
+        suffix
+    ))
+    .expect("derived stream subscription renewal audit event id is valid")
+}
+
+fn authority_expiry_sweep_authority_audit_event_id(
+    request_id: &DottedId,
+    outcome: ManifoldAuthorityExpirySweepAuthorityReviewOutcome,
+) -> DottedId {
+    let suffix = match outcome {
+        ManifoldAuthorityExpirySweepAuthorityReviewOutcome::ExpiredStateAccepted => "accepted",
+        ManifoldAuthorityExpirySweepAuthorityReviewOutcome::ExpirySweepRejected => "rejected",
+    };
+    DottedId::new(format!(
+        "audit.expiry_sweep.{}.{}",
+        request_id.as_str(),
+        suffix
+    ))
+    .expect("derived authority expiry sweep audit event id is valid")
+}
+
+fn module_runtime_state_authority_audit_event_id(
+    request_id: &DottedId,
+    outcome: ManifoldModuleRuntimeStateAuthorityReviewOutcome,
+) -> DottedId {
+    let suffix = match outcome {
+        ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateAccepted => "accepted",
+        ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateRejected => "rejected",
+    };
+    DottedId::new(format!(
+        "audit.module_runtime_state.{}.{}",
+        request_id.as_str(),
+        suffix
+    ))
+    .expect("derived module runtime-state audit event id is valid")
+}
+
+fn host_manifest_authority_audit_event_id(
+    request_id: &DottedId,
+    outcome: ManifoldHostManifestAuthorityReviewOutcome,
+) -> DottedId {
+    let suffix = match outcome {
+        ManifoldHostManifestAuthorityReviewOutcome::HostManifestAccepted => "accepted",
+        ManifoldHostManifestAuthorityReviewOutcome::HostManifestRejected => "rejected",
+    };
+    DottedId::new(format!(
+        "audit.host_manifest.{}.{}",
+        request_id.as_str(),
+        suffix
+    ))
+    .expect("derived host manifest audit event id is valid")
+}
+
+fn clock_snapshot_authority_audit_event_id(
+    request_id: &DottedId,
+    outcome: ManifoldClockSnapshotAuthorityReviewOutcome,
+) -> DottedId {
+    let suffix = match outcome {
+        ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotAccepted => "accepted",
+        ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotRejected => "rejected",
+    };
+    DottedId::new(format!(
+        "audit.clock_snapshot.{}.{}",
+        request_id.as_str(),
+        suffix
+    ))
+    .expect("derived clock snapshot audit event id is valid")
+}
+
+fn wall_unix_ms_u64(clock: &ManifoldClockSnapshot) -> u64 {
+    u64::try_from(clock.wall_unix_ms).unwrap_or_default()
+}
+
+fn lease_expired_at(lease: &ManifoldControlLease, clock: &ManifoldClockSnapshot) -> bool {
+    wall_unix_ms_u64(clock) >= lease.expires_at_ms
+}
+
+fn stream_subscription_expired_at(
+    subscription: &ManifoldStreamSubscription,
+    clock: &ManifoldClockSnapshot,
+) -> bool {
+    wall_unix_ms_u64(clock) >= subscription.expires_at_ms
+}
+
+fn module_runtime_transition_is_empty(transition: &ManifoldModuleRuntimeTransition) -> bool {
+    transition.lifecycle_change.is_none()
+        && transition.health_change.is_none()
+        && transition.backend_change.is_none()
+        && transition.activated_streams.is_empty()
+        && transition.deactivated_streams.is_empty()
+        && transition.activated_commands.is_empty()
+        && transition.deactivated_commands.is_empty()
+        && transition.added_issues.is_empty()
+        && transition.resolved_issues.is_empty()
+}
+
+fn duplicate_stream_id(streams: &[ManifoldStreamManifest]) -> Option<DottedId> {
+    streams.iter().enumerate().find_map(|(index, stream)| {
+        streams
+            .iter()
+            .skip(index + 1)
+            .any(|other| other.stream_id == stream.stream_id)
+            .then(|| stream.stream_id.clone())
+    })
+}
+
+fn duplicate_endpoint_id(endpoints: &[EndpointDescriptor]) -> Option<DottedId> {
+    endpoints.iter().enumerate().find_map(|(index, endpoint)| {
+        endpoints
+            .iter()
+            .skip(index + 1)
+            .any(|other| other.endpoint_id == endpoint.endpoint_id)
+            .then(|| endpoint.endpoint_id.clone())
+    })
+}
+
+fn duplicate_id(ids: &[DottedId]) -> Option<DottedId> {
+    ids.iter().enumerate().find_map(|(index, id)| {
+        ids.iter()
+            .skip(index + 1)
+            .any(|other| other == id)
+            .then(|| id.clone())
+    })
+}
+
+fn duplicate_subscription_id(subscriptions: &[ManifoldStreamSubscription]) -> Option<DottedId> {
+    subscriptions
+        .iter()
+        .enumerate()
+        .find_map(|(index, subscription)| {
+            subscriptions
+                .iter()
+                .skip(index + 1)
+                .any(|other| other.subscription_id == subscription.subscription_id)
+                .then(|| subscription.subscription_id.clone())
+        })
+}
+
+fn command_validation_retryable(kind: CommandValidationErrorKind) -> bool {
+    matches!(
+        kind,
+        CommandValidationErrorKind::StaleRevision
+            | CommandValidationErrorKind::MissingLease
+            | CommandValidationErrorKind::InactiveLease
+            | CommandValidationErrorKind::LeaseRevisionMismatch
+    )
+}
+
+fn authority_application_validation_retryable(kind: ManifoldAuthorityValidationErrorKind) -> bool {
+    matches!(
+        kind,
+        ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch
+            | ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch
+            | ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch
+            | ManifoldAuthorityValidationErrorKind::MissingEvidence
+            | ManifoldAuthorityValidationErrorKind::UnknownLease
+            | ManifoldAuthorityValidationErrorKind::InactiveLease
+            | ManifoldAuthorityValidationErrorKind::LeaseRevisionAhead
+            | ManifoldAuthorityValidationErrorKind::LeaseMismatch
+            | ManifoldAuthorityValidationErrorKind::UnknownSubscription
+    )
+}
+
+fn authority_error_kind_for_rejection_code(
+    rejection_code: &str,
+) -> ManifoldAuthorityValidationErrorKind {
+    match rejection_code {
+        "unknown_command" => ManifoldAuthorityValidationErrorKind::UnknownCommand,
+        "unknown_lease" => ManifoldAuthorityValidationErrorKind::UnknownLease,
+        "expired_lease" => ManifoldAuthorityValidationErrorKind::InactiveLease,
+        _ => ManifoldAuthorityValidationErrorKind::CommandValidationFailed,
+    }
+}
+
+fn authority_error_kind_for_lease_rejection_code(
+    rejection_code: &str,
+) -> ManifoldAuthorityValidationErrorKind {
+    match rejection_code {
+        "unsupported_schema" => ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+        "stale_revision" => ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+        "invalid_ttl" => ManifoldAuthorityValidationErrorKind::InvalidLeaseTtl,
+        "capability_not_advertised" => {
+            ManifoldAuthorityValidationErrorKind::CapabilityNotAdvertised
+        }
+        "lease_scope_busy" => ManifoldAuthorityValidationErrorKind::LeaseScopeBusy,
+        _ => ManifoldAuthorityValidationErrorKind::LeaseRequestValidationFailed,
+    }
+}
+
+fn authority_error_kind_for_lease_release_rejection_code(
+    rejection_code: &str,
+) -> ManifoldAuthorityValidationErrorKind {
+    match rejection_code {
+        "unsupported_schema" => ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+        "stale_revision" => ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+        "unknown_lease" => ManifoldAuthorityValidationErrorKind::UnknownLease,
+        "inactive_lease" | "expired_lease" => ManifoldAuthorityValidationErrorKind::InactiveLease,
+        "lease_holder_mismatch" | "lease_scope_mismatch" => {
+            ManifoldAuthorityValidationErrorKind::LeaseMismatch
+        }
+        _ => ManifoldAuthorityValidationErrorKind::LeaseRequestValidationFailed,
+    }
+}
+
+fn authority_error_kind_for_lease_renewal_rejection_code(
+    rejection_code: &str,
+) -> ManifoldAuthorityValidationErrorKind {
+    match rejection_code {
+        "unsupported_schema" => ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+        "stale_revision" => ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+        "unknown_lease" => ManifoldAuthorityValidationErrorKind::UnknownLease,
+        "inactive_lease" | "expired_lease" => ManifoldAuthorityValidationErrorKind::InactiveLease,
+        "invalid_ttl" => ManifoldAuthorityValidationErrorKind::InvalidLeaseTtl,
+        "lease_holder_mismatch" | "lease_scope_mismatch" | "non_extending_renewal" => {
+            ManifoldAuthorityValidationErrorKind::LeaseMismatch
+        }
+        _ => ManifoldAuthorityValidationErrorKind::LeaseRequestValidationFailed,
+    }
+}
+
+fn authority_error_kind_for_stream_registry_rejection_code(
+    rejection_code: &str,
+) -> ManifoldAuthorityValidationErrorKind {
+    match rejection_code {
+        "stale_revision" => ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+        "capability_not_advertised" => {
+            ManifoldAuthorityValidationErrorKind::CapabilityNotAdvertised
+        }
+        "missing_lease" | "lease_mismatch" => ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+        "unknown_lease" => ManifoldAuthorityValidationErrorKind::UnknownLease,
+        "inactive_lease" | "expired_lease" => ManifoldAuthorityValidationErrorKind::InactiveLease,
+        "lease_revision_ahead" => ManifoldAuthorityValidationErrorKind::LeaseRevisionAhead,
+        "registry_revision_mismatch" => {
+            ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch
+        }
+        "unknown_module_link"
+        | "unknown_transport_endpoint"
+        | "active_stream_conflict"
+        | "active_subscription_conflict"
+        | "stream_already_exists"
+        | "duplicate_stream"
+        | "empty_registry_diff"
+        | "unknown_stream" => ManifoldAuthorityValidationErrorKind::StreamRegistryValidationFailed,
+        "stream_diff_mismatch" => ManifoldAuthorityValidationErrorKind::StreamDiffMismatch,
+        _ => ManifoldAuthorityValidationErrorKind::StreamRegistryValidationFailed,
+    }
+}
+
+fn authority_error_kind_for_stream_subscription_rejection_code(
+    rejection_code: &str,
+) -> ManifoldAuthorityValidationErrorKind {
+    match rejection_code {
+        "unsupported_schema" => ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+        "stale_revision" => ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+        "registry_revision_mismatch" => {
+            ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch
+        }
+        "invalid_ttl" => ManifoldAuthorityValidationErrorKind::InvalidSubscriptionTtl,
+        "capability_not_advertised" => {
+            ManifoldAuthorityValidationErrorKind::CapabilityNotAdvertised
+        }
+        "unknown_stream" => ManifoldAuthorityValidationErrorKind::UnknownStream,
+        "subscription_not_allowed" => ManifoldAuthorityValidationErrorKind::SubscriptionNotAllowed,
+        "subscriber_limit_reached" => {
+            ManifoldAuthorityValidationErrorKind::SubscriptionLimitReached
+        }
+        "unknown_transport" | "unknown_transport_endpoint" => {
+            ManifoldAuthorityValidationErrorKind::UnknownTransport
+        }
+        _ => ManifoldAuthorityValidationErrorKind::StreamSubscriptionValidationFailed,
+    }
+}
+
+fn authority_error_kind_for_stream_subscription_release_rejection_code(
+    rejection_code: &str,
+) -> ManifoldAuthorityValidationErrorKind {
+    match rejection_code {
+        "unsupported_schema" => ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+        "stale_revision" => ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+        "registry_revision_mismatch" => {
+            ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch
+        }
+        "unknown_subscription" => ManifoldAuthorityValidationErrorKind::UnknownSubscription,
+        "inactive_subscription" | "expired_subscription" => {
+            ManifoldAuthorityValidationErrorKind::SubscriptionMismatch
+        }
+        "subscriber_mismatch" | "stream_mismatch" => {
+            ManifoldAuthorityValidationErrorKind::SubscriptionMismatch
+        }
+        _ => ManifoldAuthorityValidationErrorKind::StreamSubscriptionValidationFailed,
+    }
+}
+
+fn authority_error_kind_for_stream_subscription_renewal_rejection_code(
+    rejection_code: &str,
+) -> ManifoldAuthorityValidationErrorKind {
+    match rejection_code {
+        "unsupported_schema" => ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+        "stale_revision" => ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+        "registry_revision_mismatch" => {
+            ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch
+        }
+        "invalid_ttl" => ManifoldAuthorityValidationErrorKind::InvalidSubscriptionTtl,
+        "unknown_subscription" => ManifoldAuthorityValidationErrorKind::UnknownSubscription,
+        "inactive_subscription"
+        | "expired_subscription"
+        | "subscriber_mismatch"
+        | "stream_mismatch"
+        | "transport_mismatch"
+        | "non_extending_renewal" => ManifoldAuthorityValidationErrorKind::SubscriptionMismatch,
+        _ => ManifoldAuthorityValidationErrorKind::StreamSubscriptionValidationFailed,
+    }
+}
+
+fn authority_error_kind_for_expiry_sweep_rejection_code(
+    rejection_code: &str,
+) -> ManifoldAuthorityValidationErrorKind {
+    match rejection_code {
+        "unsupported_schema" => ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+        "stale_revision" => ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+        "registry_revision_mismatch" => {
+            ManifoldAuthorityValidationErrorKind::RegistryRevisionMismatch
+        }
+        "no_expired_state" => ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+        _ => ManifoldAuthorityValidationErrorKind::RejectionMismatch,
+    }
+}
+
+fn authority_error_kind_for_module_runtime_rejection_code(
+    rejection_code: &str,
+) -> ManifoldAuthorityValidationErrorKind {
+    match rejection_code {
+        "unsupported_schema" => ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+        "stale_revision" => ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+        "capability_not_advertised" => {
+            ManifoldAuthorityValidationErrorKind::CapabilityNotAdvertised
+        }
+        "missing_lease" | "lease_mismatch" => ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+        "unknown_lease" => ManifoldAuthorityValidationErrorKind::UnknownLease,
+        "inactive_lease" | "expired_lease" => ManifoldAuthorityValidationErrorKind::InactiveLease,
+        "lease_revision_ahead" => ManifoldAuthorityValidationErrorKind::LeaseRevisionAhead,
+        "unknown_module" => ManifoldAuthorityValidationErrorKind::UnknownModule,
+        "module_id_mismatch" => ManifoldAuthorityValidationErrorKind::ModuleIdMismatch,
+        "runtime_revision_mismatch" => {
+            ManifoldAuthorityValidationErrorKind::RuntimeRevisionMismatch
+        }
+        "unknown_stream" => ManifoldAuthorityValidationErrorKind::UnknownModuleStream,
+        "unknown_command" => ManifoldAuthorityValidationErrorKind::UnknownModuleCommand,
+        _ => ManifoldAuthorityValidationErrorKind::ModuleRuntimeValidationFailed,
+    }
+}
+
+fn authority_error_kind_for_host_manifest_rejection_code(
+    rejection_code: &str,
+) -> ManifoldAuthorityValidationErrorKind {
+    match rejection_code {
+        "unsupported_schema" => ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+        "stale_revision" => ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+        "capability_not_advertised" => {
+            ManifoldAuthorityValidationErrorKind::CapabilityNotAdvertised
+        }
+        "missing_lease" | "lease_mismatch" => ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+        "unknown_lease" => ManifoldAuthorityValidationErrorKind::UnknownLease,
+        "inactive_lease" | "expired_lease" => ManifoldAuthorityValidationErrorKind::InactiveLease,
+        "lease_revision_ahead" => ManifoldAuthorityValidationErrorKind::LeaseRevisionAhead,
+        "host_id_mismatch" => ManifoldAuthorityValidationErrorKind::HostIdMismatch,
+        "missing_authority_role" => ManifoldAuthorityValidationErrorKind::HostHasNoAuthority,
+        "clock_domain_mismatch" => ManifoldAuthorityValidationErrorKind::ClockDomainMismatch,
+        "endpoint_security_mismatch" => {
+            ManifoldAuthorityValidationErrorKind::HostEndpointSecurityMismatch
+        }
+        "endpoint_in_use" => ManifoldAuthorityValidationErrorKind::HostEndpointInUse,
+        "capability_in_use" => ManifoldAuthorityValidationErrorKind::HostCapabilityInUse,
+        "backend_in_use" => ManifoldAuthorityValidationErrorKind::HostBackendInUse,
+        _ => ManifoldAuthorityValidationErrorKind::HostManifestValidationFailed,
+    }
+}
+
+fn authority_error_kind_for_clock_snapshot_rejection_code(
+    rejection_code: &str,
+) -> ManifoldAuthorityValidationErrorKind {
+    match rejection_code {
+        "unsupported_schema" => ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+        "stale_revision" => ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+        "capability_not_advertised" => {
+            ManifoldAuthorityValidationErrorKind::CapabilityNotAdvertised
+        }
+        "missing_lease" | "lease_mismatch" => ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+        "unknown_lease" => ManifoldAuthorityValidationErrorKind::UnknownLease,
+        "inactive_lease" => ManifoldAuthorityValidationErrorKind::InactiveLease,
+        "lease_revision_ahead" => ManifoldAuthorityValidationErrorKind::LeaseRevisionAhead,
+        "clock_domain_mismatch" => ManifoldAuthorityValidationErrorKind::ClockDomainMismatch,
+        _ => ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
     }
 }
 
@@ -2835,6 +16879,304 @@ mod tests {
         }
     }
 
+    fn active_registry_lease() -> ManifoldControlLease {
+        ManifoldControlLease {
+            schema_id: schema("rusty.manifold.command.control_lease.v1"),
+            lease_id: id("lease.synthetic_stream_registry"),
+            holder_id: id("holder.test_agent"),
+            scope: id("manifold.stream_registry"),
+            state: LeaseState::Active,
+            granted_revision: Revision::INITIAL,
+            expires_at_ms: 1_765_000_030_000,
+            required_capability: id("manifold.stream_registry.update"),
+        }
+    }
+
+    fn active_host_manifest_lease() -> ManifoldControlLease {
+        ManifoldControlLease {
+            schema_id: schema("rusty.manifold.command.control_lease.v1"),
+            lease_id: id("lease.synthetic_host_manifest"),
+            holder_id: id("holder.test_agent"),
+            scope: id("manifold.host_manifest"),
+            state: LeaseState::Active,
+            granted_revision: Revision::INITIAL,
+            expires_at_ms: 1_765_000_030_000,
+            required_capability: id("manifold.host_manifest.update"),
+        }
+    }
+
+    fn active_clock_lease() -> ManifoldControlLease {
+        ManifoldControlLease {
+            schema_id: schema("rusty.manifold.command.control_lease.v1"),
+            lease_id: id("lease.synthetic_clock"),
+            holder_id: id("holder.test_agent"),
+            scope: id("manifold.clock"),
+            state: LeaseState::Active,
+            granted_revision: Revision::INITIAL,
+            expires_at_ms: 1_765_000_030_000,
+            required_capability: id("manifold.clock.update"),
+        }
+    }
+
+    fn synthetic_stream(max_subscribers: u32) -> ManifoldStreamManifest {
+        ManifoldStreamManifest {
+            schema_id: schema("rusty.manifold.stream.manifest.v1"),
+            stream_id: id("stream.synthetic_wave"),
+            source_module_id: id("module.synthetic_wave_provider"),
+            semantic_family: id("synthetic.scalar"),
+            sample_schema: schema("rusty.manifold.sample.scalar_f32.v1"),
+            rate_class: StreamRateClass::Periodic,
+            timestamp_domains: vec![id("clock.host_monotonic")],
+            retention: RetentionPolicyDescriptor {
+                policy: RetentionPolicy::Ephemeral,
+            },
+            sensitivity: SensitivityLevel::Synthetic,
+            transport_offers: vec![TransportOffer {
+                transport_id: id("transport.in_process"),
+                transport: EndpointTransport::InProcess,
+                endpoint_id: None,
+            }],
+            subscription: SubscriptionPolicy {
+                ui_subscribable: true,
+                max_subscribers: Some(max_subscribers),
+            },
+        }
+    }
+
+    fn clock_snapshot(sequence: u64) -> ManifoldClockSnapshot {
+        ManifoldClockSnapshot {
+            schema_id: schema("rusty.manifold.clock.snapshot.v1"),
+            clock_domain: id("clock.host_monotonic"),
+            clock_epoch_id: id("clock_epoch.synthetic_1"),
+            sequence,
+            monotonic_elapsed_ns: 1_234_567_890,
+            wall_unix_ms: 1_765_000_000_000,
+            read_uncertainty_ns: 250_000,
+            health: ClockHealth::Healthy,
+            wall_clock_adjustment_count: 0,
+        }
+    }
+
+    fn next_clock_snapshot() -> ManifoldClockSnapshot {
+        ManifoldClockSnapshot {
+            schema_id: schema("rusty.manifold.clock.snapshot.v1"),
+            clock_domain: id("clock.host_monotonic"),
+            clock_epoch_id: id("clock_epoch.synthetic_1"),
+            sequence: 43,
+            monotonic_elapsed_ns: 1_234_567_990,
+            wall_unix_ms: 1_765_000_000_100,
+            read_uncertainty_ns: 250_000,
+            health: ClockHealth::Degraded,
+            wall_clock_adjustment_count: 0,
+        }
+    }
+
+    fn authority_snapshot() -> ManifoldAuthoritySnapshot {
+        ManifoldAuthoritySnapshot {
+            schema_id: schema("rusty.manifold.authority.snapshot.v1"),
+            authority_id: id("authority.synthetic"),
+            authority_revision: Revision::INITIAL,
+            host_manifest: ManifoldHostManifest {
+                schema_id: schema("rusty.manifold.host.manifest.v1"),
+                host_id: id("host.synthetic"),
+                authority_role: AuthorityRole::Primary,
+                host_category: Some(id("host.synthetic")),
+                clock_domain: id("clock.host_monotonic"),
+                endpoints: Vec::new(),
+                capabilities: vec![
+                    id("manifold.module.control"),
+                    id("manifold.graph.run"),
+                    id("manifold.host_manifest.update"),
+                    id("manifold.clock.update"),
+                ],
+                supported_backends: vec![id("backend.synthetic")],
+                permissions: Vec::new(),
+                lifecycle_limits: Vec::new(),
+                missing_requirements: Vec::new(),
+            },
+            clock_snapshot: clock_snapshot(42),
+            stream_registry: ManifoldStreamRegistrySnapshot {
+                schema_id: schema("rusty.manifold.stream.registry_snapshot.v1"),
+                registry_revision: Revision::INITIAL,
+                streams: Vec::new(),
+            },
+            module_runtime_states: vec![ManifoldModuleRuntimeState {
+                schema_id: schema("rusty.manifold.module.runtime_state.v1"),
+                module_id: id("module.synthetic_wave_provider"),
+                runtime_revision: Revision::INITIAL,
+                lifecycle: ModuleLifecycleState::Running,
+                health: HealthLevel::Healthy,
+                selected_backend: Some(id("backend.synthetic")),
+                active_streams: Vec::new(),
+                active_commands: vec![id("command.module.start")],
+                issues: Vec::new(),
+            }],
+            command_ids: vec![id("command.module.start")],
+            command_descriptors: vec![command_descriptor()],
+            active_leases: vec![
+                active_lease(),
+                active_host_manifest_lease(),
+                active_clock_lease(),
+            ],
+            active_stream_subscriptions: Vec::new(),
+        }
+    }
+
+    fn stream_authority_snapshot() -> ManifoldAuthoritySnapshot {
+        let mut snapshot = authority_snapshot();
+        snapshot
+            .host_manifest
+            .capabilities
+            .push(id("manifold.stream_registry.update"));
+        snapshot
+            .host_manifest
+            .capabilities
+            .push(id("manifold.stream.subscribe"));
+        snapshot.stream_registry = ManifoldStreamRegistrySnapshot {
+            schema_id: schema("rusty.manifold.stream.registry_snapshot.v1"),
+            registry_revision: Revision::INITIAL,
+            streams: vec![synthetic_stream(8)],
+        };
+        snapshot.module_runtime_states[0].active_streams = vec![id("stream.synthetic_wave")];
+        snapshot.active_leases.push(active_registry_lease());
+        snapshot
+    }
+
+    fn accepted_command_audit_event() -> ManifoldCommandAuthorityAuditEvent {
+        ManifoldCommandAuthorityAuditEvent {
+            schema_id: schema("rusty.manifold.authority.command_audit_event.v1"),
+            event_id: id("audit.command.start.synthetic_wave.accepted"),
+            authority_id: id("authority.synthetic"),
+            prior_authority_revision: Revision::INITIAL,
+            event_kind: ManifoldCommandAuthorityAuditEventKind::CommandAccepted,
+            envelope: command_envelope(),
+            accepted: Some(ManifoldCommandAck {
+                schema_id: schema("rusty.manifold.command.ack.v1"),
+                request_id: id("request.start.synthetic_wave"),
+                accepted_revision: Revision::new(2).unwrap(),
+                lease_id: Some(id("lease.synthetic_module")),
+                authority_id: id("authority.synthetic"),
+                accepted_at_ms: 1_765_000_000_100,
+            }),
+            rejection: None,
+            lease: Some(active_lease()),
+            recorded_clock: clock_snapshot(43),
+            evidence_refs: vec![id("evidence.command.start.synthetic_wave")],
+        }
+    }
+
+    fn command_review_clock() -> ManifoldClockSnapshot {
+        clock_snapshot(43)
+    }
+
+    fn lease_request() -> ManifoldControlLeaseRequest {
+        ManifoldControlLeaseRequest {
+            schema_id: schema("rusty.manifold.command.lease_request.v1"),
+            request_id: id("request.synthetic_lease_1"),
+            holder_id: id("holder.test_agent"),
+            scope: id("manifold.graph"),
+            expected_revision: Revision::INITIAL,
+            requested_ttl_ms: 30_000,
+            required_capability: id("manifold.graph.run"),
+            safety_class: SafetyClass::BoundedMutation,
+        }
+    }
+
+    fn stream_registry_change_request() -> ManifoldStreamRegistryChangeRequest {
+        ManifoldStreamRegistryChangeRequest {
+            schema_id: schema("rusty.manifold.stream.registry_change_request.v1"),
+            request_id: id("request.stream_registry.synthetic_wave_subscription"),
+            holder_id: id("holder.test_agent"),
+            expected_authority_revision: Revision::INITIAL,
+            lease_id: Some(id("lease.synthetic_stream_registry")),
+            required_capability: id("manifold.stream_registry.update"),
+            diff: ManifoldStreamRegistryDiff {
+                schema_id: schema("rusty.manifold.stream.registry_diff.v1"),
+                from_revision: Revision::INITIAL,
+                to_revision: Revision::new(2).unwrap(),
+                added_streams: Vec::new(),
+                removed_streams: Vec::new(),
+                changed_streams: vec![ManifoldStreamChange {
+                    stream_id: id("stream.synthetic_wave"),
+                    before: synthetic_stream(8),
+                    after: synthetic_stream(4),
+                }],
+            },
+        }
+    }
+
+    fn stream_subscription_request() -> ManifoldStreamSubscriptionRequest {
+        ManifoldStreamSubscriptionRequest {
+            schema_id: schema("rusty.manifold.stream.subscription_request.v1"),
+            request_id: id("request.stream_subscription.synthetic_wave_ui"),
+            subscriber_id: id("subscriber.ui.synthetic_dashboard"),
+            subscriber_kind: ManifoldStreamSubscriberKind::Ui,
+            expected_authority_revision: Revision::INITIAL,
+            expected_registry_revision: Revision::INITIAL,
+            stream_id: id("stream.synthetic_wave"),
+            transport_id: id("transport.in_process"),
+            requested_ttl_ms: 30_000,
+            required_capability: id("manifold.stream.subscribe"),
+            requested_at_ms: 1_765_000_000_000,
+        }
+    }
+
+    fn module_runtime_state_change_request() -> ManifoldModuleRuntimeStateChangeRequest {
+        ManifoldModuleRuntimeStateChangeRequest {
+            schema_id: schema("rusty.manifold.module.runtime_state_change_request.v1"),
+            request_id: id("request.module_runtime.stop.synthetic_wave_provider"),
+            holder_id: id("holder.test_agent"),
+            expected_authority_revision: Revision::INITIAL,
+            lease_id: Some(id("lease.synthetic_module")),
+            required_capability: id("manifold.module.control"),
+            module_id: id("module.synthetic_wave_provider"),
+            from_runtime_revision: Revision::INITIAL,
+            proposed_state: ManifoldModuleRuntimeState {
+                schema_id: schema("rusty.manifold.module.runtime_state.v1"),
+                module_id: id("module.synthetic_wave_provider"),
+                runtime_revision: Revision::new(2).unwrap(),
+                lifecycle: ModuleLifecycleState::Stopped,
+                health: HealthLevel::Healthy,
+                selected_backend: Some(id("backend.synthetic")),
+                active_streams: Vec::new(),
+                active_commands: vec![id("command.module.start")],
+                issues: vec![ManifoldIssue {
+                    issue_code: id("issue.synthetic_stopped"),
+                    severity: IssueSeverity::Info,
+                    message: "Synthetic provider stopped cleanly.".to_owned(),
+                }],
+            },
+        }
+    }
+
+    fn host_manifest_change_request() -> ManifoldHostManifestChangeRequest {
+        let mut proposed_manifest = authority_snapshot().host_manifest;
+        proposed_manifest.permissions = vec![id("permission.synthetic_diagnostics")];
+        ManifoldHostManifestChangeRequest {
+            schema_id: schema("rusty.manifold.host.manifest_change_request.v1"),
+            request_id: id("request.host_manifest.synthetic_permissions"),
+            holder_id: id("holder.test_agent"),
+            expected_authority_revision: Revision::INITIAL,
+            lease_id: Some(id("lease.synthetic_host_manifest")),
+            required_capability: id("manifold.host_manifest.update"),
+            proposed_manifest,
+        }
+    }
+
+    fn clock_snapshot_change_request() -> ManifoldClockSnapshotChangeRequest {
+        ManifoldClockSnapshotChangeRequest {
+            schema_id: schema("rusty.manifold.clock.snapshot_change_request.v1"),
+            request_id: id("request.clock.synthetic_tick"),
+            holder_id: id("holder.test_agent"),
+            expected_authority_revision: Revision::INITIAL,
+            lease_id: Some(id("lease.synthetic_clock")),
+            required_capability: id("manifold.clock.update"),
+            from_clock_epoch_id: id("clock_epoch.synthetic_1"),
+            from_clock_sequence: 42,
+            proposed_snapshot: next_clock_snapshot(),
+        }
+    }
+
     #[test]
     fn command_envelope_accepts_matching_descriptor_revision_and_lease() {
         let result = command_envelope().validate_request(
@@ -2869,6 +17211,1319 @@ mod tests {
 
         assert_eq!(error.kind(), CommandValidationErrorKind::MissingLease);
         assert_eq!(error.rejection_code(), "missing_lease");
+    }
+
+    #[test]
+    fn authority_snapshot_validates_command_stream_host_clock_and_leases() {
+        let snapshot = authority_snapshot();
+
+        assert_eq!(snapshot.validate_authority_links(), Ok(()));
+    }
+
+    #[test]
+    fn command_authority_audit_event_validates_accepted_command() {
+        let snapshot = authority_snapshot();
+        let event = accepted_command_audit_event();
+
+        assert_eq!(event.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn command_authority_review_accepts_valid_command() {
+        let snapshot = authority_snapshot();
+        let envelope = command_envelope();
+        let review = snapshot
+            .review_command(
+                envelope,
+                command_review_clock(),
+                vec![id(
+                    "evidence.command_authority.request.start.synthetic_wave",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldCommandAuthorityReviewOutcome::CommandAccepted
+        );
+        assert!(review.accepted.is_some());
+        assert!(review.rejection.is_none());
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn command_authority_audit_event_rejects_skipped_acceptance_revision() {
+        let snapshot = authority_snapshot();
+        let mut event = accepted_command_audit_event();
+        event
+            .accepted
+            .as_mut()
+            .expect("accepted fixture is present")
+            .accepted_revision = Revision::new(3).unwrap();
+
+        let error = event.validate_against_snapshot(&snapshot).unwrap_err();
+
+        assert_eq!(error.rejection_code(), "acceptance_revision_mismatch");
+    }
+
+    #[test]
+    fn command_dispatch_receipt_prepares_accepted_review() {
+        let snapshot = authority_snapshot();
+        let review = snapshot
+            .review_command(
+                command_envelope(),
+                command_review_clock(),
+                vec![id(
+                    "evidence.command_authority.request.start.synthetic_wave",
+                )],
+            )
+            .unwrap();
+        let receipt = snapshot.prepare_command_dispatch(review.clone()).unwrap();
+
+        assert_eq!(
+            receipt.outcome,
+            ManifoldCommandDispatchReceiptOutcome::CommandDispatchReady
+        );
+        assert_eq!(receipt.ack, review.accepted);
+        assert!(receipt.rejection.is_none());
+        assert_eq!(receipt.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn command_authority_audit_event_rejects_unknown_command() {
+        let snapshot = authority_snapshot();
+        let mut event = accepted_command_audit_event();
+        event.envelope.command_id = id("command.module.not_registered");
+
+        let error = event.validate_against_snapshot(&snapshot).unwrap_err();
+
+        assert_eq!(error.rejection_code(), "unknown_command");
+    }
+
+    #[test]
+    fn command_authority_review_rejects_missing_lease() {
+        let snapshot = authority_snapshot();
+        let mut envelope = command_envelope();
+        envelope.request_id = id("request.missing_lease.synthetic_wave");
+        envelope.lease_id = None;
+        let review = snapshot
+            .review_command(
+                envelope,
+                command_review_clock(),
+                vec![id(
+                    "evidence.command_authority.request.missing_lease.synthetic_wave",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldCommandAuthorityReviewOutcome::CommandRejected
+        );
+        assert_eq!(
+            review.rejection.as_ref().unwrap().rejection_code.as_str(),
+            "missing_lease"
+        );
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn command_dispatch_receipt_rejects_rejected_review() {
+        let snapshot = authority_snapshot();
+        let mut envelope = command_envelope();
+        envelope.request_id = id("request.missing_lease.synthetic_wave");
+        envelope.lease_id = None;
+        let review = snapshot
+            .review_command(
+                envelope,
+                command_review_clock(),
+                vec![id(
+                    "evidence.command_authority.request.missing_lease.synthetic_wave",
+                )],
+            )
+            .unwrap();
+        let receipt = snapshot.prepare_command_dispatch(review).unwrap();
+
+        assert_eq!(
+            receipt.outcome,
+            ManifoldCommandDispatchReceiptOutcome::CommandDispatchRejected
+        );
+        assert!(receipt.ack.is_none());
+        assert_eq!(
+            receipt
+                .rejection
+                .as_ref()
+                .expect("dispatch rejection is present")
+                .rejection_code
+                .as_str(),
+            "review_rejected"
+        );
+        assert_eq!(receipt.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn lease_authority_review_accepts_available_scope() {
+        let snapshot = authority_snapshot();
+        let request = lease_request();
+        let review = snapshot
+            .review_lease_request(
+                request,
+                command_review_clock(),
+                vec![id("evidence.lease_authority.request.synthetic_lease_1")],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldControlLeaseAuthorityReviewOutcome::LeaseAccepted
+        );
+        assert!(review.accepted.is_some());
+        assert!(review.rejection.is_none());
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn lease_authority_application_advances_snapshot() {
+        let snapshot = authority_snapshot();
+        let review = snapshot
+            .review_lease_request(
+                lease_request(),
+                command_review_clock(),
+                vec![id("evidence.lease_authority.request.synthetic_lease_1")],
+            )
+            .unwrap();
+        let application = snapshot
+            .apply_control_lease_authority_review(review)
+            .unwrap();
+
+        assert_eq!(
+            application.outcome,
+            ManifoldControlLeaseAuthorityApplicationOutcome::LeaseApplied
+        );
+        assert!(application.rejection.is_none());
+        let applied = application.applied_snapshot.as_ref().unwrap();
+        assert_eq!(applied.authority_revision, Revision::new(2).unwrap());
+        assert_eq!(
+            applied.active_leases.len(),
+            snapshot.active_leases.len() + 1
+        );
+        let accepted_lease = applied.active_leases.last().unwrap();
+        assert_eq!(accepted_lease.lease_id.as_str(), "lease.synthetic_lease_1");
+        assert_eq!(accepted_lease.scope.as_str(), "manifold.graph");
+        assert_eq!(accepted_lease.granted_revision, Revision::INITIAL);
+        assert_eq!(application.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn lease_authority_application_rejects_rejected_review() {
+        let snapshot = authority_snapshot();
+        let mut request = lease_request();
+        request.request_id = id("request.lease.stale_graph");
+        request.expected_revision = Revision::new(2).unwrap();
+        let review = snapshot
+            .review_lease_request(
+                request,
+                command_review_clock(),
+                vec![id("evidence.lease_authority.request.lease.stale_graph")],
+            )
+            .unwrap();
+        let application = snapshot
+            .apply_control_lease_authority_review(review)
+            .unwrap();
+
+        assert_eq!(
+            application.outcome,
+            ManifoldControlLeaseAuthorityApplicationOutcome::LeaseApplicationRejected
+        );
+        assert!(application.applied_snapshot.is_none());
+        assert_eq!(
+            application
+                .rejection
+                .as_ref()
+                .unwrap()
+                .rejection_code
+                .as_str(),
+            "review_rejected"
+        );
+        assert_eq!(application.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn lease_release_authority_application_removes_active_lease() {
+        let snapshot = authority_snapshot();
+        let lease_review = snapshot
+            .review_lease_request(
+                lease_request(),
+                command_review_clock(),
+                vec![id("evidence.lease_authority.request.synthetic_lease_1")],
+            )
+            .unwrap();
+        let lease_application = snapshot
+            .apply_control_lease_authority_review(lease_review)
+            .unwrap();
+        let active_snapshot = lease_application.applied_snapshot.unwrap();
+        let lease = active_snapshot.active_leases.last().unwrap().clone();
+        let release_request = ManifoldControlLeaseReleaseRequest {
+            schema_id: control_lease_release_request_schema_id(),
+            request_id: id("request.lease_release.synthetic_lease_1"),
+            lease_id: lease.lease_id.clone(),
+            holder_id: lease.holder_id.clone(),
+            expected_authority_revision: active_snapshot.authority_revision,
+            scope: lease.scope.clone(),
+            release_reason: id("holder.done"),
+            requested_at_ms: 1_765_000_000_200,
+        };
+        let release_review = active_snapshot
+            .review_control_lease_release(
+                release_request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.lease_release_authority.request.synthetic_lease_1",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            release_review.outcome,
+            ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleased
+        );
+        assert_eq!(release_review.released.as_ref(), Some(&lease));
+        assert_eq!(
+            release_review.validate_against_snapshot(&active_snapshot),
+            Ok(())
+        );
+
+        let release_application = active_snapshot
+            .apply_control_lease_release_authority_review(release_review)
+            .unwrap();
+
+        assert_eq!(
+            release_application.outcome,
+            ManifoldControlLeaseReleaseAuthorityApplicationOutcome::LeaseReleaseApplied
+        );
+        assert!(release_application.rejection.is_none());
+        let applied = release_application.applied_snapshot.as_ref().unwrap();
+        assert_eq!(applied.authority_revision, Revision::new(3).unwrap());
+        assert_eq!(
+            applied.active_leases.len(),
+            active_snapshot.active_leases.len() - 1
+        );
+        assert!(!applied
+            .active_leases
+            .iter()
+            .any(|active| active.lease_id == lease.lease_id));
+        assert_eq!(
+            release_application.validate_against_snapshot(&active_snapshot),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn lease_renewal_authority_application_replaces_active_lease() {
+        let snapshot = authority_snapshot();
+        let lease_review = snapshot
+            .review_lease_request(
+                lease_request(),
+                command_review_clock(),
+                vec![id("evidence.lease_authority.request.synthetic_lease_1")],
+            )
+            .unwrap();
+        let lease_application = snapshot
+            .apply_control_lease_authority_review(lease_review)
+            .unwrap();
+        let active_snapshot = lease_application.applied_snapshot.unwrap();
+        let lease = active_snapshot.active_leases.last().unwrap().clone();
+        let old_expires_at_ms = lease.expires_at_ms;
+        let renewal_request = ManifoldControlLeaseRenewalRequest {
+            schema_id: control_lease_renewal_request_schema_id(),
+            request_id: id("request.lease_renewal.synthetic_lease_1"),
+            lease_id: lease.lease_id.clone(),
+            holder_id: lease.holder_id.clone(),
+            expected_authority_revision: active_snapshot.authority_revision,
+            scope: lease.scope.clone(),
+            requested_ttl_ms: 60_000,
+            renewal_reason: id("holder.needs_more_time"),
+            requested_at_ms: 1_765_000_000_200,
+        };
+        let renewal_review = active_snapshot
+            .review_control_lease_renewal(
+                renewal_request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.lease_renewal_authority.request.synthetic_lease_1",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            renewal_review.outcome,
+            ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewed
+        );
+        let renewed = renewal_review.renewed.as_ref().unwrap();
+        assert_eq!(renewed.lease_id, lease.lease_id);
+        assert!(renewed.expires_at_ms > old_expires_at_ms);
+        assert_eq!(
+            renewal_review.validate_against_snapshot(&active_snapshot),
+            Ok(())
+        );
+
+        let renewal_application = active_snapshot
+            .apply_control_lease_renewal_authority_review(renewal_review)
+            .unwrap();
+
+        assert_eq!(
+            renewal_application.outcome,
+            ManifoldControlLeaseRenewalAuthorityApplicationOutcome::LeaseRenewalApplied
+        );
+        assert!(renewal_application.rejection.is_none());
+        let applied = renewal_application.applied_snapshot.as_ref().unwrap();
+        assert_eq!(applied.authority_revision, Revision::new(3).unwrap());
+        assert_eq!(
+            applied.active_leases.len(),
+            active_snapshot.active_leases.len()
+        );
+        let renewed_lease = applied
+            .active_leases
+            .iter()
+            .find(|active| active.lease_id == lease.lease_id)
+            .unwrap();
+        assert!(renewed_lease.expires_at_ms > old_expires_at_ms);
+        assert_eq!(renewed_lease.granted_revision, Revision::new(2).unwrap());
+        assert_eq!(
+            renewal_application.validate_against_snapshot(&active_snapshot),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn lease_authority_review_rejects_busy_scope() {
+        let snapshot = authority_snapshot();
+        let mut request = lease_request();
+        request.request_id = id("request.lease.busy_module");
+        request.holder_id = id("holder.other_agent");
+        request.scope = id("module.synthetic_wave_provider");
+        request.required_capability = id("manifold.module.control");
+        let review = snapshot
+            .review_lease_request(
+                request,
+                command_review_clock(),
+                vec![id("evidence.lease_authority.request.lease.busy_module")],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldControlLeaseAuthorityReviewOutcome::LeaseRejected
+        );
+        assert_eq!(
+            review.rejection.as_ref().unwrap().rejection_code.as_str(),
+            "lease_scope_busy"
+        );
+        assert_eq!(
+            review
+                .rejection
+                .as_ref()
+                .unwrap()
+                .conflicting_lease_id
+                .as_ref()
+                .unwrap()
+                .as_str(),
+            "lease.synthetic_module"
+        );
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn stream_registry_authority_review_accepts_metadata_change() {
+        let snapshot = stream_authority_snapshot();
+        let request = stream_registry_change_request();
+        let review = snapshot
+            .review_stream_registry_change(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.stream_registry_authority.request.synthetic_wave_subscription",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldStreamRegistryAuthorityReviewOutcome::RegistryAccepted
+        );
+        assert_eq!(
+            review
+                .accepted
+                .as_ref()
+                .unwrap()
+                .streams
+                .first()
+                .unwrap()
+                .subscription
+                .max_subscribers,
+            Some(4)
+        );
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn stream_registry_authority_review_rejects_active_stream_removal() {
+        let snapshot = stream_authority_snapshot();
+        let mut request = stream_registry_change_request();
+        request.request_id = id("request.stream_registry.remove_active_wave");
+        request.diff.changed_streams.clear();
+        request.diff.removed_streams = vec![synthetic_stream(8)];
+        let review = snapshot
+            .review_stream_registry_change(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.stream_registry_authority.request.remove_active_wave",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldStreamRegistryAuthorityReviewOutcome::RegistryRejected
+        );
+        assert_eq!(
+            review.rejection.as_ref().unwrap().rejection_code.as_str(),
+            "active_stream_conflict"
+        );
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn stream_registry_authority_application_advances_snapshot() {
+        let snapshot = stream_authority_snapshot();
+        let review = snapshot
+            .review_stream_registry_change(
+                stream_registry_change_request(),
+                command_review_clock(),
+                vec![id(
+                    "evidence.stream_registry_authority.request.synthetic_wave_subscription",
+                )],
+            )
+            .unwrap();
+        let application = snapshot
+            .apply_stream_registry_authority_review(review)
+            .unwrap();
+
+        assert_eq!(
+            application.outcome,
+            ManifoldStreamRegistryAuthorityApplicationOutcome::RegistrySnapshotApplied
+        );
+        assert!(application.rejection.is_none());
+        let applied = application.applied_snapshot.as_ref().unwrap();
+        assert_eq!(applied.authority_revision, Revision::new(2).unwrap());
+        assert_eq!(
+            applied.stream_registry.registry_revision,
+            Revision::new(2).unwrap()
+        );
+        assert_eq!(
+            applied.stream_registry.streams[0]
+                .subscription
+                .max_subscribers,
+            Some(4)
+        );
+        assert_eq!(application.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn stream_registry_authority_application_rejects_rejected_review() {
+        let snapshot = stream_authority_snapshot();
+        let mut request = stream_registry_change_request();
+        request.request_id = id("request.stream_registry.stale_revision");
+        request.expected_authority_revision = Revision::new(2).unwrap();
+        let review = snapshot
+            .review_stream_registry_change(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.stream_registry_authority.request.stale_revision",
+                )],
+            )
+            .unwrap();
+        let application = snapshot
+            .apply_stream_registry_authority_review(review)
+            .unwrap();
+
+        assert_eq!(
+            application.outcome,
+            ManifoldStreamRegistryAuthorityApplicationOutcome::RegistryApplicationRejected
+        );
+        assert!(application.applied_snapshot.is_none());
+        assert_eq!(
+            application
+                .rejection
+                .as_ref()
+                .unwrap()
+                .rejection_code
+                .as_str(),
+            "review_rejected"
+        );
+        assert_eq!(application.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn stream_subscription_authority_review_accepts_ui_subscriber() {
+        let snapshot = stream_authority_snapshot();
+        let request = stream_subscription_request();
+        let review = snapshot
+            .review_stream_subscription(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.stream_subscription_authority.request.synthetic_wave_ui",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionAccepted
+        );
+        let accepted = review.accepted.as_ref().unwrap();
+        assert_eq!(accepted.stream_id, id("stream.synthetic_wave"));
+        assert_eq!(accepted.transport_id, id("transport.in_process"));
+        assert_eq!(accepted.accepted_authority_revision, Revision::INITIAL);
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn stream_subscription_authority_review_rejects_stale_registry() {
+        let snapshot = stream_authority_snapshot();
+        let mut request = stream_subscription_request();
+        request.request_id = id("request.stream_subscription.stale_registry");
+        request.expected_registry_revision = Revision::new(2).unwrap();
+        let review = snapshot
+            .review_stream_subscription(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.stream_subscription_authority.request.stale_registry",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionRejected
+        );
+        assert_eq!(
+            review.rejection.as_ref().unwrap().rejection_code.as_str(),
+            "registry_revision_mismatch"
+        );
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn stream_subscription_authority_review_rejects_subscriber_limit() {
+        let mut snapshot = stream_authority_snapshot();
+        snapshot.stream_registry.streams[0]
+            .subscription
+            .max_subscribers = Some(1);
+        let review = snapshot
+            .review_stream_subscription(
+                stream_subscription_request(),
+                command_review_clock(),
+                vec![id(
+                    "evidence.stream_subscription_authority.request.synthetic_wave_ui",
+                )],
+            )
+            .unwrap();
+        let first_subscription = review.accepted.clone().unwrap();
+        snapshot
+            .active_stream_subscriptions
+            .push(first_subscription);
+        let mut second_request = stream_subscription_request();
+        second_request.request_id = id("request.stream_subscription.second_ui");
+        second_request.subscriber_id = id("subscriber.ui.second_dashboard");
+        let review = snapshot
+            .review_stream_subscription(
+                second_request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.stream_subscription_authority.request.second_ui",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionRejected
+        );
+        assert_eq!(
+            review.rejection.as_ref().unwrap().rejection_code.as_str(),
+            "subscriber_limit_reached"
+        );
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn stream_subscription_authority_application_appends_subscription() {
+        let snapshot = stream_authority_snapshot();
+        let review = snapshot
+            .review_stream_subscription(
+                stream_subscription_request(),
+                command_review_clock(),
+                vec![id(
+                    "evidence.stream_subscription_authority.request.synthetic_wave_ui",
+                )],
+            )
+            .unwrap();
+        let application = snapshot
+            .apply_stream_subscription_authority_review(review)
+            .unwrap();
+
+        assert_eq!(
+            application.outcome,
+            ManifoldStreamSubscriptionAuthorityApplicationOutcome::SubscriptionApplied
+        );
+        assert!(application.rejection.is_none());
+        let applied = application.applied_snapshot.as_ref().unwrap();
+        assert_eq!(applied.authority_revision, Revision::new(2).unwrap());
+        assert_eq!(applied.active_stream_subscriptions.len(), 1);
+        assert_eq!(application.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn stream_subscription_release_application_removes_subscription() {
+        let snapshot = stream_authority_snapshot();
+        let subscription_review = snapshot
+            .review_stream_subscription(
+                stream_subscription_request(),
+                command_review_clock(),
+                vec![id(
+                    "evidence.stream_subscription_authority.request.synthetic_wave_ui",
+                )],
+            )
+            .unwrap();
+        let subscription_application = snapshot
+            .apply_stream_subscription_authority_review(subscription_review)
+            .unwrap();
+        let active_snapshot = subscription_application.applied_snapshot.unwrap();
+        let subscription = active_snapshot.active_stream_subscriptions[0].clone();
+        let release_request = ManifoldStreamSubscriptionReleaseRequest {
+            schema_id: stream_subscription_release_request_schema_id(),
+            request_id: id("request.stream_subscription_release.synthetic_wave_ui"),
+            subscription_id: subscription.subscription_id.clone(),
+            subscriber_id: subscription.subscriber_id.clone(),
+            expected_authority_revision: active_snapshot.authority_revision,
+            expected_registry_revision: active_snapshot.stream_registry.registry_revision,
+            stream_id: subscription.stream_id.clone(),
+            release_reason: id("subscriber.closed"),
+            requested_at_ms: 1_765_000_000_200,
+        };
+        let release_review = active_snapshot
+            .review_stream_subscription_release(
+                release_request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.stream_subscription_release_authority.request.synthetic_wave_ui",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            release_review.outcome,
+            ManifoldStreamSubscriptionReleaseAuthorityReviewOutcome::SubscriptionReleased
+        );
+        assert_eq!(release_review.released.as_ref(), Some(&subscription));
+        assert_eq!(
+            release_review.validate_against_snapshot(&active_snapshot),
+            Ok(())
+        );
+
+        let release_application = active_snapshot
+            .apply_stream_subscription_release_authority_review(release_review)
+            .unwrap();
+
+        assert_eq!(
+            release_application.outcome,
+            ManifoldStreamSubscriptionReleaseAuthorityApplicationOutcome::SubscriptionReleaseApplied
+        );
+        assert!(release_application.rejection.is_none());
+        let applied = release_application.applied_snapshot.as_ref().unwrap();
+        assert_eq!(applied.authority_revision, Revision::new(3).unwrap());
+        assert!(applied.active_stream_subscriptions.is_empty());
+        assert_eq!(
+            release_application.validate_against_snapshot(&active_snapshot),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn stream_subscription_renewal_application_replaces_subscription() {
+        let snapshot = stream_authority_snapshot();
+        let subscription_review = snapshot
+            .review_stream_subscription(
+                stream_subscription_request(),
+                command_review_clock(),
+                vec![id(
+                    "evidence.stream_subscription_authority.request.synthetic_wave_ui",
+                )],
+            )
+            .unwrap();
+        let subscription_application = snapshot
+            .apply_stream_subscription_authority_review(subscription_review)
+            .unwrap();
+        let active_snapshot = subscription_application.applied_snapshot.unwrap();
+        let subscription = active_snapshot.active_stream_subscriptions[0].clone();
+        let old_expires_at_ms = subscription.expires_at_ms;
+        let renewal_request = ManifoldStreamSubscriptionRenewalRequest {
+            schema_id: stream_subscription_renewal_request_schema_id(),
+            request_id: id("request.stream_subscription_renewal.synthetic_wave_ui"),
+            subscription_id: subscription.subscription_id.clone(),
+            subscriber_id: subscription.subscriber_id.clone(),
+            expected_authority_revision: active_snapshot.authority_revision,
+            expected_registry_revision: active_snapshot.stream_registry.registry_revision,
+            stream_id: subscription.stream_id.clone(),
+            transport_id: subscription.transport_id.clone(),
+            requested_ttl_ms: 60_000,
+            renewal_reason: id("subscriber.needs_more_time"),
+            requested_at_ms: 1_765_000_000_200,
+        };
+        let renewal_review = active_snapshot
+            .review_stream_subscription_renewal(
+                renewal_request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.stream_subscription_renewal_authority.request.synthetic_wave_ui",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            renewal_review.outcome,
+            ManifoldStreamSubscriptionRenewalAuthorityReviewOutcome::SubscriptionRenewed
+        );
+        let renewed = renewal_review.renewed.as_ref().unwrap();
+        assert_eq!(renewed.subscription_id, subscription.subscription_id);
+        assert!(renewed.expires_at_ms > old_expires_at_ms);
+        assert_eq!(
+            renewal_review.validate_against_snapshot(&active_snapshot),
+            Ok(())
+        );
+
+        let renewal_application = active_snapshot
+            .apply_stream_subscription_renewal_authority_review(renewal_review)
+            .unwrap();
+
+        assert_eq!(
+            renewal_application.outcome,
+            ManifoldStreamSubscriptionRenewalAuthorityApplicationOutcome::SubscriptionRenewalApplied
+        );
+        assert!(renewal_application.rejection.is_none());
+        let applied = renewal_application.applied_snapshot.as_ref().unwrap();
+        assert_eq!(applied.authority_revision, Revision::new(3).unwrap());
+        assert_eq!(
+            applied.active_stream_subscriptions.len(),
+            active_snapshot.active_stream_subscriptions.len()
+        );
+        let renewed_subscription = applied
+            .active_stream_subscriptions
+            .iter()
+            .find(|active| active.subscription_id == subscription.subscription_id)
+            .unwrap();
+        assert!(renewed_subscription.expires_at_ms > old_expires_at_ms);
+        assert_eq!(
+            renewed_subscription.accepted_authority_revision,
+            Revision::new(2).unwrap()
+        );
+        assert_eq!(
+            renewal_application.validate_against_snapshot(&active_snapshot),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn authority_expiry_sweep_application_removes_expired_state() {
+        let snapshot = stream_authority_snapshot();
+        let subscription_review = snapshot
+            .review_stream_subscription(
+                stream_subscription_request(),
+                command_review_clock(),
+                vec![id(
+                    "evidence.stream_subscription_authority.request.synthetic_wave_ui",
+                )],
+            )
+            .unwrap();
+        let subscription_application = snapshot
+            .apply_stream_subscription_authority_review(subscription_review)
+            .unwrap();
+        let active_snapshot = subscription_application.applied_snapshot.unwrap();
+        let mut expired_clock = command_review_clock();
+        expired_clock.sequence = 44;
+        expired_clock.monotonic_elapsed_ns = 3_334_567_990;
+        expired_clock.wall_unix_ms = 1_765_000_030_200;
+        let request = ManifoldAuthorityExpirySweepRequest {
+            schema_id: authority_expiry_sweep_request_schema_id(),
+            request_id: id("request.expiry_sweep.synthetic"),
+            requester_id: id("authority.synthetic"),
+            expected_authority_revision: active_snapshot.authority_revision,
+            expected_registry_revision: active_snapshot.stream_registry.registry_revision,
+            sweep_reason: id("maintenance.ttl_expired"),
+            requested_at_ms: 1_765_000_030_200,
+        };
+
+        let review = active_snapshot
+            .review_authority_expiry_sweep(
+                request,
+                expired_clock,
+                vec![id("evidence.expiry_sweep.synthetic")],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldAuthorityExpirySweepAuthorityReviewOutcome::ExpiredStateAccepted
+        );
+        assert_eq!(
+            review.expired_leases.len(),
+            active_snapshot.active_leases.len()
+        );
+        assert_eq!(
+            review.expired_stream_subscriptions.len(),
+            active_snapshot.active_stream_subscriptions.len()
+        );
+        assert_eq!(review.validate_against_snapshot(&active_snapshot), Ok(()));
+
+        let application = active_snapshot
+            .apply_authority_expiry_sweep_review(review)
+            .unwrap();
+
+        assert_eq!(
+            application.outcome,
+            ManifoldAuthorityExpirySweepAuthorityApplicationOutcome::ExpiredStateApplied
+        );
+        assert!(application.rejection.is_none());
+        let applied = application.applied_snapshot.as_ref().unwrap();
+        assert_eq!(applied.authority_revision, Revision::new(3).unwrap());
+        assert!(applied.active_leases.is_empty());
+        assert!(applied.active_stream_subscriptions.is_empty());
+        assert_eq!(
+            application.validate_against_snapshot(&active_snapshot),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn module_runtime_state_authority_review_accepts_stop_transition() {
+        let snapshot = stream_authority_snapshot();
+        let request = module_runtime_state_change_request();
+        let review = snapshot
+            .review_module_runtime_state_change(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.module_runtime_state_authority.request.stop.synthetic_wave_provider",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateAccepted
+        );
+        assert_eq!(
+            review.accepted.as_ref().unwrap().lifecycle,
+            ModuleLifecycleState::Stopped
+        );
+        assert_eq!(
+            review.transition.as_ref().unwrap().deactivated_streams,
+            vec![id("stream.synthetic_wave")]
+        );
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn module_runtime_state_authority_review_rejects_unknown_stream() {
+        let snapshot = stream_authority_snapshot();
+        let mut request = module_runtime_state_change_request();
+        request.request_id = id("request.module_runtime.unknown_stream");
+        request.proposed_state.lifecycle = ModuleLifecycleState::Running;
+        request.proposed_state.active_streams = vec![id("stream.not_registered")];
+        let review = snapshot
+            .review_module_runtime_state_change(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.module_runtime_state_authority.request.unknown_stream",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldModuleRuntimeStateAuthorityReviewOutcome::RuntimeStateRejected
+        );
+        assert_eq!(
+            review.rejection.as_ref().unwrap().rejection_code.as_str(),
+            "unknown_stream"
+        );
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn module_runtime_state_authority_application_advances_snapshot() {
+        let snapshot = stream_authority_snapshot();
+        let review = snapshot
+            .review_module_runtime_state_change(
+                module_runtime_state_change_request(),
+                command_review_clock(),
+                vec![id(
+                    "evidence.module_runtime_state_authority.request.stop.synthetic_wave_provider",
+                )],
+            )
+            .unwrap();
+        let application = snapshot
+            .apply_module_runtime_state_authority_review(review)
+            .unwrap();
+
+        assert_eq!(
+            application.outcome,
+            ManifoldModuleRuntimeStateAuthorityApplicationOutcome::RuntimeStateApplied
+        );
+        assert!(application.rejection.is_none());
+        let applied = application.applied_snapshot.as_ref().unwrap();
+        assert_eq!(applied.authority_revision, Revision::new(2).unwrap());
+        let runtime_state = applied
+            .module_runtime_state(&id("module.synthetic_wave_provider"))
+            .unwrap();
+        assert_eq!(runtime_state.lifecycle, ModuleLifecycleState::Stopped);
+        assert_eq!(runtime_state.runtime_revision, Revision::new(2).unwrap());
+        assert!(runtime_state.active_streams.is_empty());
+        assert_eq!(application.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn module_runtime_state_authority_application_rejects_rejected_review() {
+        let snapshot = stream_authority_snapshot();
+        let mut request = module_runtime_state_change_request();
+        request.request_id = id("request.module_runtime.stale_revision");
+        request.expected_authority_revision = Revision::new(2).unwrap();
+        let review = snapshot
+            .review_module_runtime_state_change(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.module_runtime_state_authority.request.stale_revision",
+                )],
+            )
+            .unwrap();
+        let application = snapshot
+            .apply_module_runtime_state_authority_review(review)
+            .unwrap();
+
+        assert_eq!(
+            application.outcome,
+            ManifoldModuleRuntimeStateAuthorityApplicationOutcome::RuntimeStateApplicationRejected
+        );
+        assert!(application.applied_snapshot.is_none());
+        assert_eq!(
+            application
+                .rejection
+                .as_ref()
+                .unwrap()
+                .rejection_code
+                .as_str(),
+            "review_rejected"
+        );
+        assert_eq!(application.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn host_manifest_authority_review_accepts_permission_change() {
+        let snapshot = authority_snapshot();
+        let request = host_manifest_change_request();
+        let review = snapshot
+            .review_host_manifest_change(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.host_manifest_authority.request.synthetic_permissions",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldHostManifestAuthorityReviewOutcome::HostManifestAccepted
+        );
+        assert_eq!(
+            review.accepted.as_ref().unwrap().permissions,
+            vec![id("permission.synthetic_diagnostics")]
+        );
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn host_manifest_authority_review_rejects_missing_authority_role() {
+        let snapshot = authority_snapshot();
+        let mut request = host_manifest_change_request();
+        request.request_id = id("request.host_manifest.missing_authority_role");
+        request.proposed_manifest.authority_role = AuthorityRole::None;
+        let review = snapshot
+            .review_host_manifest_change(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.host_manifest_authority.request.missing_authority_role",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldHostManifestAuthorityReviewOutcome::HostManifestRejected
+        );
+        assert_eq!(
+            review.rejection.as_ref().unwrap().rejection_code.as_str(),
+            "missing_authority_role"
+        );
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn host_manifest_authority_review_rejects_backend_in_use_removal() {
+        let snapshot = authority_snapshot();
+        let mut request = host_manifest_change_request();
+        request.request_id = id("request.host_manifest.remove_backend");
+        request.proposed_manifest.supported_backends.clear();
+        let review = snapshot
+            .review_host_manifest_change(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.host_manifest_authority.request.remove_backend",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldHostManifestAuthorityReviewOutcome::HostManifestRejected
+        );
+        assert_eq!(
+            review.rejection.as_ref().unwrap().rejection_code.as_str(),
+            "backend_in_use"
+        );
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn host_manifest_authority_application_advances_snapshot() {
+        let snapshot = authority_snapshot();
+        let review = snapshot
+            .review_host_manifest_change(
+                host_manifest_change_request(),
+                command_review_clock(),
+                vec![id(
+                    "evidence.host_manifest_authority.request.synthetic_permissions",
+                )],
+            )
+            .unwrap();
+        let application = snapshot
+            .apply_host_manifest_authority_review(review)
+            .unwrap();
+
+        assert_eq!(
+            application.outcome,
+            ManifoldHostManifestAuthorityApplicationOutcome::HostManifestApplied
+        );
+        assert!(application.rejection.is_none());
+        let applied = application.applied_snapshot.as_ref().unwrap();
+        assert_eq!(applied.authority_revision, Revision::new(2).unwrap());
+        assert_eq!(
+            applied.host_manifest.permissions,
+            vec![id("permission.synthetic_diagnostics")]
+        );
+        assert_eq!(application.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn host_manifest_authority_application_rejects_rejected_review() {
+        let snapshot = authority_snapshot();
+        let mut request = host_manifest_change_request();
+        request.request_id = id("request.host_manifest.stale_revision");
+        request.expected_authority_revision = Revision::new(2).unwrap();
+        let review = snapshot
+            .review_host_manifest_change(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.host_manifest_authority.request.stale_revision",
+                )],
+            )
+            .unwrap();
+        let application = snapshot
+            .apply_host_manifest_authority_review(review)
+            .unwrap();
+
+        assert_eq!(
+            application.outcome,
+            ManifoldHostManifestAuthorityApplicationOutcome::HostManifestApplicationRejected
+        );
+        assert!(application.applied_snapshot.is_none());
+        assert_eq!(
+            application
+                .rejection
+                .as_ref()
+                .unwrap()
+                .rejection_code
+                .as_str(),
+            "review_rejected"
+        );
+        assert_eq!(application.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn clock_snapshot_authority_review_accepts_next_tick() {
+        let snapshot = authority_snapshot();
+        let request = clock_snapshot_change_request();
+        let review = snapshot
+            .review_clock_snapshot_change(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.clock_snapshot_authority.request.synthetic_tick",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotAccepted
+        );
+        assert_eq!(review.accepted.as_ref().unwrap().sequence, 43);
+        assert_eq!(
+            review.accepted.as_ref().unwrap().health,
+            ClockHealth::Degraded
+        );
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn clock_snapshot_authority_application_advances_snapshot() {
+        let snapshot = authority_snapshot();
+        let review = snapshot
+            .review_clock_snapshot_change(
+                clock_snapshot_change_request(),
+                command_review_clock(),
+                vec![id(
+                    "evidence.clock_snapshot_authority.request.synthetic_tick",
+                )],
+            )
+            .unwrap();
+        let application = snapshot
+            .apply_clock_snapshot_authority_review(review)
+            .unwrap();
+
+        assert_eq!(
+            application.outcome,
+            ManifoldClockSnapshotAuthorityApplicationOutcome::ClockSnapshotApplied
+        );
+        assert!(application.rejection.is_none());
+        let applied = application.applied_snapshot.as_ref().unwrap();
+        assert_eq!(applied.authority_revision, Revision::new(2).unwrap());
+        assert_eq!(applied.clock_snapshot.sequence, 43);
+        assert_eq!(
+            applied.clock_snapshot.clock_epoch_id,
+            snapshot.clock_snapshot.clock_epoch_id
+        );
+        assert_eq!(applied.clock_snapshot.health, ClockHealth::Degraded);
+        assert_eq!(application.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn clock_snapshot_authority_application_rejects_rejected_review() {
+        let snapshot = authority_snapshot();
+        let mut request = clock_snapshot_change_request();
+        request.request_id = id("request.clock.stale_revision");
+        request.expected_authority_revision = Revision::new(2).unwrap();
+        let review = snapshot
+            .review_clock_snapshot_change(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.clock_snapshot_authority.request.stale_revision",
+                )],
+            )
+            .unwrap();
+        let application = snapshot
+            .apply_clock_snapshot_authority_review(review)
+            .unwrap();
+
+        assert_eq!(
+            application.outcome,
+            ManifoldClockSnapshotAuthorityApplicationOutcome::ClockSnapshotApplicationRejected
+        );
+        assert!(application.applied_snapshot.is_none());
+        assert_eq!(
+            application
+                .rejection
+                .as_ref()
+                .unwrap()
+                .rejection_code
+                .as_str(),
+            "review_rejected"
+        );
+        assert_eq!(application.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn clock_snapshot_authority_review_rejects_sequence_gap() {
+        let snapshot = authority_snapshot();
+        let mut request = clock_snapshot_change_request();
+        request.request_id = id("request.clock.sequence_gap");
+        request.proposed_snapshot.sequence = 44;
+        let review = snapshot
+            .review_clock_snapshot_change(
+                request,
+                command_review_clock(),
+                vec![id("evidence.clock_snapshot_authority.request.sequence_gap")],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotRejected
+        );
+        assert_eq!(
+            review.rejection.as_ref().unwrap().rejection_code.as_str(),
+            "clock_sequence_mismatch"
+        );
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn clock_snapshot_authority_review_rejects_monotonic_regression() {
+        let snapshot = authority_snapshot();
+        let mut request = clock_snapshot_change_request();
+        request.request_id = id("request.clock.monotonic_regression");
+        request.proposed_snapshot.monotonic_elapsed_ns =
+            snapshot.clock_snapshot.monotonic_elapsed_ns;
+        let review = snapshot
+            .review_clock_snapshot_change(
+                request,
+                command_review_clock(),
+                vec![id(
+                    "evidence.clock_snapshot_authority.request.monotonic_regression",
+                )],
+            )
+            .unwrap();
+
+        assert_eq!(
+            review.outcome,
+            ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotRejected
+        );
+        assert_eq!(
+            review.rejection.as_ref().unwrap().rejection_code.as_str(),
+            "monotonic_time_regression"
+        );
+        assert_eq!(review.validate_against_snapshot(&snapshot), Ok(()));
     }
 
     #[test]
@@ -3107,6 +18762,30 @@ mod serde_fixture_tests {
         fixture::<ManifoldModuleRuntimeState>(include_str!(
             "../../../fixtures/module/synthetic-processor-runtime-state.json"
         ));
+        fixture::<ManifoldModuleRuntimeState>(include_str!(
+            "../../../fixtures/module/synthetic-wave-runtime-state-v2.json"
+        ));
+        fixture::<ManifoldModuleRuntimeTransition>(include_str!(
+            "../../../fixtures/module/synthetic-runtime-state-transition.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateChangeRequest>(include_str!(
+            "../../../fixtures/module/synthetic-runtime-state-change-request.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateChangeRequest>(include_str!(
+            "../../../fixtures/damaged/module-runtime-request-stale-revision.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateChangeRequest>(include_str!(
+            "../../../fixtures/damaged/module-runtime-request-missing-lease.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateChangeRequest>(include_str!(
+            "../../../fixtures/damaged/module-runtime-request-unknown-stream.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateChangeRequest>(include_str!(
+            "../../../fixtures/damaged/module-runtime-request-missing-backend.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateRejection>(include_str!(
+            "../../../fixtures/module/synthetic-runtime-state-rejection.json"
+        ));
         fixture::<ManifoldStreamManifest>(include_str!(
             "../../../fixtures/stream/synthetic-wave-stream.json"
         ));
@@ -3115,6 +18794,93 @@ mod serde_fixture_tests {
         ));
         fixture::<ManifoldStreamRegistrySnapshot>(include_str!(
             "../../../fixtures/stream/synthetic-stream-registry.json"
+        ));
+        fixture::<ManifoldStreamRegistryDiff>(include_str!(
+            "../../../fixtures/stream/synthetic-stream-registry-diff.json"
+        ));
+        fixture::<ManifoldStreamRegistryChangeRequest>(include_str!(
+            "../../../fixtures/stream/synthetic-stream-registry-change-request.json"
+        ));
+        fixture::<ManifoldStreamRegistryChangeRequest>(include_str!(
+            "../../../fixtures/damaged/stream-registry-request-stale-revision.json"
+        ));
+        fixture::<ManifoldStreamRegistryChangeRequest>(include_str!(
+            "../../../fixtures/damaged/stream-registry-request-missing-lease.json"
+        ));
+        fixture::<ManifoldStreamRegistryChangeRequest>(include_str!(
+            "../../../fixtures/damaged/stream-registry-request-remove-active-stream.json"
+        ));
+        fixture::<ManifoldStreamRegistryChangeRequest>(include_str!(
+            "../../../fixtures/damaged/stream-registry-request-unknown-module.json"
+        ));
+        fixture::<ManifoldStreamRegistryChangeRequest>(include_str!(
+            "../../../fixtures/damaged/stream-registry-request-unknown-endpoint.json"
+        ));
+        fixture::<ManifoldStreamRegistryRejection>(include_str!(
+            "../../../fixtures/stream/synthetic-stream-registry-rejection.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRequest>(include_str!(
+            "../../../fixtures/stream-subscription/synthetic-stream-subscription-request.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-request-zero-ttl.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-request-missing-capability.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-request-stale-revision.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-request-stale-registry.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-request-unknown-stream.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-request-unknown-transport.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-request-subscriber-limit.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-request-ui-disabled.json"
+        ));
+        fixture::<ManifoldStreamSubscription>(include_str!(
+            "../../../fixtures/stream-subscription/synthetic-stream-subscription.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRejection>(include_str!(
+            "../../../fixtures/stream-subscription/synthetic-stream-subscription-rejection.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalRequest>(include_str!(
+            "../../../fixtures/stream-subscription/synthetic-stream-subscription-renewal-request.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-renewal-request-stale-revision.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-renewal-request-stale-registry.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-renewal-request-unknown-subscription.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-renewal-request-subscriber-mismatch.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-renewal-request-stream-mismatch.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-renewal-request-transport-mismatch.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-renewal-request-zero-ttl.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalRequest>(include_str!(
+            "../../../fixtures/damaged/stream-subscription-renewal-request-non-extending.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalRejection>(include_str!(
+            "../../../fixtures/stream-subscription/synthetic-stream-subscription-renewal-rejection.json"
         ));
         fixture::<ManifoldCommandDescriptor>(include_str!(
             "../../../fixtures/command/synthetic-command-descriptor.json"
@@ -3131,8 +18897,539 @@ mod serde_fixture_tests {
         fixture::<ManifoldControlLeaseRequest>(include_str!(
             "../../../fixtures/command/synthetic-lease-request.json"
         ));
+        fixture::<ManifoldControlLeaseRequest>(include_str!(
+            "../../../fixtures/damaged/lease-request-stale-revision.json"
+        ));
+        fixture::<ManifoldControlLeaseRequest>(include_str!(
+            "../../../fixtures/damaged/lease-request-zero-ttl.json"
+        ));
+        fixture::<ManifoldControlLeaseRequest>(include_str!(
+            "../../../fixtures/damaged/lease-request-missing-capability.json"
+        ));
+        fixture::<ManifoldControlLeaseRequest>(include_str!(
+            "../../../fixtures/damaged/lease-request-busy-scope.json"
+        ));
         fixture::<ManifoldControlLease>(include_str!(
             "../../../fixtures/command/synthetic-control-lease.json"
+        ));
+        fixture::<ManifoldControlLease>(include_str!(
+            "../../../fixtures/command/synthetic-stream-registry-lease.json"
+        ));
+        fixture::<ManifoldControlLease>(include_str!(
+            "../../../fixtures/command/synthetic-host-manifest-lease.json"
+        ));
+        fixture::<ManifoldControlLease>(include_str!(
+            "../../../fixtures/command/synthetic-clock-lease.json"
+        ));
+        fixture::<ManifoldControlLeaseRejection>(include_str!(
+            "../../../fixtures/command/synthetic-lease-rejection.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseRequest>(include_str!(
+            "../../../fixtures/command/synthetic-lease-release-request.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseRequest>(include_str!(
+            "../../../fixtures/damaged/lease-release-request-stale-revision.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseRequest>(include_str!(
+            "../../../fixtures/damaged/lease-release-request-unknown-lease.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseRequest>(include_str!(
+            "../../../fixtures/damaged/lease-release-request-holder-mismatch.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseRequest>(include_str!(
+            "../../../fixtures/damaged/lease-release-request-scope-mismatch.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseRejection>(include_str!(
+            "../../../fixtures/command/synthetic-lease-release-rejection.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalRequest>(include_str!(
+            "../../../fixtures/command/synthetic-lease-renewal-request.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalRequest>(include_str!(
+            "../../../fixtures/damaged/lease-renewal-request-stale-revision.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalRequest>(include_str!(
+            "../../../fixtures/damaged/lease-renewal-request-unknown-lease.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalRequest>(include_str!(
+            "../../../fixtures/damaged/lease-renewal-request-holder-mismatch.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalRequest>(include_str!(
+            "../../../fixtures/damaged/lease-renewal-request-scope-mismatch.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalRequest>(include_str!(
+            "../../../fixtures/damaged/lease-renewal-request-zero-ttl.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalRequest>(include_str!(
+            "../../../fixtures/damaged/lease-renewal-request-non-extending.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalRejection>(include_str!(
+            "../../../fixtures/command/synthetic-lease-renewal-rejection.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot-v2.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-lease-active-authority-snapshot.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-stream-subscription-authority-snapshot.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-stream-subscription-active-authority-snapshot.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-stream-subscription-limit-authority-snapshot.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-stream-subscription-ui-disabled-authority-snapshot.json"
+        ));
+        fixture::<ManifoldCommandAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-command-accepted-event.json"
+        ));
+        fixture::<ManifoldControlLeaseAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-lease-accepted-event.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-lease-release-accepted-event.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-lease-renewal-accepted-event.json"
+        ));
+        fixture::<ManifoldStreamRegistryAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-stream-registry-accepted-event.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-stream-subscription-accepted-event.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-stream-subscription-renewal-accepted-event.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-module-runtime-state-accepted-event.json"
+        ));
+        fixture::<ManifoldHostManifestAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-host-manifest-accepted-event.json"
+        ));
+        fixture::<ManifoldClockSnapshotAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-clock-accepted-event.json"
+        ));
+        fixture::<ManifoldCommandAuthorityReview>(include_str!(
+            "../../../fixtures/authority-review/synthetic-command-accepted-review.json"
+        ));
+        fixture::<ManifoldCommandAuthorityReview>(include_str!(
+            "../../../fixtures/authority-review/synthetic-command-stale-revision-review.json"
+        ));
+        fixture::<ManifoldCommandAuthorityReview>(include_str!(
+            "../../../fixtures/authority-review/synthetic-command-expired-lease-review.json"
+        ));
+        fixture::<ManifoldCommandAuthorityReview>(include_str!(
+            "../../../fixtures/authority-review/synthetic-command-missing-lease-review.json"
+        ));
+        fixture::<ManifoldCommandAuthorityReview>(include_str!(
+            "../../../fixtures/authority-review/synthetic-command-unknown-command-review.json"
+        ));
+        fixture::<ManifoldCommandAuthorityReview>(include_str!(
+            "../../../fixtures/authority-review/synthetic-command-unknown-lease-review.json"
+        ));
+        fixture::<ManifoldCommandAuthorityReview>(include_str!(
+            "../../../fixtures/authority-review/synthetic-command-capability-mismatch-review.json"
+        ));
+        fixture::<ManifoldCommandDispatchRejection>(include_str!(
+            "../../../fixtures/command-dispatch/synthetic-command-dispatch-rejection.json"
+        ));
+        fixture::<ManifoldCommandDispatchReceipt>(include_str!(
+            "../../../fixtures/command-dispatch/synthetic-command-dispatch-ready-receipt.json"
+        ));
+        fixture::<ManifoldCommandDispatchReceipt>(include_str!(
+            "../../../fixtures/command-dispatch/synthetic-command-dispatch-rejected-receipt.json"
+        ));
+        fixture::<ManifoldControlLeaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-review/synthetic-lease-accepted-review.json"
+        ));
+        fixture::<ManifoldControlLeaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-review/synthetic-lease-stale-revision-review.json"
+        ));
+        fixture::<ManifoldControlLeaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-review/synthetic-lease-zero-ttl-review.json"
+        ));
+        fixture::<ManifoldControlLeaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-review/synthetic-lease-missing-capability-review.json"
+        ));
+        fixture::<ManifoldControlLeaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-review/synthetic-lease-busy-scope-review.json"
+        ));
+        fixture::<ManifoldControlLeaseAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-lease-accepted-application.json"
+        ));
+        fixture::<ManifoldControlLeaseAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-lease-rejected-application.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshotApplicationRejection>(include_str!(
+            "../../../fixtures/authority-application/synthetic-lease-application-rejection.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-release-review/synthetic-lease-release-accepted-review.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-release-review/synthetic-lease-release-expired-lease-review.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-release-review/synthetic-lease-release-stale-revision-review.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-release-review/synthetic-lease-release-unknown-lease-review.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-release-review/synthetic-lease-release-holder-mismatch-review.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-release-review/synthetic-lease-release-scope-mismatch-review.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-lease-release-accepted-application.json"
+        ));
+        fixture::<ManifoldControlLeaseReleaseAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-lease-release-rejected-application.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshotApplicationRejection>(include_str!(
+            "../../../fixtures/authority-application/synthetic-lease-release-application-rejection.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/lease-renewal-review/synthetic-lease-renewal-accepted-review.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/lease-renewal-review/synthetic-lease-renewal-stale-revision-review.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/lease-renewal-review/synthetic-lease-renewal-unknown-lease-review.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/lease-renewal-review/synthetic-lease-renewal-holder-mismatch-review.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/lease-renewal-review/synthetic-lease-renewal-scope-mismatch-review.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/lease-renewal-review/synthetic-lease-renewal-zero-ttl-review.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/lease-renewal-review/synthetic-lease-renewal-non-extending-review.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/lease-renewal-review/synthetic-lease-renewal-expired-lease-review.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-lease-renewal-accepted-application.json"
+        ));
+        fixture::<ManifoldControlLeaseRenewalAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-lease-renewal-rejected-application.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshotApplicationRejection>(include_str!(
+            "../../../fixtures/authority-application/synthetic-lease-renewal-application-rejection.json"
+        ));
+        fixture::<ManifoldStreamRegistryAuthorityReview>(include_str!(
+            "../../../fixtures/stream-registry-review/synthetic-stream-registry-accepted-review.json"
+        ));
+        fixture::<ManifoldStreamRegistryAuthorityReview>(include_str!(
+            "../../../fixtures/stream-registry-review/synthetic-stream-registry-expired-lease-review.json"
+        ));
+        fixture::<ManifoldStreamRegistryAuthorityReview>(include_str!(
+            "../../../fixtures/stream-registry-review/synthetic-stream-registry-stale-revision-review.json"
+        ));
+        fixture::<ManifoldStreamRegistryAuthorityReview>(include_str!(
+            "../../../fixtures/stream-registry-review/synthetic-stream-registry-missing-lease-review.json"
+        ));
+        fixture::<ManifoldStreamRegistryAuthorityReview>(include_str!(
+            "../../../fixtures/stream-registry-review/synthetic-stream-registry-active-stream-review.json"
+        ));
+        fixture::<ManifoldStreamRegistryAuthorityReview>(include_str!(
+            "../../../fixtures/stream-registry-review/synthetic-stream-registry-unknown-module-review.json"
+        ));
+        fixture::<ManifoldStreamRegistryAuthorityReview>(include_str!(
+            "../../../fixtures/stream-registry-review/synthetic-stream-registry-unknown-endpoint-review.json"
+        ));
+        fixture::<ManifoldStreamRegistryAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-stream-registry-accepted-application.json"
+        ));
+        fixture::<ManifoldStreamRegistryAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-stream-registry-rejected-application.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshotApplicationRejection>(include_str!(
+            "../../../fixtures/authority-application/synthetic-stream-registry-application-rejection.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-review/synthetic-stream-subscription-accepted-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-review/synthetic-stream-subscription-zero-ttl-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-review/synthetic-stream-subscription-missing-capability-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-review/synthetic-stream-subscription-stale-revision-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-review/synthetic-stream-subscription-stale-registry-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-review/synthetic-stream-subscription-unknown-stream-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-review/synthetic-stream-subscription-unknown-transport-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-review/synthetic-stream-subscription-subscriber-limit-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-review/synthetic-stream-subscription-ui-disabled-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-stream-subscription-accepted-application.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-stream-subscription-rejected-application.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshotApplicationRejection>(include_str!(
+            "../../../fixtures/authority-application/synthetic-stream-subscription-application-rejection.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-release-review/synthetic-stream-subscription-release-accepted-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-release-review/synthetic-stream-subscription-release-expired-subscription-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-release-review/synthetic-stream-subscription-release-stale-revision-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-release-review/synthetic-stream-subscription-release-stale-registry-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-release-review/synthetic-stream-subscription-release-unknown-subscription-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-release-review/synthetic-stream-subscription-release-subscriber-mismatch-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-release-review/synthetic-stream-subscription-release-stream-mismatch-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionReleaseAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-stream-subscription-release-accepted-application.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionReleaseAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-stream-subscription-release-rejected-application.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshotApplicationRejection>(include_str!(
+            "../../../fixtures/authority-application/synthetic-stream-subscription-release-application-rejection.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-renewal-review/synthetic-stream-subscription-renewal-accepted-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-renewal-review/synthetic-stream-subscription-renewal-stale-revision-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-renewal-review/synthetic-stream-subscription-renewal-stale-registry-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-renewal-review/synthetic-stream-subscription-renewal-unknown-subscription-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-renewal-review/synthetic-stream-subscription-renewal-subscriber-mismatch-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-renewal-review/synthetic-stream-subscription-renewal-stream-mismatch-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-renewal-review/synthetic-stream-subscription-renewal-transport-mismatch-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-renewal-review/synthetic-stream-subscription-renewal-zero-ttl-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-renewal-review/synthetic-stream-subscription-renewal-non-extending-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-renewal-review/synthetic-stream-subscription-renewal-expired-subscription-review.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-stream-subscription-renewal-accepted-application.json"
+        ));
+        fixture::<ManifoldStreamSubscriptionRenewalAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-stream-subscription-renewal-rejected-application.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshotApplicationRejection>(include_str!(
+            "../../../fixtures/authority-application/synthetic-stream-subscription-renewal-application-rejection.json"
+        ));
+        fixture::<ManifoldAuthorityExpirySweepRequest>(include_str!(
+            "../../../fixtures/authority-expiry/synthetic-authority-expiry-sweep-request.json"
+        ));
+        fixture::<ManifoldAuthorityExpirySweepRequest>(include_str!(
+            "../../../fixtures/damaged/authority-expiry-sweep-request-stale-revision.json"
+        ));
+        fixture::<ManifoldAuthorityExpirySweepRequest>(include_str!(
+            "../../../fixtures/damaged/authority-expiry-sweep-request-registry-mismatch.json"
+        ));
+        fixture::<ManifoldAuthorityExpirySweepRejection>(include_str!(
+            "../../../fixtures/authority-expiry/synthetic-authority-expiry-sweep-rejection.json"
+        ));
+        fixture::<ManifoldAuthorityExpirySweepAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-authority-expiry-sweep-accepted-event.json"
+        ));
+        fixture::<ManifoldAuthorityExpirySweepAuthorityReview>(include_str!(
+            "../../../fixtures/authority-expiry-review/synthetic-authority-expiry-sweep-accepted-review.json"
+        ));
+        fixture::<ManifoldAuthorityExpirySweepAuthorityReview>(include_str!(
+            "../../../fixtures/authority-expiry-review/synthetic-authority-expiry-sweep-stale-revision-review.json"
+        ));
+        fixture::<ManifoldAuthorityExpirySweepAuthorityReview>(include_str!(
+            "../../../fixtures/authority-expiry-review/synthetic-authority-expiry-sweep-registry-mismatch-review.json"
+        ));
+        fixture::<ManifoldAuthorityExpirySweepAuthorityReview>(include_str!(
+            "../../../fixtures/authority-expiry-review/synthetic-authority-expiry-sweep-no-expired-review.json"
+        ));
+        fixture::<ManifoldAuthorityExpirySweepAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-authority-expiry-sweep-accepted-application.json"
+        ));
+        fixture::<ManifoldAuthorityExpirySweepAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-authority-expiry-sweep-rejected-application.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshotApplicationRejection>(include_str!(
+            "../../../fixtures/authority-application/synthetic-authority-expiry-sweep-application-rejection.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateAuthorityReview>(include_str!(
+            "../../../fixtures/module-runtime-review/synthetic-module-runtime-accepted-review.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateAuthorityReview>(include_str!(
+            "../../../fixtures/module-runtime-review/synthetic-module-runtime-expired-lease-review.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateAuthorityReview>(include_str!(
+            "../../../fixtures/module-runtime-review/synthetic-module-runtime-stale-revision-review.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateAuthorityReview>(include_str!(
+            "../../../fixtures/module-runtime-review/synthetic-module-runtime-missing-lease-review.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateAuthorityReview>(include_str!(
+            "../../../fixtures/module-runtime-review/synthetic-module-runtime-unknown-stream-review.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateAuthorityReview>(include_str!(
+            "../../../fixtures/module-runtime-review/synthetic-module-runtime-missing-backend-review.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-module-runtime-accepted-application.json"
+        ));
+        fixture::<ManifoldModuleRuntimeStateAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-module-runtime-rejected-application.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshotApplicationRejection>(include_str!(
+            "../../../fixtures/authority-application/synthetic-module-runtime-application-rejection.json"
+        ));
+        fixture::<ManifoldHostManifestChangeRequest>(include_str!(
+            "../../../fixtures/host/synthetic-host-manifest-change-request.json"
+        ));
+        fixture::<ManifoldHostManifestChangeRequest>(include_str!(
+            "../../../fixtures/damaged/host-manifest-request-stale-revision.json"
+        ));
+        fixture::<ManifoldHostManifestChangeRequest>(include_str!(
+            "../../../fixtures/damaged/host-manifest-request-missing-authority-role.json"
+        ));
+        fixture::<ManifoldHostManifestChangeRequest>(include_str!(
+            "../../../fixtures/damaged/host-manifest-request-endpoint-mismatch.json"
+        ));
+        fixture::<ManifoldHostManifestChangeRequest>(include_str!(
+            "../../../fixtures/damaged/host-manifest-request-remove-capability.json"
+        ));
+        fixture::<ManifoldHostManifestChangeRequest>(include_str!(
+            "../../../fixtures/damaged/host-manifest-request-remove-backend.json"
+        ));
+        fixture::<ManifoldHostManifestRejection>(include_str!(
+            "../../../fixtures/host/synthetic-host-manifest-rejection.json"
+        ));
+        fixture::<ManifoldHostManifestAuthorityReview>(include_str!(
+            "../../../fixtures/host-manifest-review/synthetic-host-manifest-accepted-review.json"
+        ));
+        fixture::<ManifoldHostManifestAuthorityReview>(include_str!(
+            "../../../fixtures/host-manifest-review/synthetic-host-manifest-expired-lease-review.json"
+        ));
+        fixture::<ManifoldHostManifestAuthorityReview>(include_str!(
+            "../../../fixtures/host-manifest-review/synthetic-host-manifest-stale-revision-review.json"
+        ));
+        fixture::<ManifoldHostManifestAuthorityReview>(include_str!(
+            "../../../fixtures/host-manifest-review/synthetic-host-manifest-missing-authority-role-review.json"
+        ));
+        fixture::<ManifoldHostManifestAuthorityReview>(include_str!(
+            "../../../fixtures/host-manifest-review/synthetic-host-manifest-endpoint-mismatch-review.json"
+        ));
+        fixture::<ManifoldHostManifestAuthorityReview>(include_str!(
+            "../../../fixtures/host-manifest-review/synthetic-host-manifest-remove-capability-review.json"
+        ));
+        fixture::<ManifoldHostManifestAuthorityReview>(include_str!(
+            "../../../fixtures/host-manifest-review/synthetic-host-manifest-remove-backend-review.json"
+        ));
+        fixture::<ManifoldHostManifestAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-host-manifest-accepted-application.json"
+        ));
+        fixture::<ManifoldHostManifestAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-host-manifest-rejected-application.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshotApplicationRejection>(include_str!(
+            "../../../fixtures/authority-application/synthetic-host-manifest-application-rejection.json"
+        ));
+        fixture::<ManifoldClockSnapshotChangeRequest>(include_str!(
+            "../../../fixtures/clock/synthetic-clock-change-request.json"
+        ));
+        fixture::<ManifoldClockSnapshotChangeRequest>(include_str!(
+            "../../../fixtures/damaged/clock-request-stale-revision.json"
+        ));
+        fixture::<ManifoldClockSnapshotChangeRequest>(include_str!(
+            "../../../fixtures/damaged/clock-request-missing-lease.json"
+        ));
+        fixture::<ManifoldClockSnapshotChangeRequest>(include_str!(
+            "../../../fixtures/damaged/clock-request-domain-mismatch.json"
+        ));
+        fixture::<ManifoldClockSnapshotChangeRequest>(include_str!(
+            "../../../fixtures/damaged/clock-request-sequence-gap.json"
+        ));
+        fixture::<ManifoldClockSnapshotChangeRequest>(include_str!(
+            "../../../fixtures/damaged/clock-request-monotonic-regression.json"
+        ));
+        fixture::<ManifoldClockSnapshotRejection>(include_str!(
+            "../../../fixtures/clock/synthetic-clock-rejection.json"
+        ));
+        fixture::<ManifoldClockSnapshotAuthorityReview>(include_str!(
+            "../../../fixtures/clock-review/synthetic-clock-accepted-review.json"
+        ));
+        fixture::<ManifoldClockSnapshotAuthorityReview>(include_str!(
+            "../../../fixtures/clock-review/synthetic-clock-expired-lease-review.json"
+        ));
+        fixture::<ManifoldClockSnapshotAuthorityReview>(include_str!(
+            "../../../fixtures/clock-review/synthetic-clock-stale-revision-review.json"
+        ));
+        fixture::<ManifoldClockSnapshotAuthorityReview>(include_str!(
+            "../../../fixtures/clock-review/synthetic-clock-missing-lease-review.json"
+        ));
+        fixture::<ManifoldClockSnapshotAuthorityReview>(include_str!(
+            "../../../fixtures/clock-review/synthetic-clock-domain-mismatch-review.json"
+        ));
+        fixture::<ManifoldClockSnapshotAuthorityReview>(include_str!(
+            "../../../fixtures/clock-review/synthetic-clock-sequence-gap-review.json"
+        ));
+        fixture::<ManifoldClockSnapshotAuthorityReview>(include_str!(
+            "../../../fixtures/clock-review/synthetic-clock-monotonic-regression-review.json"
+        ));
+        fixture::<ManifoldClockSnapshotAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-clock-accepted-application.json"
+        ));
+        fixture::<ManifoldClockSnapshotAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-clock-rejected-application.json"
+        ));
+        fixture::<ManifoldAuthoritySnapshotApplicationRejection>(include_str!(
+            "../../../fixtures/authority-application/synthetic-clock-application-rejection.json"
         ));
         fixture::<ManifoldHostManifest>(include_str!("../../../fixtures/host/synthetic-host.json"));
         fixture::<ManifoldHostManifest>(include_str!("../../../fixtures/host/desktop-local.json"));
@@ -3143,6 +19440,12 @@ mod serde_fixture_tests {
         ));
         fixture::<ManifoldClockSnapshot>(include_str!(
             "../../../fixtures/clock/synthetic-clock-snapshot.json"
+        ));
+        fixture::<ManifoldClockSnapshot>(include_str!(
+            "../../../fixtures/clock/synthetic-command-review-clock.json"
+        ));
+        fixture::<ManifoldClockSnapshot>(include_str!(
+            "../../../fixtures/clock/synthetic-expired-command-review-clock.json"
         ));
         fixture::<ManifoldValidationScorecard>(include_str!(
             "../../../fixtures/validation/synthetic-scorecard.json"
@@ -3218,6 +19521,631 @@ mod serde_fixture_tests {
             .unwrap_err();
 
         assert_eq!(error.rejection_code(), "missing_lease");
+    }
+
+    #[test]
+    fn valid_authority_audit_fixture_matches_snapshot() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let event = fixture::<ManifoldCommandAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-command-accepted-event.json"
+        ));
+
+        assert_eq!(snapshot.validate_authority_links(), Ok(()));
+        assert_eq!(event.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_authority_review_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let envelope = fixture::<ManifoldCommandEnvelope>(include_str!(
+            "../../../fixtures/command/synthetic-command-envelope.json"
+        ));
+        let clock = fixture::<ManifoldClockSnapshot>(include_str!(
+            "../../../fixtures/clock/synthetic-command-review-clock.json"
+        ));
+        let expected = fixture::<ManifoldCommandAuthorityReview>(include_str!(
+            "../../../fixtures/authority-review/synthetic-command-accepted-review.json"
+        ));
+        let generated = snapshot
+            .review_command(
+                envelope,
+                clock,
+                vec![
+                    DottedId::new("evidence.command_authority.request.start.synthetic_wave")
+                        .unwrap(),
+                ],
+            )
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_command_dispatch_receipt_fixtures_match_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let accepted_review = fixture::<ManifoldCommandAuthorityReview>(include_str!(
+            "../../../fixtures/authority-review/synthetic-command-accepted-review.json"
+        ));
+        let rejected_review = fixture::<ManifoldCommandAuthorityReview>(include_str!(
+            "../../../fixtures/authority-review/synthetic-command-missing-lease-review.json"
+        ));
+        let expected_ready = fixture::<ManifoldCommandDispatchReceipt>(include_str!(
+            "../../../fixtures/command-dispatch/synthetic-command-dispatch-ready-receipt.json"
+        ));
+        let expected_rejected = fixture::<ManifoldCommandDispatchReceipt>(include_str!(
+            "../../../fixtures/command-dispatch/synthetic-command-dispatch-rejected-receipt.json"
+        ));
+
+        let generated_ready = snapshot.prepare_command_dispatch(accepted_review).unwrap();
+        let generated_rejected = snapshot.prepare_command_dispatch(rejected_review).unwrap();
+
+        assert_eq!(generated_ready, expected_ready);
+        assert_eq!(generated_rejected, expected_rejected);
+        assert_eq!(expected_ready.validate_against_snapshot(&snapshot), Ok(()));
+        assert_eq!(
+            expected_rejected.validate_against_snapshot(&snapshot),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn damaged_authority_audit_fixture_rejects_unknown_command() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let event = fixture::<ManifoldCommandAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/damaged/authority-audit-unknown-command.json"
+        ));
+        let error = event.validate_against_snapshot(&snapshot).unwrap_err();
+
+        assert_eq!(error.rejection_code(), "unknown_command");
+    }
+
+    #[test]
+    fn valid_lease_authority_audit_fixture_matches_snapshot() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let event = fixture::<ManifoldControlLeaseAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-lease-accepted-event.json"
+        ));
+
+        assert_eq!(snapshot.validate_authority_links(), Ok(()));
+        assert_eq!(event.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_lease_authority_review_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let request = fixture::<ManifoldControlLeaseRequest>(include_str!(
+            "../../../fixtures/command/synthetic-lease-request.json"
+        ));
+        let clock = fixture::<ManifoldClockSnapshot>(include_str!(
+            "../../../fixtures/clock/synthetic-command-review-clock.json"
+        ));
+        let expected = fixture::<ManifoldControlLeaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-review/synthetic-lease-accepted-review.json"
+        ));
+        let generated = snapshot
+            .review_lease_request(
+                request,
+                clock,
+                vec![DottedId::new("evidence.lease_authority.request.synthetic_lease_1").unwrap()],
+            )
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_lease_authority_application_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let review = fixture::<ManifoldControlLeaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-review/synthetic-lease-accepted-review.json"
+        ));
+        let expected = fixture::<ManifoldControlLeaseAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-lease-accepted-application.json"
+        ));
+        let generated = snapshot
+            .apply_control_lease_authority_review(review)
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_lease_release_authority_audit_fixture_matches_snapshot() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-lease-active-authority-snapshot.json"
+        ));
+        let event = fixture::<ManifoldControlLeaseReleaseAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-lease-release-accepted-event.json"
+        ));
+
+        assert_eq!(snapshot.validate_authority_links(), Ok(()));
+        assert_eq!(event.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_lease_release_authority_review_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-lease-active-authority-snapshot.json"
+        ));
+        let request = fixture::<ManifoldControlLeaseReleaseRequest>(include_str!(
+            "../../../fixtures/command/synthetic-lease-release-request.json"
+        ));
+        let clock = fixture::<ManifoldClockSnapshot>(include_str!(
+            "../../../fixtures/clock/synthetic-command-review-clock.json"
+        ));
+        let expected = fixture::<ManifoldControlLeaseReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-release-review/synthetic-lease-release-accepted-review.json"
+        ));
+        let generated = snapshot
+            .review_control_lease_release(
+                request,
+                clock,
+                vec![DottedId::new(
+                    "evidence.lease_release_authority.request.lease_release.synthetic_lease_1",
+                )
+                .unwrap()],
+            )
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_lease_release_authority_application_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-lease-active-authority-snapshot.json"
+        ));
+        let review = fixture::<ManifoldControlLeaseReleaseAuthorityReview>(include_str!(
+            "../../../fixtures/lease-release-review/synthetic-lease-release-accepted-review.json"
+        ));
+        let expected = fixture::<ManifoldControlLeaseReleaseAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-lease-release-accepted-application.json"
+        ));
+        let generated = snapshot
+            .apply_control_lease_release_authority_review(review)
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_lease_renewal_authority_audit_fixture_matches_snapshot() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-lease-active-authority-snapshot.json"
+        ));
+        let event = fixture::<ManifoldControlLeaseRenewalAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-lease-renewal-accepted-event.json"
+        ));
+
+        assert_eq!(snapshot.validate_authority_links(), Ok(()));
+        assert_eq!(event.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_lease_renewal_authority_review_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-lease-active-authority-snapshot.json"
+        ));
+        let request = fixture::<ManifoldControlLeaseRenewalRequest>(include_str!(
+            "../../../fixtures/command/synthetic-lease-renewal-request.json"
+        ));
+        let clock = fixture::<ManifoldClockSnapshot>(include_str!(
+            "../../../fixtures/clock/synthetic-command-review-clock.json"
+        ));
+        let expected = fixture::<ManifoldControlLeaseRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/lease-renewal-review/synthetic-lease-renewal-accepted-review.json"
+        ));
+        let generated = snapshot
+            .review_control_lease_renewal(
+                request,
+                clock,
+                vec![DottedId::new(
+                    "evidence.lease_renewal_authority.request.lease_renewal.synthetic_lease_1",
+                )
+                .unwrap()],
+            )
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_lease_renewal_authority_application_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-lease-active-authority-snapshot.json"
+        ));
+        let review = fixture::<ManifoldControlLeaseRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/lease-renewal-review/synthetic-lease-renewal-accepted-review.json"
+        ));
+        let expected = fixture::<ManifoldControlLeaseRenewalAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-lease-renewal-accepted-application.json"
+        ));
+        let generated = snapshot
+            .apply_control_lease_renewal_authority_review(review)
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_stream_registry_authority_audit_fixture_matches_snapshot() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let event = fixture::<ManifoldStreamRegistryAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-stream-registry-accepted-event.json"
+        ));
+
+        assert_eq!(snapshot.validate_authority_links(), Ok(()));
+        assert_eq!(event.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_stream_registry_authority_review_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let request = fixture::<ManifoldStreamRegistryChangeRequest>(include_str!(
+            "../../../fixtures/stream/synthetic-stream-registry-change-request.json"
+        ));
+        let clock = fixture::<ManifoldClockSnapshot>(include_str!(
+            "../../../fixtures/clock/synthetic-command-review-clock.json"
+        ));
+        let expected = fixture::<ManifoldStreamRegistryAuthorityReview>(include_str!(
+            "../../../fixtures/stream-registry-review/synthetic-stream-registry-accepted-review.json"
+        ));
+        let generated = snapshot
+            .review_stream_registry_change(
+                request,
+                clock,
+                vec![DottedId::new(
+                    "evidence.stream_registry_authority.request.stream_registry.synthetic_wave_subscription",
+                )
+                .unwrap()],
+            )
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_stream_registry_authority_application_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let review = fixture::<ManifoldStreamRegistryAuthorityReview>(include_str!(
+            "../../../fixtures/stream-registry-review/synthetic-stream-registry-accepted-review.json"
+        ));
+        let expected = fixture::<ManifoldStreamRegistryAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-stream-registry-accepted-application.json"
+        ));
+        let generated = snapshot
+            .apply_stream_registry_authority_review(review)
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_stream_subscription_renewal_authority_audit_fixture_matches_snapshot() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-stream-subscription-active-authority-snapshot.json"
+        ));
+        let event = fixture::<ManifoldStreamSubscriptionRenewalAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-stream-subscription-renewal-accepted-event.json"
+        ));
+
+        assert_eq!(snapshot.validate_authority_links(), Ok(()));
+        assert_eq!(event.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_stream_subscription_renewal_authority_review_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-stream-subscription-active-authority-snapshot.json"
+        ));
+        let request = fixture::<ManifoldStreamSubscriptionRenewalRequest>(include_str!(
+            "../../../fixtures/stream-subscription/synthetic-stream-subscription-renewal-request.json"
+        ));
+        let clock = fixture::<ManifoldClockSnapshot>(include_str!(
+            "../../../fixtures/clock/synthetic-command-review-clock.json"
+        ));
+        let expected = fixture::<ManifoldStreamSubscriptionRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-renewal-review/synthetic-stream-subscription-renewal-accepted-review.json"
+        ));
+        let generated = snapshot
+            .review_stream_subscription_renewal(
+                request,
+                clock,
+                vec![DottedId::new(
+                    "evidence.stream_subscription_renewal_authority.request.stream_subscription_renewal.synthetic_wave_ui",
+                )
+                .unwrap()],
+            )
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_stream_subscription_renewal_authority_application_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-stream-subscription-active-authority-snapshot.json"
+        ));
+        let review = fixture::<ManifoldStreamSubscriptionRenewalAuthorityReview>(include_str!(
+            "../../../fixtures/stream-subscription-renewal-review/synthetic-stream-subscription-renewal-accepted-review.json"
+        ));
+        let expected =
+            fixture::<ManifoldStreamSubscriptionRenewalAuthorityApplication>(include_str!(
+                "../../../fixtures/authority-application/synthetic-stream-subscription-renewal-accepted-application.json"
+            ));
+        let generated = snapshot
+            .apply_stream_subscription_renewal_authority_review(review)
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_authority_expiry_sweep_authority_audit_fixture_matches_snapshot() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-stream-subscription-active-authority-snapshot.json"
+        ));
+        let event = fixture::<ManifoldAuthorityExpirySweepAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-authority-expiry-sweep-accepted-event.json"
+        ));
+
+        assert_eq!(snapshot.validate_authority_links(), Ok(()));
+        assert_eq!(event.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_authority_expiry_sweep_authority_review_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-stream-subscription-active-authority-snapshot.json"
+        ));
+        let request = fixture::<ManifoldAuthorityExpirySweepRequest>(include_str!(
+            "../../../fixtures/authority-expiry/synthetic-authority-expiry-sweep-request.json"
+        ));
+        let clock = fixture::<ManifoldClockSnapshot>(include_str!(
+            "../../../fixtures/clock/synthetic-expired-command-review-clock.json"
+        ));
+        let expected = fixture::<ManifoldAuthorityExpirySweepAuthorityReview>(include_str!(
+            "../../../fixtures/authority-expiry-review/synthetic-authority-expiry-sweep-accepted-review.json"
+        ));
+        let generated = snapshot
+            .review_authority_expiry_sweep(
+                request,
+                clock,
+                vec![DottedId::new(
+                    "evidence.expiry_sweep_authority.request.expiry_sweep.synthetic",
+                )
+                .unwrap()],
+            )
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_authority_expiry_sweep_authority_application_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-stream-subscription-active-authority-snapshot.json"
+        ));
+        let accepted_review = fixture::<ManifoldAuthorityExpirySweepAuthorityReview>(include_str!(
+            "../../../fixtures/authority-expiry-review/synthetic-authority-expiry-sweep-accepted-review.json"
+        ));
+        let rejected_review = fixture::<ManifoldAuthorityExpirySweepAuthorityReview>(include_str!(
+            "../../../fixtures/authority-expiry-review/synthetic-authority-expiry-sweep-stale-revision-review.json"
+        ));
+        let expected_accepted =
+            fixture::<ManifoldAuthorityExpirySweepAuthorityApplication>(include_str!(
+                "../../../fixtures/authority-application/synthetic-authority-expiry-sweep-accepted-application.json"
+            ));
+        let expected_rejected =
+            fixture::<ManifoldAuthorityExpirySweepAuthorityApplication>(include_str!(
+                "../../../fixtures/authority-application/synthetic-authority-expiry-sweep-rejected-application.json"
+            ));
+        let generated_accepted = snapshot
+            .apply_authority_expiry_sweep_review(accepted_review)
+            .unwrap();
+        let generated_rejected = snapshot
+            .apply_authority_expiry_sweep_review(rejected_review)
+            .unwrap();
+
+        assert_eq!(generated_accepted, expected_accepted);
+        assert_eq!(generated_rejected, expected_rejected);
+        assert_eq!(
+            expected_accepted.validate_against_snapshot(&snapshot),
+            Ok(())
+        );
+        assert_eq!(
+            expected_rejected.validate_against_snapshot(&snapshot),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn valid_module_runtime_state_authority_audit_fixture_matches_snapshot() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let event = fixture::<ManifoldModuleRuntimeStateAuthorityAuditEvent>(include_str!(
+            "../../../fixtures/audit/synthetic-module-runtime-state-accepted-event.json"
+        ));
+
+        assert_eq!(snapshot.validate_authority_links(), Ok(()));
+        assert_eq!(event.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_module_runtime_state_authority_review_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let request = fixture::<ManifoldModuleRuntimeStateChangeRequest>(include_str!(
+            "../../../fixtures/module/synthetic-runtime-state-change-request.json"
+        ));
+        let clock = fixture::<ManifoldClockSnapshot>(include_str!(
+            "../../../fixtures/clock/synthetic-command-review-clock.json"
+        ));
+        let expected = fixture::<ManifoldModuleRuntimeStateAuthorityReview>(include_str!(
+            "../../../fixtures/module-runtime-review/synthetic-module-runtime-accepted-review.json"
+        ));
+        let generated = snapshot
+            .review_module_runtime_state_change(
+                request,
+                clock,
+                vec![DottedId::new(
+                    "evidence.module_runtime_state_authority.request.module_runtime.stop.synthetic_wave_provider",
+                )
+                .unwrap()],
+            )
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_module_runtime_state_authority_application_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let review = fixture::<ManifoldModuleRuntimeStateAuthorityReview>(include_str!(
+            "../../../fixtures/module-runtime-review/synthetic-module-runtime-accepted-review.json"
+        ));
+        let expected = fixture::<ManifoldModuleRuntimeStateAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-module-runtime-accepted-application.json"
+        ));
+        let generated = snapshot
+            .apply_module_runtime_state_authority_review(review)
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_host_manifest_authority_review_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let request = fixture::<ManifoldHostManifestChangeRequest>(include_str!(
+            "../../../fixtures/host/synthetic-host-manifest-change-request.json"
+        ));
+        let clock = fixture::<ManifoldClockSnapshot>(include_str!(
+            "../../../fixtures/clock/synthetic-command-review-clock.json"
+        ));
+        let expected = fixture::<ManifoldHostManifestAuthorityReview>(include_str!(
+            "../../../fixtures/host-manifest-review/synthetic-host-manifest-accepted-review.json"
+        ));
+        let generated = snapshot
+            .review_host_manifest_change(
+                request,
+                clock,
+                vec![DottedId::new(
+                    "evidence.host_manifest_authority.request.host_manifest.synthetic_permissions",
+                )
+                .unwrap()],
+            )
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_host_manifest_authority_application_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let review = fixture::<ManifoldHostManifestAuthorityReview>(include_str!(
+            "../../../fixtures/host-manifest-review/synthetic-host-manifest-accepted-review.json"
+        ));
+        let expected = fixture::<ManifoldHostManifestAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-host-manifest-accepted-application.json"
+        ));
+        let generated = snapshot
+            .apply_host_manifest_authority_review(review)
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_clock_snapshot_authority_review_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let request = fixture::<ManifoldClockSnapshotChangeRequest>(include_str!(
+            "../../../fixtures/clock/synthetic-clock-change-request.json"
+        ));
+        let clock = fixture::<ManifoldClockSnapshot>(include_str!(
+            "../../../fixtures/clock/synthetic-command-review-clock.json"
+        ));
+        let expected = fixture::<ManifoldClockSnapshotAuthorityReview>(include_str!(
+            "../../../fixtures/clock-review/synthetic-clock-accepted-review.json"
+        ));
+        let generated = snapshot
+            .review_clock_snapshot_change(
+                request,
+                clock,
+                vec![DottedId::new(
+                    "evidence.clock_snapshot_authority.request.clock.synthetic_tick",
+                )
+                .unwrap()],
+            )
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
+    }
+
+    #[test]
+    fn valid_clock_snapshot_authority_application_fixture_matches_evaluator() {
+        let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+            "../../../fixtures/authority/synthetic-authority-snapshot.json"
+        ));
+        let review = fixture::<ManifoldClockSnapshotAuthorityReview>(include_str!(
+            "../../../fixtures/clock-review/synthetic-clock-accepted-review.json"
+        ));
+        let expected = fixture::<ManifoldClockSnapshotAuthorityApplication>(include_str!(
+            "../../../fixtures/authority-application/synthetic-clock-accepted-application.json"
+        ));
+        let generated = snapshot
+            .apply_clock_snapshot_authority_review(review)
+            .unwrap();
+
+        assert_eq!(generated, expected);
+        assert_eq!(expected.validate_against_snapshot(&snapshot), Ok(()));
     }
 
     #[test]

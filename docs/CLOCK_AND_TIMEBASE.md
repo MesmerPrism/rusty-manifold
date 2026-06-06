@@ -16,3 +16,22 @@ clocks.
 
 Stream events should carry both source timestamps and Manifold receive or
 accept timestamps with named domains.
+
+## Authority Application
+
+Clock snapshot changes are reviewed before accepted state changes. The
+source-only reviewer requires a valid clock lease and rejects that lease if it
+has expired at the review clock. Accepted reviews are applied through
+`ManifoldClockSnapshotAuthorityApplication`, which advances only the authority
+revision and accepted clock snapshot. Rejected reviews produce a
+`ManifoldAuthoritySnapshotApplicationRejection` and leave accepted authority
+state unchanged.
+
+The fixture CLI route is:
+
+```powershell
+cargo run -p rusty-manifold-fixtures -- apply-clock-review --snapshot fixtures/authority/synthetic-authority-snapshot.json --review fixtures/clock-review/synthetic-clock-accepted-review.json
+```
+
+Application is still source-only. It does not read live time, alter host time,
+start a clock service, contact a host, or call platform clock adapters.

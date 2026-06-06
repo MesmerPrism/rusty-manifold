@@ -1,0 +1,13 @@
+{
+  "$schema": "rusty.manifold.stream.subscription_renewal_request.v1",
+  "request_id": "request.stream_subscription_renewal.stale_registry",
+  "subscription_id": "subscription.stream_subscription.synthetic_wave_ui",
+  "subscriber_id": "subscriber.ui.synthetic_dashboard",
+  "expected_authority_revision": 2,
+  "expected_registry_revision": 2,
+  "stream_id": "stream.synthetic_wave",
+  "transport_id": "transport.in_process",
+  "requested_ttl_ms": 60000,
+  "renewal_reason": "subscriber.needs_more_time",
+  "requested_at_ms": 1765000000200
+}

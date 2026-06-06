@@ -1,0 +1,58 @@
+{
+  "$schema": "rusty.manifold.authority.lease_review.v1",
+  "review_id": "lease_review.request.lease.busy_module",
+  "authority_id": "authority.synthetic",
+  "authority_revision": 1,
+  "outcome": "lease_rejected",
+  "accepted": null,
+  "rejection": {
+    "$schema": "rusty.manifold.command.lease_rejection.v1",
+    "request_id": "request.lease.busy_module",
+    "rejection_code": "lease_scope_busy",
+    "message": "lease request scope is already held by an active lease",
+    "retryable": true,
+    "current_revision": 1,
+    "conflicting_lease_id": "lease.synthetic_module"
+  },
+  "audit_event": {
+    "$schema": "rusty.manifold.authority.lease_audit_event.v1",
+    "event_id": "audit.lease.request.lease.busy_module.rejected",
+    "authority_id": "authority.synthetic",
+    "prior_authority_revision": 1,
+    "event_kind": "lease_rejected",
+    "request": {
+      "$schema": "rusty.manifold.command.lease_request.v1",
+      "request_id": "request.lease.busy_module",
+      "holder_id": "holder.other_agent",
+      "scope": "module.synthetic_wave_provider",
+      "expected_revision": 1,
+      "requested_ttl_ms": 30000,
+      "required_capability": "manifold.module.control",
+      "safety_class": "bounded_mutation"
+    },
+    "accepted": null,
+    "rejection": {
+      "$schema": "rusty.manifold.command.lease_rejection.v1",
+      "request_id": "request.lease.busy_module",
+      "rejection_code": "lease_scope_busy",
+      "message": "lease request scope is already held by an active lease",
+      "retryable": true,
+      "current_revision": 1,
+      "conflicting_lease_id": "lease.synthetic_module"
+    },
+    "recorded_clock": {
+      "$schema": "rusty.manifold.clock.snapshot.v1",
+      "clock_domain": "clock.host_monotonic",
+      "clock_epoch_id": "clock_epoch.synthetic_1",
+      "sequence": 43,
+      "monotonic_elapsed_ns": 1234567990,
+      "wall_unix_ms": 1765000000100,
+      "read_uncertainty_ns": 250000,
+      "health": "healthy",
+      "wall_clock_adjustment_count": 0
+    },
+    "evidence_refs": [
+      "evidence.lease_authority.request.lease.busy_module"
+    ]
+  }
+}

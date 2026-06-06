@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.authority.snapshot_application_rejection.v1",
+  "application_id": "host_manifest_application.host_manifest_review.request.host_manifest.stale_revision",
+  "rejection_code": "review_rejected",
+  "message": "host manifest review did not accept a host manifest",
+  "retryable": true,
+  "current_authority_revision": 1
+}

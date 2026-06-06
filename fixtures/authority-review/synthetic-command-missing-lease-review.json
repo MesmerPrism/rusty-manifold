@@ -1,0 +1,62 @@
+{
+  "$schema": "rusty.manifold.authority.command_review.v1",
+  "review_id": "command_review.request.missing_lease.synthetic_wave",
+  "authority_id": "authority.synthetic",
+  "authority_revision": 1,
+  "outcome": "command_rejected",
+  "accepted": null,
+  "rejection": {
+    "$schema": "rusty.manifold.command.rejection.v1",
+    "request_id": "request.missing_lease.synthetic_wave",
+    "rejection_code": "missing_lease",
+    "message": "command requires an active lease",
+    "retryable": true,
+    "current_revision": 1
+  },
+  "audit_event": {
+    "$schema": "rusty.manifold.authority.command_audit_event.v1",
+    "event_id": "audit.command.request.missing_lease.synthetic_wave.rejected",
+    "authority_id": "authority.synthetic",
+    "prior_authority_revision": 1,
+    "event_kind": "command_rejected",
+    "envelope": {
+      "$schema": "rusty.manifold.command.envelope.v1",
+      "request_id": "request.missing_lease.synthetic_wave",
+      "command_id": "command.module.start",
+      "target_id": "module.synthetic_wave_provider",
+      "target_scope": "module.synthetic_wave_provider",
+      "input_schema": "rusty.manifold.command.input.empty.v1",
+      "expected_revision": 1,
+      "required_capability": "manifold.module.control",
+      "lease_id": null,
+      "preconditions": [],
+      "safety_class": "bounded_mutation",
+      "requested_at_ms": 1765000000000,
+      "holder_id": "holder.test_agent"
+    },
+    "accepted": null,
+    "rejection": {
+      "$schema": "rusty.manifold.command.rejection.v1",
+      "request_id": "request.missing_lease.synthetic_wave",
+      "rejection_code": "missing_lease",
+      "message": "command requires an active lease",
+      "retryable": true,
+      "current_revision": 1
+    },
+    "lease": null,
+    "recorded_clock": {
+      "$schema": "rusty.manifold.clock.snapshot.v1",
+      "clock_domain": "clock.host_monotonic",
+      "clock_epoch_id": "clock_epoch.synthetic_1",
+      "sequence": 43,
+      "monotonic_elapsed_ns": 1234567990,
+      "wall_unix_ms": 1765000000100,
+      "read_uncertainty_ns": 250000,
+      "health": "healthy",
+      "wall_clock_adjustment_count": 0
+    },
+    "evidence_refs": [
+      "evidence.command_authority.request.missing_lease.synthetic_wave"
+    ]
+  }
+}

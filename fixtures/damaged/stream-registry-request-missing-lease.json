@@ -1,0 +1,16 @@
+{
+  "$schema": "rusty.manifold.stream.registry_change_request.v1",
+  "request_id": "request.stream_registry.missing_lease",
+  "holder_id": "holder.test_agent",
+  "expected_authority_revision": 1,
+  "lease_id": null,
+  "required_capability": "manifold.stream_registry.update",
+  "diff": {
+    "$schema": "rusty.manifold.stream.registry_diff.v1",
+    "from_revision": 1,
+    "to_revision": 2,
+    "added_streams": [],
+    "removed_streams": [],
+    "changed_streams": []
+  }
+}

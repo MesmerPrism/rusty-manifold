@@ -1,0 +1,11 @@
+{
+  "$schema": "rusty.manifold.command.lease_renewal_request.v1",
+  "request_id": "request.lease_renewal.synthetic_lease_1",
+  "lease_id": "lease.synthetic_lease_1",
+  "holder_id": "holder.test_agent",
+  "expected_authority_revision": 2,
+  "scope": "manifold.graph",
+  "requested_ttl_ms": 60000,
+  "renewal_reason": "holder.needs_more_time",
+  "requested_at_ms": 1765000000200
+}

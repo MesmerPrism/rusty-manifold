@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.authority.snapshot_application_rejection.v1",
+  "application_id": "lease_application.lease_review.request.lease.stale_graph",
+  "rejection_code": "review_rejected",
+  "message": "control lease review did not accept a lease",
+  "retryable": true,
+  "current_authority_revision": 1
+}

@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.authority.snapshot_application_rejection.v1",
+  "application_id": "stream_subscription_application.stream_subscription_review.request.stream_subscription.stale_authority",
+  "rejection_code": "review_rejected",
+  "message": "stream subscription review did not accept a subscription",
+  "retryable": true,
+  "current_authority_revision": 1
+}

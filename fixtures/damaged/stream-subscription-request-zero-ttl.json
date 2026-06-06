@@ -1,0 +1,13 @@
+{
+  "$schema": "rusty.manifold.stream.subscription_request.v1",
+  "request_id": "request.stream_subscription.zero_ttl",
+  "subscriber_id": "subscriber.ui.synthetic_dashboard",
+  "subscriber_kind": "ui",
+  "expected_authority_revision": 1,
+  "expected_registry_revision": 1,
+  "stream_id": "stream.synthetic_wave",
+  "transport_id": "transport.in_process",
+  "requested_ttl_ms": 0,
+  "required_capability": "manifold.stream.subscribe",
+  "requested_at_ms": 1765000000000
+}

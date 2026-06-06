@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.authority.snapshot_application_rejection.v1",
+  "application_id": "expiry_sweep_application.expiry_sweep_review.request.expiry_sweep.stale_revision",
+  "rejection_code": "review_rejected",
+  "message": "authority expiry sweep review did not accept expired state",
+  "retryable": true,
+  "current_authority_revision": 2
+}

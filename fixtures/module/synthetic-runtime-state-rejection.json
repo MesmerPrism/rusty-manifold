@@ -1,0 +1,9 @@
+{
+  "$schema": "rusty.manifold.module.runtime_state_rejection.v1",
+  "request_id": "request.module_runtime.stop.synthetic_wave_provider",
+  "rejection_code": "stale_revision",
+  "message": "module runtime-state request expected authority revision does not match current revision",
+  "retryable": true,
+  "current_authority_revision": 1,
+  "current_runtime_revision": 1
+}

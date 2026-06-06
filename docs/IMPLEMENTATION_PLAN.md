@@ -13,16 +13,79 @@ Deliverables:
 - `ManifoldPackageManifest`
 - `ManifoldModuleManifest`
 - `ManifoldModuleRuntimeState`
+- `ManifoldModuleRuntimeStateChangeRequest`
+- `ManifoldModuleRuntimeStateRejection`
 - `ManifoldStreamManifest`
 - `ManifoldStreamRegistrySnapshot`
+- `ManifoldStreamRegistryDiff`
+- `ManifoldStreamRegistryChangeRequest`
+- `ManifoldStreamRegistryRejection`
+- `ManifoldStreamSubscriptionRequest`
+- `ManifoldStreamSubscription`
+- `ManifoldStreamSubscriptionRejection`
+- `ManifoldStreamSubscriptionReleaseRequest`
+- `ManifoldStreamSubscriptionReleaseRejection`
+- `ManifoldStreamSubscriptionRenewalRequest`
+- `ManifoldStreamSubscriptionRenewalRejection`
 - `ManifoldCommandDescriptor`
 - `ManifoldCommandEnvelope`
 - `ManifoldCommandAck`
 - `ManifoldCommandRejection`
+- `ManifoldCommandDispatchRejection`
+- `ManifoldCommandDispatchReceipt`
+- `ManifoldControlLeaseRequest`
 - `ManifoldControlLease`
+- `ManifoldControlLeaseRejection`
+- `ManifoldControlLeaseReleaseRequest`
+- `ManifoldControlLeaseReleaseRejection`
+- `ManifoldControlLeaseRenewalRequest`
+- `ManifoldControlLeaseRenewalRejection`
+- `ManifoldAuthoritySnapshot`
+- `ManifoldCommandAuthorityAuditEvent`
+- `ManifoldCommandAuthorityReview`
+- `ManifoldControlLeaseAuthorityAuditEvent`
+- `ManifoldControlLeaseAuthorityReview`
+- `ManifoldControlLeaseAuthorityApplication`
+- `ManifoldControlLeaseReleaseAuthorityAuditEvent`
+- `ManifoldControlLeaseReleaseAuthorityReview`
+- `ManifoldControlLeaseReleaseAuthorityApplication`
+- `ManifoldControlLeaseRenewalAuthorityAuditEvent`
+- `ManifoldControlLeaseRenewalAuthorityReview`
+- `ManifoldControlLeaseRenewalAuthorityApplication`
+- `ManifoldStreamRegistryAuthorityAuditEvent`
+- `ManifoldStreamRegistryAuthorityReview`
+- `ManifoldAuthoritySnapshotApplicationRejection`
+- `ManifoldStreamRegistryAuthorityApplication`
+- `ManifoldStreamSubscriptionAuthorityAuditEvent`
+- `ManifoldStreamSubscriptionAuthorityReview`
+- `ManifoldStreamSubscriptionAuthorityApplication`
+- `ManifoldStreamSubscriptionReleaseAuthorityAuditEvent`
+- `ManifoldStreamSubscriptionReleaseAuthorityReview`
+- `ManifoldStreamSubscriptionReleaseAuthorityApplication`
+- `ManifoldStreamSubscriptionRenewalAuthorityAuditEvent`
+- `ManifoldStreamSubscriptionRenewalAuthorityReview`
+- `ManifoldStreamSubscriptionRenewalAuthorityApplication`
+- `ManifoldAuthorityExpirySweepRequest`
+- `ManifoldAuthorityExpirySweepRejection`
+- `ManifoldAuthorityExpirySweepAuthorityAuditEvent`
+- `ManifoldAuthorityExpirySweepAuthorityReview`
+- `ManifoldAuthorityExpirySweepAuthorityApplication`
+- `ManifoldModuleRuntimeStateAuthorityAuditEvent`
+- `ManifoldModuleRuntimeStateAuthorityReview`
+- `ManifoldModuleRuntimeStateAuthorityApplication`
 - `ManifoldHostManifest`
+- `ManifoldHostManifestChangeRequest`
+- `ManifoldHostManifestRejection`
+- `ManifoldHostManifestAuthorityAuditEvent`
+- `ManifoldHostManifestAuthorityReview`
+- `ManifoldHostManifestAuthorityApplication`
 - `ManifoldDeploymentManifest`
 - `ManifoldClockSnapshot`
+- `ManifoldClockSnapshotChangeRequest`
+- `ManifoldClockSnapshotRejection`
+- `ManifoldClockSnapshotAuthorityAuditEvent`
+- `ManifoldClockSnapshotAuthorityReview`
+- `ManifoldClockSnapshotAuthorityApplication`
 - `ManifoldValidationScorecard`
 
 Implementation:
@@ -82,6 +145,7 @@ Deliverables:
 - command acceptance and rejection fixtures;
 - runtime-state transition fixtures;
 - stream registry diff fixture.
+- lease and stream subscription admission, renewal, release, and expiry-sweep review/application fixtures.
 
 The simulator may be a test helper or CLI. It should produce the same manifest
 and runtime-state shapes that a live host will produce later.

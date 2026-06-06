@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.authority.snapshot_application_rejection.v1",
+  "application_id": "lease_release_application.lease_release_review.request.lease_release.stale_revision",
+  "rejection_code": "review_rejected",
+  "message": "control lease release review did not release a lease",
+  "retryable": true,
+  "current_authority_revision": 2
+}

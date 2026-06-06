@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.command.lease_request.v1",
+  "request_id": "request.lease.busy_module",
+  "holder_id": "holder.other_agent",
+  "scope": "module.synthetic_wave_provider",
+  "expected_revision": 1,
+  "requested_ttl_ms": 30000,
+  "required_capability": "manifold.module.control",
+  "safety_class": "bounded_mutation"
+}

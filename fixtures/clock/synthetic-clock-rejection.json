@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.clock.snapshot_rejection.v1",
+  "request_id": "request.clock.stale_revision",
+  "rejection_code": "stale_revision",
+  "message": "clock snapshot request expected authority revision does not match current revision",
+  "retryable": true,
+  "current_authority_revision": 1,
+  "current_clock_epoch_id": "clock_epoch.synthetic_1",
+  "current_clock_sequence": 42
+}

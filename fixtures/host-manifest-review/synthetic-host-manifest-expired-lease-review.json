@@ -1,0 +1,99 @@
+{
+  "$schema": "rusty.manifold.authority.host_manifest_review.v1",
+  "review_id": "host_manifest_review.request.host_manifest.synthetic_permissions",
+  "authority_id": "authority.synthetic",
+  "authority_revision": 1,
+  "host_id": "host.synthetic",
+  "outcome": "host_manifest_rejected",
+  "accepted": null,
+  "rejection": {
+    "$schema": "rusty.manifold.host.manifest_rejection.v1",
+    "request_id": "request.host_manifest.synthetic_permissions",
+    "rejection_code": "expired_lease",
+    "message": "host manifest lease is expired at the review clock",
+    "retryable": true,
+    "current_authority_revision": 1
+  },
+  "audit_event": {
+    "$schema": "rusty.manifold.authority.host_manifest_audit_event.v1",
+    "event_id": "audit.host_manifest.request.host_manifest.synthetic_permissions.rejected",
+    "authority_id": "authority.synthetic",
+    "prior_authority_revision": 1,
+    "host_id": "host.synthetic",
+    "event_kind": "host_manifest_rejected",
+    "request": {
+      "$schema": "rusty.manifold.host.manifest_change_request.v1",
+      "request_id": "request.host_manifest.synthetic_permissions",
+      "holder_id": "holder.test_agent",
+      "expected_authority_revision": 1,
+      "lease_id": "lease.synthetic_host_manifest",
+      "required_capability": "manifold.host_manifest.update",
+      "proposed_manifest": {
+        "$schema": "rusty.manifold.host.manifest.v1",
+        "host_id": "host.synthetic",
+        "authority_role": "primary",
+        "host_category": "host.synthetic",
+        "clock_domain": "clock.host_monotonic",
+        "endpoints": [
+          {
+            "endpoint_id": "endpoint.control_loopback",
+            "visibility": "loopback",
+            "transport": "http",
+            "security": "local_process"
+          }
+        ],
+        "capabilities": [
+          "manifold.graph.read",
+          "manifold.command.request",
+          "manifold.module.control",
+          "manifold.graph.run",
+          "manifold.stream_registry.update",
+          "manifold.host_manifest.update",
+          "manifold.clock.update"
+        ],
+        "supported_backends": [
+          "backend.synthetic",
+          "backend.replay"
+        ],
+        "permissions": [
+          "permission.synthetic_diagnostics"
+        ],
+        "lifecycle_limits": [],
+        "missing_requirements": []
+      }
+    },
+    "accepted": null,
+    "rejection": {
+      "$schema": "rusty.manifold.host.manifest_rejection.v1",
+      "request_id": "request.host_manifest.synthetic_permissions",
+      "rejection_code": "expired_lease",
+      "message": "host manifest lease is expired at the review clock",
+      "retryable": true,
+      "current_authority_revision": 1
+    },
+    "lease": {
+      "$schema": "rusty.manifold.command.control_lease.v1",
+      "lease_id": "lease.synthetic_host_manifest",
+      "holder_id": "holder.test_agent",
+      "scope": "manifold.host_manifest",
+      "state": "active",
+      "granted_revision": 1,
+      "expires_at_ms": 1765000030000,
+      "required_capability": "manifold.host_manifest.update"
+    },
+    "recorded_clock": {
+      "$schema": "rusty.manifold.clock.snapshot.v1",
+      "clock_domain": "clock.host_monotonic",
+      "clock_epoch_id": "clock_epoch.synthetic_1",
+      "sequence": 44,
+      "monotonic_elapsed_ns": 3334567990,
+      "wall_unix_ms": 1765000030200,
+      "read_uncertainty_ns": 250000,
+      "health": "healthy",
+      "wall_clock_adjustment_count": 0
+    },
+    "evidence_refs": [
+      "evidence.host_manifest_authority.request.host_manifest.synthetic_permissions"
+    ]
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.command.control_lease.v1",
+  "lease_id": "lease.synthetic_host_manifest",
+  "holder_id": "holder.test_agent",
+  "scope": "manifold.host_manifest",
+  "state": "active",
+  "granted_revision": 1,
+  "expires_at_ms": 1765000030000,
+  "required_capability": "manifold.host_manifest.update"
+}

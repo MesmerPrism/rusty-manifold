@@ -1,0 +1,78 @@
+{
+  "$schema": "rusty.manifold.authority.stream_subscription_renewal_review.v1",
+  "review_id": "stream_subscription_renewal_review.request.stream_subscription_renewal.synthetic_wave_ui",
+  "authority_id": "authority.synthetic",
+  "authority_revision": 2,
+  "registry_revision": 1,
+  "outcome": "subscription_renewed",
+  "renewed": {
+    "$schema": "rusty.manifold.stream.subscription.v1",
+    "subscription_id": "subscription.stream_subscription.synthetic_wave_ui",
+    "request_id": "request.stream_subscription.synthetic_wave_ui",
+    "subscriber_id": "subscriber.ui.synthetic_dashboard",
+    "subscriber_kind": "ui",
+    "stream_id": "stream.synthetic_wave",
+    "transport_id": "transport.in_process",
+    "endpoint_id": null,
+    "state": "active",
+    "accepted_authority_revision": 2,
+    "accepted_registry_revision": 1,
+    "accepted_at_ms": 1765000000100,
+    "expires_at_ms": 1765000060100,
+    "required_capability": "manifold.stream.subscribe"
+  },
+  "rejection": null,
+  "audit_event": {
+    "$schema": "rusty.manifold.authority.stream_subscription_renewal_audit_event.v1",
+    "event_id": "audit.stream_subscription_renewal.request.stream_subscription_renewal.synthetic_wave_ui.renewed",
+    "authority_id": "authority.synthetic",
+    "prior_authority_revision": 2,
+    "prior_registry_revision": 1,
+    "active_subscriber_count": 1,
+    "event_kind": "subscription_renewed",
+    "request": {
+      "$schema": "rusty.manifold.stream.subscription_renewal_request.v1",
+      "request_id": "request.stream_subscription_renewal.synthetic_wave_ui",
+      "subscription_id": "subscription.stream_subscription.synthetic_wave_ui",
+      "subscriber_id": "subscriber.ui.synthetic_dashboard",
+      "expected_authority_revision": 2,
+      "expected_registry_revision": 1,
+      "stream_id": "stream.synthetic_wave",
+      "transport_id": "transport.in_process",
+      "requested_ttl_ms": 60000,
+      "renewal_reason": "subscriber.needs_more_time",
+      "requested_at_ms": 1765000000200
+    },
+    "renewed": {
+      "$schema": "rusty.manifold.stream.subscription.v1",
+      "subscription_id": "subscription.stream_subscription.synthetic_wave_ui",
+      "request_id": "request.stream_subscription.synthetic_wave_ui",
+      "subscriber_id": "subscriber.ui.synthetic_dashboard",
+      "subscriber_kind": "ui",
+      "stream_id": "stream.synthetic_wave",
+      "transport_id": "transport.in_process",
+      "endpoint_id": null,
+      "state": "active",
+      "accepted_authority_revision": 2,
+      "accepted_registry_revision": 1,
+      "accepted_at_ms": 1765000000100,
+      "expires_at_ms": 1765000060100,
+      "required_capability": "manifold.stream.subscribe"
+    },
+    "rejection": null,
+    "recorded_clock": {
+      "$schema": "rusty.manifold.clock.snapshot.v1",
+      "clock_domain": "clock.host_monotonic",
+      "clock_epoch_id": "clock_epoch.synthetic_1",
+      "sequence": 43,
+      "monotonic_elapsed_ns": 1234567990,
+      "wall_unix_ms": 1765000000100,
+      "read_uncertainty_ns": 250000,
+      "health": "healthy",
+      "wall_clock_adjustment_count": 0
+    },
+    "evidence_refs": [
+      "evidence.stream_subscription_renewal_authority.request.stream_subscription_renewal.synthetic_wave_ui"
+    ]
+  }
+}

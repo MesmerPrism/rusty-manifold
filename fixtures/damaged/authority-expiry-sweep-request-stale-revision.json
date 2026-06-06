@@ -1,0 +1,9 @@
+{
+  "$schema": "rusty.manifold.authority.expiry_sweep_request.v1",
+  "request_id": "request.expiry_sweep.stale_revision",
+  "requester_id": "authority.synthetic",
+  "expected_authority_revision": 1,
+  "expected_registry_revision": 1,
+  "sweep_reason": "maintenance.ttl_expired",
+  "requested_at_ms": 1765000030200
+}

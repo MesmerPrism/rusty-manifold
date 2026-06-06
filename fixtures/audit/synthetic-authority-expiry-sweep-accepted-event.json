@@ -1,0 +1,92 @@
+{
+  "$schema": "rusty.manifold.authority.expiry_sweep_audit_event.v1",
+  "event_id": "audit.expiry_sweep.request.expiry_sweep.synthetic.accepted",
+  "authority_id": "authority.synthetic",
+  "prior_authority_revision": 2,
+  "prior_registry_revision": 1,
+  "event_kind": "expired_state_accepted",
+  "request": {
+    "$schema": "rusty.manifold.authority.expiry_sweep_request.v1",
+    "request_id": "request.expiry_sweep.synthetic",
+    "requester_id": "authority.synthetic",
+    "expected_authority_revision": 2,
+    "expected_registry_revision": 1,
+    "sweep_reason": "maintenance.ttl_expired",
+    "requested_at_ms": 1765000030200
+  },
+  "expired_leases": [
+    {
+      "$schema": "rusty.manifold.command.control_lease.v1",
+      "lease_id": "lease.synthetic_module",
+      "holder_id": "holder.test_agent",
+      "scope": "module.synthetic_wave_provider",
+      "state": "active",
+      "granted_revision": 1,
+      "expires_at_ms": 1765000030000,
+      "required_capability": "manifold.module.control"
+    },
+    {
+      "$schema": "rusty.manifold.command.control_lease.v1",
+      "lease_id": "lease.synthetic_stream_registry",
+      "holder_id": "holder.test_agent",
+      "scope": "manifold.stream_registry",
+      "state": "active",
+      "granted_revision": 1,
+      "expires_at_ms": 1765000030000,
+      "required_capability": "manifold.stream_registry.update"
+    },
+    {
+      "$schema": "rusty.manifold.command.control_lease.v1",
+      "lease_id": "lease.synthetic_host_manifest",
+      "holder_id": "holder.test_agent",
+      "scope": "manifold.host_manifest",
+      "state": "active",
+      "granted_revision": 1,
+      "expires_at_ms": 1765000030000,
+      "required_capability": "manifold.host_manifest.update"
+    },
+    {
+      "$schema": "rusty.manifold.command.control_lease.v1",
+      "lease_id": "lease.synthetic_clock",
+      "holder_id": "holder.test_agent",
+      "scope": "manifold.clock",
+      "state": "active",
+      "granted_revision": 1,
+      "expires_at_ms": 1765000030000,
+      "required_capability": "manifold.clock.update"
+    }
+  ],
+  "expired_stream_subscriptions": [
+    {
+      "$schema": "rusty.manifold.stream.subscription.v1",
+      "subscription_id": "subscription.stream_subscription.synthetic_wave_ui",
+      "request_id": "request.stream_subscription.synthetic_wave_ui",
+      "subscriber_id": "subscriber.ui.synthetic_dashboard",
+      "subscriber_kind": "ui",
+      "stream_id": "stream.synthetic_wave",
+      "transport_id": "transport.in_process",
+      "endpoint_id": null,
+      "state": "active",
+      "accepted_authority_revision": 1,
+      "accepted_registry_revision": 1,
+      "accepted_at_ms": 1765000000100,
+      "expires_at_ms": 1765000030100,
+      "required_capability": "manifold.stream.subscribe"
+    }
+  ],
+  "rejection": null,
+  "recorded_clock": {
+    "$schema": "rusty.manifold.clock.snapshot.v1",
+    "clock_domain": "clock.host_monotonic",
+    "clock_epoch_id": "clock_epoch.synthetic_1",
+    "sequence": 44,
+    "monotonic_elapsed_ns": 3334567990,
+    "wall_unix_ms": 1765000030200,
+    "read_uncertainty_ns": 250000,
+    "health": "healthy",
+    "wall_clock_adjustment_count": 0
+  },
+  "evidence_refs": [
+    "evidence.expiry_sweep_authority.request.expiry_sweep.synthetic"
+  ]
+}

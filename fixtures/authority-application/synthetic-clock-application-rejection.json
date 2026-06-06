@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.authority.snapshot_application_rejection.v1",
+  "application_id": "clock_snapshot_application.clock_snapshot_review.request.clock.stale_revision",
+  "rejection_code": "review_rejected",
+  "message": "clock snapshot review did not accept a clock snapshot",
+  "retryable": true,
+  "current_authority_revision": 1
+}

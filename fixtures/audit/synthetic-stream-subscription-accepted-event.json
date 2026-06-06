@@ -1,0 +1,53 @@
+{
+  "$schema": "rusty.manifold.authority.stream_subscription_audit_event.v1",
+  "event_id": "audit.stream_subscription.request.stream_subscription.synthetic_wave_ui.accepted",
+  "authority_id": "authority.synthetic",
+  "prior_authority_revision": 1,
+  "prior_registry_revision": 1,
+  "active_subscriber_count": 0,
+  "event_kind": "subscription_accepted",
+  "request": {
+    "$schema": "rusty.manifold.stream.subscription_request.v1",
+    "request_id": "request.stream_subscription.synthetic_wave_ui",
+    "subscriber_id": "subscriber.ui.synthetic_dashboard",
+    "subscriber_kind": "ui",
+    "expected_authority_revision": 1,
+    "expected_registry_revision": 1,
+    "stream_id": "stream.synthetic_wave",
+    "transport_id": "transport.in_process",
+    "requested_ttl_ms": 30000,
+    "required_capability": "manifold.stream.subscribe",
+    "requested_at_ms": 1765000000000
+  },
+  "accepted": {
+    "$schema": "rusty.manifold.stream.subscription.v1",
+    "subscription_id": "subscription.stream_subscription.synthetic_wave_ui",
+    "request_id": "request.stream_subscription.synthetic_wave_ui",
+    "subscriber_id": "subscriber.ui.synthetic_dashboard",
+    "subscriber_kind": "ui",
+    "stream_id": "stream.synthetic_wave",
+    "transport_id": "transport.in_process",
+    "endpoint_id": null,
+    "state": "active",
+    "accepted_authority_revision": 1,
+    "accepted_registry_revision": 1,
+    "accepted_at_ms": 1765000000100,
+    "expires_at_ms": 1765000030100,
+    "required_capability": "manifold.stream.subscribe"
+  },
+  "rejection": null,
+  "recorded_clock": {
+    "$schema": "rusty.manifold.clock.snapshot.v1",
+    "clock_domain": "clock.host_monotonic",
+    "clock_epoch_id": "clock_epoch.synthetic_1",
+    "sequence": 43,
+    "monotonic_elapsed_ns": 1234567990,
+    "wall_unix_ms": 1765000000100,
+    "read_uncertainty_ns": 250000,
+    "health": "healthy",
+    "wall_clock_adjustment_count": 0
+  },
+  "evidence_refs": [
+    "evidence.stream_subscription_authority.request.stream_subscription.synthetic_wave_ui"
+  ]
+}

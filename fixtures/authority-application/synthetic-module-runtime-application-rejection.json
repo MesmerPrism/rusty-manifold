@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.authority.snapshot_application_rejection.v1",
+  "application_id": "module_runtime_state_application.module_runtime_state_review.request.module_runtime.stale_revision",
+  "rejection_code": "review_rejected",
+  "message": "module runtime-state review did not accept runtime state",
+  "retryable": true,
+  "current_authority_revision": 1
+}

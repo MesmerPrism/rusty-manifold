@@ -1,0 +1,84 @@
+{
+  "$schema": "rusty.manifold.authority.snapshot.v1",
+  "authority_id": "authority.synthetic",
+  "authority_revision": 1,
+  "host_manifest": {
+    "$schema": "rusty.manifold.host.manifest.v1",
+    "host_id": "host.synthetic",
+    "authority_role": "primary",
+    "host_category": "host.synthetic",
+    "clock_domain": "clock.host_monotonic",
+    "endpoints": [],
+    "capabilities": [
+      "manifold.stream.subscribe"
+    ],
+    "supported_backends": [
+      "backend.synthetic"
+    ],
+    "permissions": [],
+    "lifecycle_limits": [],
+    "missing_requirements": []
+  },
+  "clock_snapshot": {
+    "$schema": "rusty.manifold.clock.snapshot.v1",
+    "clock_domain": "clock.host_monotonic",
+    "clock_epoch_id": "clock_epoch.synthetic_1",
+    "sequence": 42,
+    "monotonic_elapsed_ns": 1234567890,
+    "wall_unix_ms": 1765000000000,
+    "read_uncertainty_ns": 250000,
+    "health": "healthy",
+    "wall_clock_adjustment_count": 0
+  },
+  "stream_registry": {
+    "$schema": "rusty.manifold.stream.registry_snapshot.v1",
+    "registry_revision": 1,
+    "streams": [
+      {
+        "$schema": "rusty.manifold.stream.manifest.v1",
+        "stream_id": "stream.synthetic_wave",
+        "source_module_id": "module.synthetic_wave_provider",
+        "semantic_family": "synthetic.scalar",
+        "sample_schema": "rusty.manifold.sample.scalar_f32.v1",
+        "rate_class": "periodic",
+        "timestamp_domains": [
+          "clock.host_monotonic"
+        ],
+        "retention": {
+          "policy": "ephemeral"
+        },
+        "sensitivity": "synthetic",
+        "transport_offers": [
+          {
+            "transport_id": "transport.in_process",
+            "transport": "in_process",
+            "endpoint_id": null
+          }
+        ],
+        "subscription": {
+          "ui_subscribable": false,
+          "max_subscribers": 8
+        }
+      }
+    ]
+  },
+  "module_runtime_states": [
+    {
+      "$schema": "rusty.manifold.module.runtime_state.v1",
+      "module_id": "module.synthetic_wave_provider",
+      "runtime_revision": 1,
+      "lifecycle": "running",
+      "health": "healthy",
+      "selected_backend": "backend.synthetic",
+      "active_streams": [
+        "stream.synthetic_wave"
+      ],
+      "active_commands": [],
+      "issues": []
+    }
+  ],
+  "command_ids": [],
+  "command_descriptors": [],
+  "active_leases": [],
+  "active_stream_subscriptions": []
+}

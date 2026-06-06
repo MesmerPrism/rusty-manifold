@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.authority.snapshot_application_rejection.v1",
+  "application_id": "lease_renewal_application.lease_renewal_review.request.lease_renewal.stale_revision",
+  "rejection_code": "review_rejected",
+  "message": "control lease renewal review did not renew a lease",
+  "retryable": true,
+  "current_authority_revision": 2
+}

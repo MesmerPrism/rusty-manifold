@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.authority.command_dispatch_rejection.v1",
+  "dispatch_id": "command_dispatch.command_review.request.missing_lease.synthetic_wave",
+  "rejection_code": "review_rejected",
+  "message": "command review did not accept a command",
+  "retryable": true,
+  "current_authority_revision": 1
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "rusty.manifold.command.envelope.v1",
+  "request_id": "request.unknown_command.synthetic_wave",
+  "command_id": "command.module.not_registered",
+  "target_id": "module.synthetic_wave_provider",
+  "target_scope": "module.synthetic_wave_provider",
+  "input_schema": "rusty.manifold.command.input.empty.v1",
+  "expected_revision": 1,
+  "required_capability": "manifold.module.control",
+  "lease_id": "lease.synthetic_module",
+  "preconditions": [],
+  "safety_class": "bounded_mutation",
+  "requested_at_ms": 1765000000000,
+  "holder_id": "holder.test_agent",
+  "expected_rejection": "unknown_command"
+}

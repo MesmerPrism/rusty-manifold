@@ -1,0 +1,307 @@
+{
+  "$schema": "rusty.manifold.authority.clock_snapshot_application.v1",
+  "application_id": "clock_snapshot_application.clock_snapshot_review.request.clock.synthetic_tick",
+  "authority_id": "authority.synthetic",
+  "from_authority_revision": 1,
+  "from_clock_epoch_id": "clock_epoch.synthetic_1",
+  "from_clock_sequence": 42,
+  "outcome": "clock_snapshot_applied",
+  "applied_snapshot": {
+    "$schema": "rusty.manifold.authority.snapshot.v1",
+    "authority_id": "authority.synthetic",
+    "authority_revision": 2,
+    "host_manifest": {
+      "$schema": "rusty.manifold.host.manifest.v1",
+      "host_id": "host.synthetic",
+      "authority_role": "primary",
+      "host_category": "host.synthetic",
+      "clock_domain": "clock.host_monotonic",
+      "endpoints": [
+        {
+          "endpoint_id": "endpoint.control_loopback",
+          "visibility": "loopback",
+          "transport": "http",
+          "security": "local_process"
+        }
+      ],
+      "capabilities": [
+        "manifold.graph.read",
+        "manifold.command.request",
+        "manifold.module.control",
+        "manifold.graph.run",
+        "manifold.stream_registry.update",
+        "manifold.host_manifest.update",
+        "manifold.clock.update"
+      ],
+      "supported_backends": [
+        "backend.synthetic",
+        "backend.replay"
+      ],
+      "permissions": [],
+      "lifecycle_limits": [],
+      "missing_requirements": []
+    },
+    "clock_snapshot": {
+      "$schema": "rusty.manifold.clock.snapshot.v1",
+      "clock_domain": "clock.host_monotonic",
+      "clock_epoch_id": "clock_epoch.synthetic_1",
+      "sequence": 43,
+      "monotonic_elapsed_ns": 1234567990,
+      "wall_unix_ms": 1765000000100,
+      "read_uncertainty_ns": 250000,
+      "health": "degraded",
+      "wall_clock_adjustment_count": 0
+    },
+    "stream_registry": {
+      "$schema": "rusty.manifold.stream.registry_snapshot.v1",
+      "registry_revision": 1,
+      "streams": [
+        {
+          "$schema": "rusty.manifold.stream.manifest.v1",
+          "stream_id": "stream.synthetic_wave",
+          "source_module_id": "module.synthetic_wave_provider",
+          "semantic_family": "synthetic.scalar",
+          "sample_schema": "rusty.manifold.sample.scalar_f32.v1",
+          "rate_class": "periodic",
+          "timestamp_domains": [
+            "clock.host_monotonic"
+          ],
+          "retention": {
+            "policy": "ephemeral"
+          },
+          "sensitivity": "synthetic",
+          "transport_offers": [
+            {
+              "transport_id": "transport.in_process",
+              "transport": "in_process",
+              "endpoint_id": null
+            }
+          ],
+          "subscription": {
+            "ui_subscribable": true,
+            "max_subscribers": 8
+          }
+        },
+        {
+          "$schema": "rusty.manifold.stream.manifest.v1",
+          "stream_id": "stream.synthetic_rms",
+          "source_module_id": "module.synthetic_wave_processor",
+          "semantic_family": "synthetic.scalar",
+          "sample_schema": "rusty.manifold.sample.scalar_f32.v1",
+          "rate_class": "periodic",
+          "timestamp_domains": [
+            "clock.host_monotonic"
+          ],
+          "retention": {
+            "policy": "ephemeral"
+          },
+          "sensitivity": "synthetic",
+          "transport_offers": [
+            {
+              "transport_id": "transport.in_process",
+              "transport": "in_process",
+              "endpoint_id": null
+            }
+          ],
+          "subscription": {
+            "ui_subscribable": true,
+            "max_subscribers": 8
+          }
+        }
+      ]
+    },
+    "module_runtime_states": [
+      {
+        "$schema": "rusty.manifold.module.runtime_state.v1",
+        "module_id": "module.synthetic_wave_provider",
+        "runtime_revision": 1,
+        "lifecycle": "running",
+        "health": "healthy",
+        "selected_backend": "backend.synthetic",
+        "active_streams": [
+          "stream.synthetic_wave"
+        ],
+        "active_commands": [
+          "command.module.configure",
+          "command.module.start",
+          "command.module.stop"
+        ],
+        "issues": []
+      },
+      {
+        "$schema": "rusty.manifold.module.runtime_state.v1",
+        "module_id": "module.synthetic_wave_processor",
+        "runtime_revision": 1,
+        "lifecycle": "running",
+        "health": "healthy",
+        "selected_backend": "backend.synthetic",
+        "active_streams": [
+          "stream.synthetic_rms"
+        ],
+        "active_commands": [
+          "command.module.configure",
+          "command.module.start",
+          "command.module.stop"
+        ],
+        "issues": []
+      }
+    ],
+    "command_ids": [
+      "command.module.configure",
+      "command.module.start",
+      "command.module.stop"
+    ],
+    "command_descriptors": [
+      {
+        "$schema": "rusty.manifold.command.descriptor.v1",
+        "command_id": "command.module.start",
+        "target_scope": "module.synthetic_wave_provider",
+        "input_schema": "rusty.manifold.command.input.empty.v1",
+        "required_capability": "manifold.module.control",
+        "required_lease_scope": "module.synthetic_wave_provider",
+        "safety_class": "bounded_mutation",
+        "operator_confirmation_required": false
+      }
+    ],
+    "active_leases": [
+      {
+        "$schema": "rusty.manifold.command.control_lease.v1",
+        "lease_id": "lease.synthetic_module",
+        "holder_id": "holder.test_agent",
+        "scope": "module.synthetic_wave_provider",
+        "state": "active",
+        "granted_revision": 1,
+        "expires_at_ms": 1765000030000,
+        "required_capability": "manifold.module.control"
+      },
+      {
+        "$schema": "rusty.manifold.command.control_lease.v1",
+        "lease_id": "lease.synthetic_stream_registry",
+        "holder_id": "holder.test_agent",
+        "scope": "manifold.stream_registry",
+        "state": "active",
+        "granted_revision": 1,
+        "expires_at_ms": 1765000030000,
+        "required_capability": "manifold.stream_registry.update"
+      },
+      {
+        "$schema": "rusty.manifold.command.control_lease.v1",
+        "lease_id": "lease.synthetic_host_manifest",
+        "holder_id": "holder.test_agent",
+        "scope": "manifold.host_manifest",
+        "state": "active",
+        "granted_revision": 1,
+        "expires_at_ms": 1765000030000,
+        "required_capability": "manifold.host_manifest.update"
+      },
+      {
+        "$schema": "rusty.manifold.command.control_lease.v1",
+        "lease_id": "lease.synthetic_clock",
+        "holder_id": "holder.test_agent",
+        "scope": "manifold.clock",
+        "state": "active",
+        "granted_revision": 1,
+        "expires_at_ms": 1765000030000,
+        "required_capability": "manifold.clock.update"
+      }
+    ]
+  },
+  "rejection": null,
+  "review": {
+    "$schema": "rusty.manifold.authority.clock_snapshot_review.v1",
+    "review_id": "clock_snapshot_review.request.clock.synthetic_tick",
+    "authority_id": "authority.synthetic",
+    "authority_revision": 1,
+    "clock_domain": "clock.host_monotonic",
+    "clock_epoch_id": "clock_epoch.synthetic_1",
+    "clock_sequence": 42,
+    "outcome": "clock_snapshot_accepted",
+    "accepted": {
+      "$schema": "rusty.manifold.clock.snapshot.v1",
+      "clock_domain": "clock.host_monotonic",
+      "clock_epoch_id": "clock_epoch.synthetic_1",
+      "sequence": 43,
+      "monotonic_elapsed_ns": 1234567990,
+      "wall_unix_ms": 1765000000100,
+      "read_uncertainty_ns": 250000,
+      "health": "degraded",
+      "wall_clock_adjustment_count": 0
+    },
+    "rejection": null,
+    "audit_event": {
+      "$schema": "rusty.manifold.authority.clock_snapshot_audit_event.v1",
+      "event_id": "audit.clock_snapshot.request.clock.synthetic_tick.accepted",
+      "authority_id": "authority.synthetic",
+      "prior_authority_revision": 1,
+      "prior_clock_snapshot": {
+        "$schema": "rusty.manifold.clock.snapshot.v1",
+        "clock_domain": "clock.host_monotonic",
+        "clock_epoch_id": "clock_epoch.synthetic_1",
+        "sequence": 42,
+        "monotonic_elapsed_ns": 1234567890,
+        "wall_unix_ms": 1765000000000,
+        "read_uncertainty_ns": 250000,
+        "health": "healthy",
+        "wall_clock_adjustment_count": 0
+      },
+      "event_kind": "clock_snapshot_accepted",
+      "request": {
+        "$schema": "rusty.manifold.clock.snapshot_change_request.v1",
+        "request_id": "request.clock.synthetic_tick",
+        "holder_id": "holder.test_agent",
+        "expected_authority_revision": 1,
+        "lease_id": "lease.synthetic_clock",
+        "required_capability": "manifold.clock.update",
+        "from_clock_epoch_id": "clock_epoch.synthetic_1",
+        "from_clock_sequence": 42,
+        "proposed_snapshot": {
+          "$schema": "rusty.manifold.clock.snapshot.v1",
+          "clock_domain": "clock.host_monotonic",
+          "clock_epoch_id": "clock_epoch.synthetic_1",
+          "sequence": 43,
+          "monotonic_elapsed_ns": 1234567990,
+          "wall_unix_ms": 1765000000100,
+          "read_uncertainty_ns": 250000,
+          "health": "degraded",
+          "wall_clock_adjustment_count": 0
+        }
+      },
+      "accepted": {
+        "$schema": "rusty.manifold.clock.snapshot.v1",
+        "clock_domain": "clock.host_monotonic",
+        "clock_epoch_id": "clock_epoch.synthetic_1",
+        "sequence": 43,
+        "monotonic_elapsed_ns": 1234567990,
+        "wall_unix_ms": 1765000000100,
+        "read_uncertainty_ns": 250000,
+        "health": "degraded",
+        "wall_clock_adjustment_count": 0
+      },
+      "rejection": null,
+      "lease": {
+        "$schema": "rusty.manifold.command.control_lease.v1",
+        "lease_id": "lease.synthetic_clock",
+        "holder_id": "holder.test_agent",
+        "scope": "manifold.clock",
+        "state": "active",
+        "granted_revision": 1,
+        "expires_at_ms": 1765000030000,
+        "required_capability": "manifold.clock.update"
+      },
+      "recorded_clock": {
+        "$schema": "rusty.manifold.clock.snapshot.v1",
+        "clock_domain": "clock.host_monotonic",
+        "clock_epoch_id": "clock_epoch.synthetic_1",
+        "sequence": 43,
+        "monotonic_elapsed_ns": 1234567990,
+        "wall_unix_ms": 1765000000100,
+        "read_uncertainty_ns": 250000,
+        "health": "healthy",
+        "wall_clock_adjustment_count": 0
+      },
+      "evidence_refs": [
+        "evidence.clock_snapshot_authority.request.clock.synthetic_tick"
+      ]
+    }
+  }
+}

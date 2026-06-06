@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.stream.subscription_rejection.v1",
+  "request_id": "request.stream_subscription.stale_authority",
+  "rejection_code": "stale_revision",
+  "message": "stream subscription request expected authority revision does not match current revision",
+  "retryable": true,
+  "current_authority_revision": 1,
+  "current_registry_revision": 1,
+  "active_subscriber_count": 0
+}

@@ -1,0 +1,9 @@
+{
+  "$schema": "rusty.manifold.command.lease_rejection.v1",
+  "request_id": "request.lease.stale_graph",
+  "rejection_code": "stale_revision",
+  "message": "lease request expected revision does not match current revision",
+  "retryable": true,
+  "current_revision": 1,
+  "conflicting_lease_id": null
+}

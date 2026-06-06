@@ -1,0 +1,16 @@
+{
+  "$schema": "rusty.manifold.stream.subscription.v1",
+  "subscription_id": "subscription.stream_subscription.synthetic_wave_ui",
+  "request_id": "request.stream_subscription.synthetic_wave_ui",
+  "subscriber_id": "subscriber.ui.synthetic_dashboard",
+  "subscriber_kind": "ui",
+  "stream_id": "stream.synthetic_wave",
+  "transport_id": "transport.in_process",
+  "endpoint_id": null,
+  "state": "active",
+  "accepted_authority_revision": 1,
+  "accepted_registry_revision": 1,
+  "accepted_at_ms": 1765000000100,
+  "expires_at_ms": 1765000030100,
+  "required_capability": "manifold.stream.subscribe"
+}

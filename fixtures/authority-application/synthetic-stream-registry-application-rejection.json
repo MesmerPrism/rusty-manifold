@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.authority.snapshot_application_rejection.v1",
+  "application_id": "stream_registry_application.stream_registry_review.request.stream_registry.stale_revision",
+  "rejection_code": "review_rejected",
+  "message": "stream registry review did not accept a registry snapshot",
+  "retryable": true,
+  "current_authority_revision": 1
+}

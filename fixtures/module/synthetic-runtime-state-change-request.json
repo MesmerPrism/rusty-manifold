@@ -1,0 +1,30 @@
+{
+  "$schema": "rusty.manifold.module.runtime_state_change_request.v1",
+  "request_id": "request.module_runtime.stop.synthetic_wave_provider",
+  "holder_id": "holder.test_agent",
+  "expected_authority_revision": 1,
+  "lease_id": "lease.synthetic_module",
+  "required_capability": "manifold.module.control",
+  "module_id": "module.synthetic_wave_provider",
+  "from_runtime_revision": 1,
+  "proposed_state": {
+    "$schema": "rusty.manifold.module.runtime_state.v1",
+    "module_id": "module.synthetic_wave_provider",
+    "runtime_revision": 2,
+    "lifecycle": "stopped",
+    "health": "healthy",
+    "selected_backend": "backend.synthetic",
+    "active_streams": [],
+    "active_commands": [
+      "command.module.configure",
+      "command.module.start"
+    ],
+    "issues": [
+      {
+        "issue_code": "issue.synthetic_stopped",
+        "severity": "info",
+        "message": "Synthetic provider stopped cleanly."
+      }
+    ]
+  }
+}

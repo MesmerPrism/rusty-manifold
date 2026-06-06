@@ -1,0 +1,85 @@
+{
+  "$schema": "rusty.manifold.authority.module_runtime_state_review.v1",
+  "review_id": "module_runtime_state_review.request.module_runtime.missing_lease",
+  "authority_id": "authority.synthetic",
+  "authority_revision": 1,
+  "module_id": "module.synthetic_wave_provider",
+  "runtime_revision": 1,
+  "outcome": "runtime_state_rejected",
+  "accepted": null,
+  "transition": null,
+  "rejection": {
+    "$schema": "rusty.manifold.module.runtime_state_rejection.v1",
+    "request_id": "request.module_runtime.missing_lease",
+    "rejection_code": "missing_lease",
+    "message": "module runtime-state change requires an active module lease",
+    "retryable": true,
+    "current_authority_revision": 1,
+    "current_runtime_revision": 1
+  },
+  "audit_event": {
+    "$schema": "rusty.manifold.authority.module_runtime_state_audit_event.v1",
+    "event_id": "audit.module_runtime_state.request.module_runtime.missing_lease.rejected",
+    "authority_id": "authority.synthetic",
+    "prior_authority_revision": 1,
+    "module_id": "module.synthetic_wave_provider",
+    "prior_runtime_revision": 1,
+    "event_kind": "runtime_state_rejected",
+    "request": {
+      "$schema": "rusty.manifold.module.runtime_state_change_request.v1",
+      "request_id": "request.module_runtime.missing_lease",
+      "holder_id": "holder.test_agent",
+      "expected_authority_revision": 1,
+      "lease_id": null,
+      "required_capability": "manifold.module.control",
+      "module_id": "module.synthetic_wave_provider",
+      "from_runtime_revision": 1,
+      "proposed_state": {
+        "$schema": "rusty.manifold.module.runtime_state.v1",
+        "module_id": "module.synthetic_wave_provider",
+        "runtime_revision": 2,
+        "lifecycle": "stopped",
+        "health": "healthy",
+        "selected_backend": "backend.synthetic",
+        "active_streams": [],
+        "active_commands": [
+          "command.module.configure",
+          "command.module.start"
+        ],
+        "issues": [
+          {
+            "issue_code": "issue.synthetic_stopped",
+            "severity": "info",
+            "message": "Synthetic provider stopped cleanly."
+          }
+        ]
+      }
+    },
+    "accepted": null,
+    "transition": null,
+    "rejection": {
+      "$schema": "rusty.manifold.module.runtime_state_rejection.v1",
+      "request_id": "request.module_runtime.missing_lease",
+      "rejection_code": "missing_lease",
+      "message": "module runtime-state change requires an active module lease",
+      "retryable": true,
+      "current_authority_revision": 1,
+      "current_runtime_revision": 1
+    },
+    "lease": null,
+    "recorded_clock": {
+      "$schema": "rusty.manifold.clock.snapshot.v1",
+      "clock_domain": "clock.host_monotonic",
+      "clock_epoch_id": "clock_epoch.synthetic_1",
+      "sequence": 43,
+      "monotonic_elapsed_ns": 1234567990,
+      "wall_unix_ms": 1765000000100,
+      "read_uncertainty_ns": 250000,
+      "health": "healthy",
+      "wall_clock_adjustment_count": 0
+    },
+    "evidence_refs": [
+      "evidence.module_runtime_state_authority.request.module_runtime.missing_lease"
+    ]
+  }
+}

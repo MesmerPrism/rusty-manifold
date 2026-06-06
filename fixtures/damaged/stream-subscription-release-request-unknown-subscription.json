@@ -1,0 +1,11 @@
+{
+  "$schema": "rusty.manifold.stream.subscription_release_request.v1",
+  "request_id": "request.stream_subscription_release.unknown_subscription",
+  "subscription_id": "subscription.stream_subscription.unknown_ui",
+  "subscriber_id": "subscriber.ui.synthetic_dashboard",
+  "expected_authority_revision": 2,
+  "expected_registry_revision": 1,
+  "stream_id": "stream.synthetic_wave",
+  "release_reason": "subscriber.closed",
+  "requested_at_ms": 1765000000200
+}

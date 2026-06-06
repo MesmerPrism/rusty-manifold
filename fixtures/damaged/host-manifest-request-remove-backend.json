@@ -1,0 +1,38 @@
+{
+  "$schema": "rusty.manifold.host.manifest_change_request.v1",
+  "request_id": "request.host_manifest.remove_backend",
+  "holder_id": "holder.test_agent",
+  "expected_authority_revision": 1,
+  "lease_id": "lease.synthetic_host_manifest",
+  "required_capability": "manifold.host_manifest.update",
+  "proposed_manifest": {
+    "$schema": "rusty.manifold.host.manifest.v1",
+    "host_id": "host.synthetic",
+    "authority_role": "primary",
+    "host_category": "host.synthetic",
+    "clock_domain": "clock.host_monotonic",
+    "endpoints": [
+      {
+        "endpoint_id": "endpoint.control_loopback",
+        "visibility": "loopback",
+        "transport": "http",
+        "security": "local_process"
+      }
+    ],
+    "capabilities": [
+      "manifold.graph.read",
+      "manifold.command.request",
+      "manifold.module.control",
+      "manifold.graph.run",
+      "manifold.stream_registry.update",
+      "manifold.host_manifest.update",
+      "manifold.clock.update"
+    ],
+    "supported_backends": [
+      "backend.replay"
+    ],
+    "permissions": [],
+    "lifecycle_limits": [],
+    "missing_requirements": []
+  }
+}

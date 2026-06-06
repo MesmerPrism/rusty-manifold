@@ -1,0 +1,28 @@
+{
+  "$schema": "rusty.manifold.module.runtime_transition.v1",
+  "module_id": "module.synthetic_wave_provider",
+  "from_revision": 1,
+  "to_revision": 2,
+  "lifecycle_change": {
+    "from": "running",
+    "to": "stopped"
+  },
+  "health_change": null,
+  "backend_change": null,
+  "activated_streams": [],
+  "deactivated_streams": [
+    "stream.synthetic_wave"
+  ],
+  "activated_commands": [],
+  "deactivated_commands": [
+    "command.module.stop"
+  ],
+  "added_issues": [
+    {
+      "issue_code": "issue.synthetic_stopped",
+      "severity": "info",
+      "message": "Synthetic provider stopped cleanly."
+    }
+  ],
+  "resolved_issues": []
+}

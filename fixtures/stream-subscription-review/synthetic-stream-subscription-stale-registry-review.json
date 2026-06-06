@@ -1,0 +1,66 @@
+{
+  "$schema": "rusty.manifold.authority.stream_subscription_review.v1",
+  "review_id": "stream_subscription_review.request.stream_subscription.stale_registry",
+  "authority_id": "authority.synthetic",
+  "authority_revision": 1,
+  "registry_revision": 1,
+  "outcome": "subscription_rejected",
+  "accepted": null,
+  "rejection": {
+    "$schema": "rusty.manifold.stream.subscription_rejection.v1",
+    "request_id": "request.stream_subscription.stale_registry",
+    "rejection_code": "registry_revision_mismatch",
+    "message": "stream subscription request expected registry revision does not match current registry",
+    "retryable": true,
+    "current_authority_revision": 1,
+    "current_registry_revision": 1,
+    "active_subscriber_count": 0
+  },
+  "audit_event": {
+    "$schema": "rusty.manifold.authority.stream_subscription_audit_event.v1",
+    "event_id": "audit.stream_subscription.request.stream_subscription.stale_registry.rejected",
+    "authority_id": "authority.synthetic",
+    "prior_authority_revision": 1,
+    "prior_registry_revision": 1,
+    "active_subscriber_count": 0,
+    "event_kind": "subscription_rejected",
+    "request": {
+      "$schema": "rusty.manifold.stream.subscription_request.v1",
+      "request_id": "request.stream_subscription.stale_registry",
+      "subscriber_id": "subscriber.ui.synthetic_dashboard",
+      "subscriber_kind": "ui",
+      "expected_authority_revision": 1,
+      "expected_registry_revision": 2,
+      "stream_id": "stream.synthetic_wave",
+      "transport_id": "transport.in_process",
+      "requested_ttl_ms": 30000,
+      "required_capability": "manifold.stream.subscribe",
+      "requested_at_ms": 1765000000000
+    },
+    "accepted": null,
+    "rejection": {
+      "$schema": "rusty.manifold.stream.subscription_rejection.v1",
+      "request_id": "request.stream_subscription.stale_registry",
+      "rejection_code": "registry_revision_mismatch",
+      "message": "stream subscription request expected registry revision does not match current registry",
+      "retryable": true,
+      "current_authority_revision": 1,
+      "current_registry_revision": 1,
+      "active_subscriber_count": 0
+    },
+    "recorded_clock": {
+      "$schema": "rusty.manifold.clock.snapshot.v1",
+      "clock_domain": "clock.host_monotonic",
+      "clock_epoch_id": "clock_epoch.synthetic_1",
+      "sequence": 43,
+      "monotonic_elapsed_ns": 1234567990,
+      "wall_unix_ms": 1765000000100,
+      "read_uncertainty_ns": 250000,
+      "health": "healthy",
+      "wall_clock_adjustment_count": 0
+    },
+    "evidence_refs": [
+      "evidence.stream_subscription_authority.request.stream_subscription.stale_registry"
+    ]
+  }
+}

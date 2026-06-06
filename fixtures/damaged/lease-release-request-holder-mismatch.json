@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.command.lease_release_request.v1",
+  "request_id": "request.lease_release.holder_mismatch",
+  "lease_id": "lease.synthetic_lease_1",
+  "holder_id": "holder.other_agent",
+  "expected_authority_revision": 2,
+  "scope": "manifold.graph",
+  "release_reason": "holder.done",
+  "requested_at_ms": 1765000000200
+}

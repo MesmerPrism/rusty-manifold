@@ -16,7 +16,10 @@
     "manifold.graph.read",
     "manifold.command.request",
     "manifold.module.control",
-    "manifold.graph.run"
+    "manifold.graph.run",
+    "manifold.stream_registry.update",
+    "manifold.host_manifest.update",
+    "manifold.clock.update"
   ],
   "supported_backends": [
     "backend.synthetic",

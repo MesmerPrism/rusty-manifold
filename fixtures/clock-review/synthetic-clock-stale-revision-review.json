@@ -1,0 +1,95 @@
+{
+  "$schema": "rusty.manifold.authority.clock_snapshot_review.v1",
+  "review_id": "clock_snapshot_review.request.clock.stale_revision",
+  "authority_id": "authority.synthetic",
+  "authority_revision": 1,
+  "clock_domain": "clock.host_monotonic",
+  "clock_epoch_id": "clock_epoch.synthetic_1",
+  "clock_sequence": 42,
+  "outcome": "clock_snapshot_rejected",
+  "accepted": null,
+  "rejection": {
+    "$schema": "rusty.manifold.clock.snapshot_rejection.v1",
+    "request_id": "request.clock.stale_revision",
+    "rejection_code": "stale_revision",
+    "message": "clock snapshot request expected authority revision does not match current revision",
+    "retryable": true,
+    "current_authority_revision": 1,
+    "current_clock_epoch_id": "clock_epoch.synthetic_1",
+    "current_clock_sequence": 42
+  },
+  "audit_event": {
+    "$schema": "rusty.manifold.authority.clock_snapshot_audit_event.v1",
+    "event_id": "audit.clock_snapshot.request.clock.stale_revision.rejected",
+    "authority_id": "authority.synthetic",
+    "prior_authority_revision": 1,
+    "prior_clock_snapshot": {
+      "$schema": "rusty.manifold.clock.snapshot.v1",
+      "clock_domain": "clock.host_monotonic",
+      "clock_epoch_id": "clock_epoch.synthetic_1",
+      "sequence": 42,
+      "monotonic_elapsed_ns": 1234567890,
+      "wall_unix_ms": 1765000000000,
+      "read_uncertainty_ns": 250000,
+      "health": "healthy",
+      "wall_clock_adjustment_count": 0
+    },
+    "event_kind": "clock_snapshot_rejected",
+    "request": {
+      "$schema": "rusty.manifold.clock.snapshot_change_request.v1",
+      "request_id": "request.clock.stale_revision",
+      "holder_id": "holder.test_agent",
+      "expected_authority_revision": 2,
+      "lease_id": "lease.synthetic_clock",
+      "required_capability": "manifold.clock.update",
+      "from_clock_epoch_id": "clock_epoch.synthetic_1",
+      "from_clock_sequence": 42,
+      "proposed_snapshot": {
+        "$schema": "rusty.manifold.clock.snapshot.v1",
+        "clock_domain": "clock.host_monotonic",
+        "clock_epoch_id": "clock_epoch.synthetic_1",
+        "sequence": 43,
+        "monotonic_elapsed_ns": 1234567990,
+        "wall_unix_ms": 1765000000100,
+        "read_uncertainty_ns": 250000,
+        "health": "degraded",
+        "wall_clock_adjustment_count": 0
+      }
+    },
+    "accepted": null,
+    "rejection": {
+      "$schema": "rusty.manifold.clock.snapshot_rejection.v1",
+      "request_id": "request.clock.stale_revision",
+      "rejection_code": "stale_revision",
+      "message": "clock snapshot request expected authority revision does not match current revision",
+      "retryable": true,
+      "current_authority_revision": 1,
+      "current_clock_epoch_id": "clock_epoch.synthetic_1",
+      "current_clock_sequence": 42
+    },
+    "lease": {
+      "$schema": "rusty.manifold.command.control_lease.v1",
+      "lease_id": "lease.synthetic_clock",
+      "holder_id": "holder.test_agent",
+      "scope": "manifold.clock",
+      "state": "active",
+      "granted_revision": 1,
+      "expires_at_ms": 1765000030000,
+      "required_capability": "manifold.clock.update"
+    },
+    "recorded_clock": {
+      "$schema": "rusty.manifold.clock.snapshot.v1",
+      "clock_domain": "clock.host_monotonic",
+      "clock_epoch_id": "clock_epoch.synthetic_1",
+      "sequence": 43,
+      "monotonic_elapsed_ns": 1234567990,
+      "wall_unix_ms": 1765000000100,
+      "read_uncertainty_ns": 250000,
+      "health": "healthy",
+      "wall_clock_adjustment_count": 0
+    },
+    "evidence_refs": [
+      "evidence.clock_snapshot_authority.request.clock.stale_revision"
+    ]
+  }
+}

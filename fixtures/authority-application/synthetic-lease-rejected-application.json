@@ -1,0 +1,77 @@
+{
+  "$schema": "rusty.manifold.authority.lease_application.v1",
+  "application_id": "lease_application.lease_review.request.lease.stale_graph",
+  "authority_id": "authority.synthetic",
+  "from_authority_revision": 1,
+  "request_id": "request.lease.stale_graph",
+  "lease_scope": "manifold.graph",
+  "from_active_lease_count": 4,
+  "outcome": "lease_application_rejected",
+  "applied_snapshot": null,
+  "rejection": {
+    "$schema": "rusty.manifold.authority.snapshot_application_rejection.v1",
+    "application_id": "lease_application.lease_review.request.lease.stale_graph",
+    "rejection_code": "review_rejected",
+    "message": "control lease review did not accept a lease",
+    "retryable": true,
+    "current_authority_revision": 1
+  },
+  "review": {
+    "$schema": "rusty.manifold.authority.lease_review.v1",
+    "review_id": "lease_review.request.lease.stale_graph",
+    "authority_id": "authority.synthetic",
+    "authority_revision": 1,
+    "outcome": "lease_rejected",
+    "accepted": null,
+    "rejection": {
+      "$schema": "rusty.manifold.command.lease_rejection.v1",
+      "request_id": "request.lease.stale_graph",
+      "rejection_code": "stale_revision",
+      "message": "lease request expected revision does not match current revision",
+      "retryable": true,
+      "current_revision": 1,
+      "conflicting_lease_id": null
+    },
+    "audit_event": {
+      "$schema": "rusty.manifold.authority.lease_audit_event.v1",
+      "event_id": "audit.lease.request.lease.stale_graph.rejected",
+      "authority_id": "authority.synthetic",
+      "prior_authority_revision": 1,
+      "event_kind": "lease_rejected",
+      "request": {
+        "$schema": "rusty.manifold.command.lease_request.v1",
+        "request_id": "request.lease.stale_graph",
+        "holder_id": "holder.test_agent",
+        "scope": "manifold.graph",
+        "expected_revision": 2,
+        "requested_ttl_ms": 30000,
+        "required_capability": "manifold.graph.run",
+        "safety_class": "bounded_mutation"
+      },
+      "accepted": null,
+      "rejection": {
+        "$schema": "rusty.manifold.command.lease_rejection.v1",
+        "request_id": "request.lease.stale_graph",
+        "rejection_code": "stale_revision",
+        "message": "lease request expected revision does not match current revision",
+        "retryable": true,
+        "current_revision": 1,
+        "conflicting_lease_id": null
+      },
+      "recorded_clock": {
+        "$schema": "rusty.manifold.clock.snapshot.v1",
+        "clock_domain": "clock.host_monotonic",
+        "clock_epoch_id": "clock_epoch.synthetic_1",
+        "sequence": 43,
+        "monotonic_elapsed_ns": 1234567990,
+        "wall_unix_ms": 1765000000100,
+        "read_uncertainty_ns": 250000,
+        "health": "healthy",
+        "wall_clock_adjustment_count": 0
+      },
+      "evidence_refs": [
+        "evidence.lease_authority.request.lease.stale_graph"
+      ]
+    }
+  }
+}

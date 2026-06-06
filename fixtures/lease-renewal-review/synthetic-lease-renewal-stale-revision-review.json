@@ -1,0 +1,62 @@
+{
+  "$schema": "rusty.manifold.authority.lease_renewal_review.v1",
+  "review_id": "lease_renewal_review.request.lease_renewal.stale_revision",
+  "authority_id": "authority.synthetic",
+  "authority_revision": 2,
+  "outcome": "lease_renewal_rejected",
+  "renewed": null,
+  "rejection": {
+    "$schema": "rusty.manifold.command.lease_renewal_rejection.v1",
+    "request_id": "request.lease_renewal.stale_revision",
+    "rejection_code": "stale_revision",
+    "message": "control lease renewal request expected authority revision does not match current revision",
+    "retryable": true,
+    "current_revision": 2,
+    "active_lease_count": 5,
+    "current_expires_at_ms": null
+  },
+  "audit_event": {
+    "$schema": "rusty.manifold.authority.lease_renewal_audit_event.v1",
+    "event_id": "audit.lease_renewal.request.lease_renewal.stale_revision.rejected",
+    "authority_id": "authority.synthetic",
+    "prior_authority_revision": 2,
+    "active_lease_count": 5,
+    "event_kind": "lease_renewal_rejected",
+    "request": {
+      "$schema": "rusty.manifold.command.lease_renewal_request.v1",
+      "request_id": "request.lease_renewal.stale_revision",
+      "lease_id": "lease.synthetic_lease_1",
+      "holder_id": "holder.test_agent",
+      "expected_authority_revision": 1,
+      "scope": "manifold.graph",
+      "requested_ttl_ms": 60000,
+      "renewal_reason": "holder.needs_more_time",
+      "requested_at_ms": 1765000000200
+    },
+    "renewed": null,
+    "rejection": {
+      "$schema": "rusty.manifold.command.lease_renewal_rejection.v1",
+      "request_id": "request.lease_renewal.stale_revision",
+      "rejection_code": "stale_revision",
+      "message": "control lease renewal request expected authority revision does not match current revision",
+      "retryable": true,
+      "current_revision": 2,
+      "active_lease_count": 5,
+      "current_expires_at_ms": null
+    },
+    "recorded_clock": {
+      "$schema": "rusty.manifold.clock.snapshot.v1",
+      "clock_domain": "clock.host_monotonic",
+      "clock_epoch_id": "clock_epoch.synthetic_1",
+      "sequence": 43,
+      "monotonic_elapsed_ns": 1234567990,
+      "wall_unix_ms": 1765000000100,
+      "read_uncertainty_ns": 250000,
+      "health": "healthy",
+      "wall_clock_adjustment_count": 0
+    },
+    "evidence_refs": [
+      "evidence.lease_renewal_authority.request.lease_renewal.stale_revision"
+    ]
+  }
+}
