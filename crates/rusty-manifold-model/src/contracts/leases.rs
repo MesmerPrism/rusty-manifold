@@ -513,6 +513,12 @@ impl ManifoldControlLeaseAuthorityApplication {
             ));
         }
 
+        validate_derived_authority_id(
+            &self.application_id,
+            &self.application_id,
+            control_lease_authority_application_id(&self.review.review_id),
+        )?;
+
         if self.authority_id != snapshot.authority_id
             || self.authority_id != self.review.authority_id
         {
@@ -1175,6 +1181,12 @@ impl ManifoldControlLeaseReleaseAuthorityApplication {
             ));
         }
 
+        validate_derived_authority_id(
+            &self.application_id,
+            &self.application_id,
+            control_lease_release_authority_application_id(&self.review.review_id),
+        )?;
+
         if self.authority_id != snapshot.authority_id
             || self.authority_id != self.review.authority_id
         {
@@ -1686,6 +1698,12 @@ impl ManifoldControlLeaseRenewalAuthorityApplication {
                 ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
             ));
         }
+
+        validate_derived_authority_id(
+            &self.application_id,
+            &self.application_id,
+            control_lease_renewal_authority_application_id(&self.review.review_id),
+        )?;
 
         if self.authority_id != snapshot.authority_id
             || self.authority_id != self.review.authority_id

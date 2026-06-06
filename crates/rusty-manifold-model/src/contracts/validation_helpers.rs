@@ -76,6 +76,22 @@ pub(super) fn duplicate_subscription_id(
         })
 }
 
+pub(super) fn validate_derived_authority_id(
+    subject_id: &DottedId,
+    actual_id: &DottedId,
+    expected_id: DottedId,
+) -> Result<(), ManifoldAuthorityValidationError> {
+    if actual_id == &expected_id {
+        Ok(())
+    } else {
+        Err(ManifoldAuthorityValidationError::new(
+            subject_id.clone(),
+            actual_id.to_string(),
+            ManifoldAuthorityValidationErrorKind::RequestIdMismatch,
+        ))
+    }
+}
+
 pub(super) fn command_validation_retryable(kind: CommandValidationErrorKind) -> bool {
     matches!(
         kind,

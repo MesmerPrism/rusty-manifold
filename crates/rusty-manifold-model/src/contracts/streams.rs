@@ -602,6 +602,12 @@ impl ManifoldStreamRegistryAuthorityApplication {
             ));
         }
 
+        validate_derived_authority_id(
+            &self.application_id,
+            &self.application_id,
+            stream_registry_authority_application_id(&self.review.review_id),
+        )?;
+
         if self.authority_id != snapshot.authority_id
             || self.authority_id != self.review.authority_id
         {
@@ -1131,6 +1137,12 @@ impl ManifoldStreamSubscriptionAuthorityApplication {
                 ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
             ));
         }
+
+        validate_derived_authority_id(
+            &self.application_id,
+            &self.application_id,
+            stream_subscription_authority_application_id(&self.review.review_id),
+        )?;
 
         if self.authority_id != snapshot.authority_id
             || self.authority_id != self.review.authority_id
@@ -1689,6 +1701,12 @@ impl ManifoldStreamSubscriptionReleaseAuthorityApplication {
                 ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
             ));
         }
+
+        validate_derived_authority_id(
+            &self.application_id,
+            &self.application_id,
+            stream_subscription_release_authority_application_id(&self.review.review_id),
+        )?;
 
         if self.authority_id != snapshot.authority_id
             || self.authority_id != self.review.authority_id
@@ -2259,6 +2277,12 @@ impl ManifoldStreamSubscriptionRenewalAuthorityApplication {
                 ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
             ));
         }
+
+        validate_derived_authority_id(
+            &self.application_id,
+            &self.application_id,
+            stream_subscription_renewal_authority_application_id(&self.review.review_id),
+        )?;
 
         if self.authority_id != snapshot.authority_id
             || self.authority_id != self.review.authority_id

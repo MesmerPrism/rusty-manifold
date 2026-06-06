@@ -231,6 +231,12 @@ impl ManifoldModuleRuntimeStateAuthorityApplication {
             ));
         }
 
+        validate_derived_authority_id(
+            &self.application_id,
+            &self.application_id,
+            module_runtime_state_authority_application_id(&self.review.review_id),
+        )?;
+
         if self.authority_id != snapshot.authority_id
             || self.authority_id != self.review.authority_id
         {

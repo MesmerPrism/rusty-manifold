@@ -502,6 +502,12 @@ impl ManifoldAuthorityExpirySweepAuthorityApplication {
             ));
         }
 
+        validate_derived_authority_id(
+            &self.application_id,
+            &self.application_id,
+            authority_expiry_sweep_authority_application_id(&self.review.review_id),
+        )?;
+
         if self.authority_id != snapshot.authority_id
             || self.authority_id != self.review.authority_id
         {

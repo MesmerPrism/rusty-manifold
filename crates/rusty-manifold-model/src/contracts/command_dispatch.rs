@@ -970,6 +970,12 @@ impl ManifoldCommandDispatchReceipt {
             ));
         }
 
+        validate_derived_authority_id(
+            &self.dispatch_id,
+            &self.dispatch_id,
+            command_dispatch_receipt_id(&self.review.review_id),
+        )?;
+
         if self.authority_id != snapshot.authority_id
             || self.authority_id != self.review.authority_id
         {

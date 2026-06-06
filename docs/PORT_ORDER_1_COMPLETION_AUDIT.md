@@ -43,7 +43,7 @@ claim.
 | Command envelopes | Proven | `ManifoldCommandEnvelope`, command descriptor fixtures, valid and damaged command validation checks. |
 | Command ack/rejection | Proven | `ManifoldCommandAck`, `ManifoldCommandRejection`, accepted/rejected command review fixtures. |
 | Command authority review | Proven | `ManifoldCommandAuthorityReview`, command audit event fixtures, stale revision, missing lease, expired lease, unknown command, unknown lease, and capability mismatch checks. |
-| Command dispatch receipt | Proven | `ManifoldCommandDispatchReceipt`, ready and rejected receipt fixtures, plus lineage checks for mismatched snapshot revision and receipt/request divergence. |
+| Command dispatch receipt | Proven | `ManifoldCommandDispatchReceipt`, ready and rejected receipt fixtures, plus lineage checks for derived receipt/review ids, mismatched snapshot revision, and receipt/request divergence. |
 | Control leases | Proven | Lease request, accepted lease, rejection, review, audit, and application fixtures. |
 | Lease release | Proven | Release request, stale/unknown/holder/scope/expired checks, review, audit, and application fixtures. |
 | Lease renewal | Proven | Renewal request, stale/unknown/holder/scope/zero TTL/non-extending/expired checks, review, audit, and application fixtures. |
@@ -58,12 +58,12 @@ claim.
 | Clock/timebase authority | Proven | Clock snapshot request, stale authority, expired lease, missing lease, domain mismatch, sequence gap, monotonic regression, review, audit, and application checks. |
 | Schema catalog | Proven | `rusty-manifold-schema -- export --check` covers current schema ids and fixture examples. |
 | Fixture CLI routes | Proven | `rusty-manifold-fixtures` routes cover review/apply/prepare commands for authority families and are exercised by fixture CLI tests. |
+| Cross-family application lineage | Proven | Application validators enforce derived application/review ids, authority revision lineage, registry/runtime/clock lineage where applicable, and accepted-state count guards through a compact model matrix test. |
 
 ## Present But Worth Future Hardening
 
 | Area | Current state | Suggested future check |
 | --- | --- | --- |
-| Cross-family application lineage | Each authority application validates its own review and snapshot lineage. | Add a compact matrix test that mutates review ids, authority revisions, and accepted-state counts across all application families. |
 | External consumer round trips | Schema catalog and Rust serde fixtures are deterministic. | Add downstream client round-trip checks when a non-Rust consumer exists. |
 | File pressure | `contracts.rs` and fixture `main.rs` have been mechanically split once but remain large. | Continue family-scoped mechanical splits without changing public type names, schema ids, or fixture JSON. |
 
