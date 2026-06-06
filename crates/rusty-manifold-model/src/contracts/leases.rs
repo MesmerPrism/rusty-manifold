@@ -1848,3 +1848,914 @@ impl ManifoldControlLeaseRenewalAuthorityApplication {
         }
     }
 }
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum LeaseAuthorityDecision {
+    Accepted,
+    Rejected {
+        rejection_code: &'static str,
+        message: String,
+        retryable: bool,
+        conflicting_lease_id: Option<DottedId>,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum LeaseReleaseAuthorityDecision {
+    Released(ManifoldControlLease),
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+        active_lease_count: usize,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum LeaseRenewalAuthorityDecision {
+    Renewed(ManifoldControlLease),
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+        active_lease_count: usize,
+        current_expires_at_ms: Option<u64>,
+    },
+}
+
+impl ManifoldAuthoritySnapshot {
+    /// Deterministically reviews one control lease request against this authority snapshot.
+    ///
+    /// The review is source-only: it does not mutate the accepted lease set,
+    /// renew leases, execute commands, or contact a host.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_lease_request(
+        &self,
+        request: ManifoldControlLeaseRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldControlLeaseAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.lease_authority_decision(&request);
+        let (outcome, accepted, rejection) = match decision {
+            LeaseAuthorityDecision::Accepted => (
+                ManifoldControlLeaseAuthorityReviewOutcome::LeaseAccepted,
+                Some(ManifoldControlLease {
+                    schema_id: control_lease_schema_id(),
+                    lease_id: control_lease_id(&request.request_id),
+                    holder_id: request.holder_id.clone(),
+                    scope: request.scope.clone(),
+                    state: LeaseState::Active,
+                    granted_revision: self.authority_revision,
+                    expires_at_ms: wall_unix_ms_u64(&recorded_clock)
+                        .saturating_add(request.requested_ttl_ms),
+                    required_capability: request.required_capability.clone(),
+                }),
+                None,
+            ),
+            LeaseAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                conflicting_lease_id,
+            } => (
+                ManifoldControlLeaseAuthorityReviewOutcome::LeaseRejected,
+                None,
+                Some(ManifoldControlLeaseRejection {
+                    schema_id: control_lease_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code literal is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_revision: self.authority_revision,
+                    conflicting_lease_id,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldControlLeaseAuthorityAuditEvent {
+            schema_id: control_lease_authority_audit_event_schema_id(),
+            event_id: control_lease_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            event_kind: outcome.into(),
+            request,
+            accepted: accepted.clone(),
+            rejection: rejection.clone(),
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldControlLeaseAuthorityReview {
+            schema_id: control_lease_authority_review_schema_id(),
+            review_id: control_lease_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            outcome,
+            accepted,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one control-lease authority review to this snapshot.
+    ///
+    /// Accepted lease reviews produce a new `ManifoldAuthoritySnapshot` with
+    /// the authority revision advanced by one and the accepted active lease
+    /// appended. Rejected reviews produce a machine-readable application
+    /// rejection and leave accepted state unchanged. This is source-only: it
+    /// does not renew leases, execute commands, mutate runtime state, open
+    /// transports, or contact a host.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_control_lease_authority_review(
+        &self,
+        review: ManifoldControlLeaseAuthorityReview,
+    ) -> Result<ManifoldControlLeaseAuthorityApplication, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        let application_id = control_lease_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let request_id = review.audit_event.request.request_id.clone();
+        let lease_scope = review.audit_event.request.scope.clone();
+        let from_active_lease_count = self.active_leases.len();
+
+        let (outcome, applied_snapshot, rejection) = match review.validate_against_snapshot(self) {
+            Err(error) => (
+                ManifoldControlLeaseAuthorityApplicationOutcome::LeaseApplicationRejected,
+                None,
+                Some(ManifoldAuthoritySnapshotApplicationRejection {
+                    schema_id: authority_snapshot_application_rejection_schema_id(),
+                    application_id: application_id.clone(),
+                    rejection_code: DottedId::new(error.rejection_code())
+                        .expect("authority rejection code is a valid dotted id"),
+                    message: format!(
+                        "control lease review does not match authority snapshot: {error}"
+                    ),
+                    retryable: authority_application_validation_retryable(error.kind()),
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+            Ok(())
+                if review.outcome == ManifoldControlLeaseAuthorityReviewOutcome::LeaseRejected =>
+            {
+                (
+                    ManifoldControlLeaseAuthorityApplicationOutcome::LeaseApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new("review_rejected")
+                            .expect("rejection code literal is valid"),
+                        message: "control lease review did not accept a lease".to_owned(),
+                        retryable: review
+                            .rejection
+                            .as_ref()
+                            .map(|rejection| rejection.retryable)
+                            .unwrap_or(false),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                )
+            }
+            Ok(()) => {
+                let Some(next_authority_revision) = self.authority_revision.next() else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        self.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                };
+                let accepted_lease = review.accepted.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut next_snapshot = self.clone();
+                next_snapshot.authority_revision = next_authority_revision;
+                next_snapshot.active_leases.push(accepted_lease);
+                next_snapshot.validate_authority_links()?;
+                (
+                    ManifoldControlLeaseAuthorityApplicationOutcome::LeaseApplied,
+                    Some(next_snapshot),
+                    None,
+                )
+            }
+        };
+
+        let application = ManifoldControlLeaseAuthorityApplication {
+            schema_id: control_lease_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            request_id,
+            lease_scope,
+            from_active_lease_count,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    /// Deterministically reviews one active control lease release request.
+    ///
+    /// The review is source-only: it verifies release preconditions against
+    /// accepted authority state and records the lease to remove, but it does
+    /// not cancel timers, execute commands, contact hosts, or notify runtimes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_control_lease_release(
+        &self,
+        request: ManifoldControlLeaseReleaseRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldControlLeaseReleaseAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.lease_release_authority_decision(&request, &recorded_clock);
+        let active_lease_count = self.active_leases.len();
+        let (outcome, released, rejection) = match decision {
+            LeaseReleaseAuthorityDecision::Released(lease) => (
+                ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleased,
+                Some(lease),
+                None,
+            ),
+            LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                active_lease_count,
+            } => (
+                ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleaseRejected,
+                None,
+                Some(ManifoldControlLeaseReleaseRejection {
+                    schema_id: control_lease_release_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_revision: self.authority_revision,
+                    active_lease_count,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldControlLeaseReleaseAuthorityAuditEvent {
+            schema_id: control_lease_release_authority_audit_event_schema_id(),
+            event_id: control_lease_release_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            active_lease_count,
+            event_kind: outcome.into(),
+            request,
+            released: released.clone(),
+            rejection: rejection.clone(),
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldControlLeaseReleaseAuthorityReview {
+            schema_id: control_lease_release_authority_review_schema_id(),
+            review_id: control_lease_release_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            outcome,
+            released,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one control lease release authority review.
+    ///
+    /// Accepted release reviews produce a new `ManifoldAuthoritySnapshot` with
+    /// the authority revision advanced by one and the released lease removed
+    /// from the active set. Rejected reviews produce a machine-readable
+    /// application rejection and leave accepted state unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_control_lease_release_authority_review(
+        &self,
+        review: ManifoldControlLeaseReleaseAuthorityReview,
+    ) -> Result<ManifoldControlLeaseReleaseAuthorityApplication, ManifoldAuthorityValidationError>
+    {
+        self.validate_authority_links()?;
+
+        let application_id = control_lease_release_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let lease_id = review.audit_event.request.lease_id.clone();
+        let lease_scope = review.audit_event.request.scope.clone();
+        let from_active_lease_count = self.active_leases.len();
+
+        let (outcome, applied_snapshot, rejection) = match review.validate_against_snapshot(self) {
+            Err(error) => (
+                ManifoldControlLeaseReleaseAuthorityApplicationOutcome::LeaseReleaseApplicationRejected,
+                None,
+                Some(ManifoldAuthoritySnapshotApplicationRejection {
+                    schema_id: authority_snapshot_application_rejection_schema_id(),
+                    application_id: application_id.clone(),
+                    rejection_code: DottedId::new(error.rejection_code())
+                        .expect("authority rejection code is a valid dotted id"),
+                    message: format!(
+                        "control lease release review does not match authority snapshot: {error}"
+                    ),
+                    retryable: authority_application_validation_retryable(error.kind()),
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+            Ok(())
+                if review.outcome
+                    == ManifoldControlLeaseReleaseAuthorityReviewOutcome::LeaseReleaseRejected =>
+            {
+                (
+                    ManifoldControlLeaseReleaseAuthorityApplicationOutcome::LeaseReleaseApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new("review_rejected")
+                            .expect("rejection code literal is valid"),
+                        message: "control lease release review did not release a lease".to_owned(),
+                        retryable: review
+                            .rejection
+                            .as_ref()
+                            .map(|rejection| rejection.retryable)
+                            .unwrap_or(false),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                )
+            }
+            Ok(()) => {
+                let Some(next_authority_revision) = self.authority_revision.next() else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        self.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                };
+                let released_lease = review.released.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        "released".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut next_snapshot = self.clone();
+                next_snapshot.authority_revision = next_authority_revision;
+                let Some(position) = next_snapshot
+                    .active_leases
+                    .iter()
+                    .position(|lease| lease.lease_id == released_lease.lease_id)
+                else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        released_lease.lease_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownLease,
+                    ));
+                };
+                next_snapshot.active_leases.remove(position);
+                next_snapshot.validate_authority_links()?;
+                (
+                    ManifoldControlLeaseReleaseAuthorityApplicationOutcome::LeaseReleaseApplied,
+                    Some(next_snapshot),
+                    None,
+                )
+            }
+        };
+
+        let application = ManifoldControlLeaseReleaseAuthorityApplication {
+            schema_id: control_lease_release_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            lease_id,
+            lease_scope,
+            from_active_lease_count,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    /// Deterministically reviews one active control lease renewal request.
+    ///
+    /// The review is source-only: it verifies renewal preconditions against
+    /// accepted active lease state and produces a renewed lease candidate or
+    /// machine-readable rejection. It does not start timers, execute commands,
+    /// contact a host, or mutate accepted authority state.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_control_lease_renewal(
+        &self,
+        request: ManifoldControlLeaseRenewalRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldControlLeaseRenewalAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let active_lease_count = self.active_leases.len();
+        let decision = self.lease_renewal_authority_decision(&request, &recorded_clock);
+        let (outcome, renewed, rejection) = match decision {
+            LeaseRenewalAuthorityDecision::Renewed(lease) => (
+                ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewed,
+                Some(lease),
+                None,
+            ),
+            LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                active_lease_count,
+                current_expires_at_ms,
+            } => (
+                ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewalRejected,
+                None,
+                Some(ManifoldControlLeaseRenewalRejection {
+                    schema_id: control_lease_renewal_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_revision: self.authority_revision,
+                    active_lease_count,
+                    current_expires_at_ms,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldControlLeaseRenewalAuthorityAuditEvent {
+            schema_id: control_lease_renewal_authority_audit_event_schema_id(),
+            event_id: control_lease_renewal_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            active_lease_count,
+            event_kind: outcome.into(),
+            request,
+            renewed: renewed.clone(),
+            rejection: rejection.clone(),
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldControlLeaseRenewalAuthorityReview {
+            schema_id: control_lease_renewal_authority_review_schema_id(),
+            review_id: control_lease_renewal_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            outcome,
+            renewed,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one control lease renewal authority review.
+    ///
+    /// Accepted renewal reviews produce a new `ManifoldAuthoritySnapshot` with
+    /// the authority revision advanced by one and the reviewed lease replaced
+    /// by its renewed candidate. Rejected reviews produce a machine-readable
+    /// application rejection and leave accepted state unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_control_lease_renewal_authority_review(
+        &self,
+        review: ManifoldControlLeaseRenewalAuthorityReview,
+    ) -> Result<ManifoldControlLeaseRenewalAuthorityApplication, ManifoldAuthorityValidationError>
+    {
+        self.validate_authority_links()?;
+
+        let application_id = control_lease_renewal_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let lease_id = review.audit_event.request.lease_id.clone();
+        let lease_scope = review.audit_event.request.scope.clone();
+        let from_active_lease_count = self.active_leases.len();
+
+        let (outcome, applied_snapshot, rejection) = match review.validate_against_snapshot(self) {
+            Err(error) => (
+                ManifoldControlLeaseRenewalAuthorityApplicationOutcome::LeaseRenewalApplicationRejected,
+                None,
+                Some(ManifoldAuthoritySnapshotApplicationRejection {
+                    schema_id: authority_snapshot_application_rejection_schema_id(),
+                    application_id: application_id.clone(),
+                    rejection_code: DottedId::new(error.rejection_code())
+                        .expect("authority rejection code is a valid dotted id"),
+                    message: format!(
+                        "control lease renewal review does not match authority snapshot: {error}"
+                    ),
+                    retryable: authority_application_validation_retryable(error.kind()),
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+            Ok(())
+                if review.outcome
+                    == ManifoldControlLeaseRenewalAuthorityReviewOutcome::LeaseRenewalRejected =>
+            {
+                (
+                    ManifoldControlLeaseRenewalAuthorityApplicationOutcome::LeaseRenewalApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new("review_rejected")
+                            .expect("rejection code literal is valid"),
+                        message: "control lease renewal review did not renew a lease".to_owned(),
+                        retryable: review
+                            .rejection
+                            .as_ref()
+                            .map(|rejection| rejection.retryable)
+                            .unwrap_or(false),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                )
+            }
+            Ok(()) => {
+                let Some(next_authority_revision) = self.authority_revision.next() else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        self.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                };
+                let renewed_lease = review.renewed.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        "renewed".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut next_snapshot = self.clone();
+                next_snapshot.authority_revision = next_authority_revision;
+                let Some(position) = next_snapshot
+                    .active_leases
+                    .iter()
+                    .position(|lease| lease.lease_id == renewed_lease.lease_id)
+                else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        renewed_lease.lease_id.to_string(),
+                        ManifoldAuthorityValidationErrorKind::UnknownLease,
+                    ));
+                };
+                next_snapshot.active_leases[position] = renewed_lease;
+                next_snapshot.validate_authority_links()?;
+                (
+                    ManifoldControlLeaseRenewalAuthorityApplicationOutcome::LeaseRenewalApplied,
+                    Some(next_snapshot),
+                    None,
+                )
+            }
+        };
+
+        let application = ManifoldControlLeaseRenewalAuthorityApplication {
+            schema_id: control_lease_renewal_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            lease_id,
+            lease_scope,
+            from_active_lease_count,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    fn lease_authority_decision(
+        &self,
+        request: &ManifoldControlLeaseRequest,
+    ) -> LeaseAuthorityDecision {
+        if request.expected_revision != self.authority_revision {
+            return LeaseAuthorityDecision::Rejected {
+                rejection_code: "stale_revision",
+                message: "lease request expected revision does not match current revision"
+                    .to_owned(),
+                retryable: true,
+                conflicting_lease_id: None,
+            };
+        }
+
+        if request.requested_ttl_ms == 0 {
+            return LeaseAuthorityDecision::Rejected {
+                rejection_code: "invalid_ttl",
+                message: "lease request ttl must be greater than zero".to_owned(),
+                retryable: false,
+                conflicting_lease_id: None,
+            };
+        }
+
+        if !self
+            .host_manifest
+            .capabilities
+            .iter()
+            .any(|capability| capability == &request.required_capability)
+        {
+            return LeaseAuthorityDecision::Rejected {
+                rejection_code: "capability_not_advertised",
+                message: "lease request capability is not advertised by the authority host"
+                    .to_owned(),
+                retryable: false,
+                conflicting_lease_id: None,
+            };
+        }
+
+        if let Some(conflicting_lease) = self
+            .active_leases
+            .iter()
+            .find(|lease| lease.scope == request.scope && lease.state == LeaseState::Active)
+        {
+            return LeaseAuthorityDecision::Rejected {
+                rejection_code: "lease_scope_busy",
+                message: "lease request scope is already held by an active lease".to_owned(),
+                retryable: true,
+                conflicting_lease_id: Some(conflicting_lease.lease_id.clone()),
+            };
+        }
+
+        LeaseAuthorityDecision::Accepted
+    }
+
+    fn lease_release_authority_decision(
+        &self,
+        request: &ManifoldControlLeaseReleaseRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> LeaseReleaseAuthorityDecision {
+        if request.schema_id != control_lease_release_request_schema_id() {
+            return LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "control lease release request schema is not supported".to_owned(),
+                retryable: false,
+                active_lease_count: self.active_leases.len(),
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message:
+                    "control lease release request expected authority revision does not match current revision"
+                        .to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+            };
+        }
+
+        let Some(lease) = self.active_lease(&request.lease_id) else {
+            return LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code: "unknown_lease".to_owned(),
+                message: "control lease release request references an unknown active lease"
+                    .to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+            };
+        };
+
+        if lease.state != LeaseState::Active {
+            return LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code: "inactive_lease".to_owned(),
+                message: "control lease release request references a non-active lease".to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+            };
+        }
+
+        if lease_expired_at(lease, recorded_clock) {
+            return LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code: "expired_lease".to_owned(),
+                message: "control lease release request references an expired lease".to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+            };
+        }
+
+        if lease.holder_id != request.holder_id {
+            return LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code: "lease_holder_mismatch".to_owned(),
+                message: "control lease release request holder does not own the lease".to_owned(),
+                retryable: false,
+                active_lease_count: self.active_leases.len(),
+            };
+        }
+
+        if lease.scope != request.scope {
+            return LeaseReleaseAuthorityDecision::Rejected {
+                rejection_code: "lease_scope_mismatch".to_owned(),
+                message: "control lease release request scope does not match the active lease"
+                    .to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+            };
+        }
+
+        LeaseReleaseAuthorityDecision::Released(lease.clone())
+    }
+
+    fn lease_renewal_authority_decision(
+        &self,
+        request: &ManifoldControlLeaseRenewalRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> LeaseRenewalAuthorityDecision {
+        if request.schema_id != control_lease_renewal_request_schema_id() {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "control lease renewal request schema is not supported".to_owned(),
+                retryable: false,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: None,
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message:
+                    "control lease renewal request expected authority revision does not match current revision"
+                        .to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: None,
+            };
+        }
+
+        if request.requested_ttl_ms == 0 {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "invalid_ttl".to_owned(),
+                message: "control lease renewal request ttl must be greater than zero".to_owned(),
+                retryable: false,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: None,
+            };
+        }
+
+        let Some(lease) = self.active_lease(&request.lease_id) else {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "unknown_lease".to_owned(),
+                message: "control lease renewal request references an unknown active lease"
+                    .to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: None,
+            };
+        };
+
+        if lease.state != LeaseState::Active {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "inactive_lease".to_owned(),
+                message: "control lease renewal request references a non-active lease".to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: Some(lease.expires_at_ms),
+            };
+        }
+
+        if lease_expired_at(lease, recorded_clock) {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "expired_lease".to_owned(),
+                message: "control lease renewal request references an expired lease".to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: Some(lease.expires_at_ms),
+            };
+        }
+
+        if lease.holder_id != request.holder_id {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "lease_holder_mismatch".to_owned(),
+                message: "control lease renewal request holder does not own the lease".to_owned(),
+                retryable: false,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: Some(lease.expires_at_ms),
+            };
+        }
+
+        if lease.scope != request.scope {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "lease_scope_mismatch".to_owned(),
+                message: "control lease renewal request scope does not match the active lease"
+                    .to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: Some(lease.expires_at_ms),
+            };
+        }
+
+        let renewed_expires_at_ms =
+            wall_unix_ms_u64(recorded_clock).saturating_add(request.requested_ttl_ms);
+        if renewed_expires_at_ms <= lease.expires_at_ms {
+            return LeaseRenewalAuthorityDecision::Rejected {
+                rejection_code: "non_extending_renewal".to_owned(),
+                message: "control lease renewal request does not extend the active lease"
+                    .to_owned(),
+                retryable: true,
+                active_lease_count: self.active_leases.len(),
+                current_expires_at_ms: Some(lease.expires_at_ms),
+            };
+        }
+
+        LeaseRenewalAuthorityDecision::Renewed(ManifoldControlLease {
+            schema_id: control_lease_schema_id(),
+            lease_id: lease.lease_id.clone(),
+            holder_id: lease.holder_id.clone(),
+            scope: lease.scope.clone(),
+            state: LeaseState::Active,
+            granted_revision: self.authority_revision,
+            expires_at_ms: renewed_expires_at_ms,
+            required_capability: lease.required_capability.clone(),
+        })
+    }
+}
