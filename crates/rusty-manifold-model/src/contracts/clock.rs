@@ -704,3 +704,415 @@ pub enum ClockHealth {
     /// Unavailable.
     Unavailable,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum ClockSnapshotAuthorityDecision {
+    Accepted(ManifoldClockSnapshot),
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ClockSnapshotRejection {
+    rejection_code: String,
+    message: String,
+    retryable: bool,
+}
+
+impl ClockSnapshotRejection {
+    fn new(rejection_code: impl Into<String>, message: impl Into<String>, retryable: bool) -> Self {
+        Self {
+            rejection_code: rejection_code.into(),
+            message: message.into(),
+            retryable,
+        }
+    }
+}
+
+impl ManifoldAuthoritySnapshot {
+    /// Deterministically reviews one clock snapshot change request.
+    ///
+    /// The review is source-only: it accepts or rejects proposed contract state
+    /// and does not read a live clock, alter host time, start a clock service,
+    /// or contact a platform adapter.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_clock_snapshot_change(
+        &self,
+        request: ManifoldClockSnapshotChangeRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldClockSnapshotAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.clock_snapshot_authority_decision(&request, &recorded_clock);
+        let lease = request
+            .lease_id
+            .as_ref()
+            .and_then(|lease_id| self.active_lease(lease_id))
+            .cloned();
+        let (outcome, accepted, rejection) = match decision {
+            ClockSnapshotAuthorityDecision::Accepted(snapshot) => (
+                ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotAccepted,
+                Some(snapshot),
+                None,
+            ),
+            ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+            } => (
+                ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotRejected,
+                None,
+                Some(ManifoldClockSnapshotRejection {
+                    schema_id: clock_snapshot_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_authority_revision: self.authority_revision,
+                    current_clock_epoch_id: self.clock_snapshot.clock_epoch_id.clone(),
+                    current_clock_sequence: self.clock_snapshot.sequence,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldClockSnapshotAuthorityAuditEvent {
+            schema_id: clock_snapshot_authority_audit_event_schema_id(),
+            event_id: clock_snapshot_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            prior_clock_snapshot: self.clock_snapshot.clone(),
+            event_kind: outcome.into(),
+            request,
+            accepted: accepted.clone(),
+            rejection: rejection.clone(),
+            lease,
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldClockSnapshotAuthorityReview {
+            schema_id: clock_snapshot_authority_review_schema_id(),
+            review_id: clock_snapshot_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            clock_domain: audit_event.prior_clock_snapshot.clock_domain.clone(),
+            clock_epoch_id: audit_event.prior_clock_snapshot.clock_epoch_id.clone(),
+            clock_sequence: audit_event.prior_clock_snapshot.sequence,
+            outcome,
+            accepted,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one clock snapshot authority review to this snapshot.
+    ///
+    /// Accepted clock reviews produce a new `ManifoldAuthoritySnapshot` with
+    /// the authority revision advanced by one and the accepted clock snapshot
+    /// installed. Rejected reviews produce a machine-readable application
+    /// rejection and leave accepted state unchanged. This is source-only: it
+    /// does not read a live clock, alter host time, start a clock service, or
+    /// contact a platform adapter.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_clock_snapshot_authority_review(
+        &self,
+        review: ManifoldClockSnapshotAuthorityReview,
+    ) -> Result<ManifoldClockSnapshotAuthorityApplication, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        let application_id = clock_snapshot_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let from_clock_epoch_id = self.clock_snapshot.clock_epoch_id.clone();
+        let from_clock_sequence = self.clock_snapshot.sequence;
+
+        let (outcome, applied_snapshot, rejection) =
+            match review.validate_against_snapshot(self) {
+                Err(error) => (
+                    ManifoldClockSnapshotAuthorityApplicationOutcome::ClockSnapshotApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new(error.rejection_code())
+                            .expect("authority rejection code is a valid dotted id"),
+                        message: format!(
+                            "clock snapshot review does not match authority snapshot: {error}"
+                        ),
+                        retryable: authority_application_validation_retryable(error.kind()),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                ),
+                Ok(()) if review.outcome
+                    == ManifoldClockSnapshotAuthorityReviewOutcome::ClockSnapshotRejected =>
+                {
+                    (
+                        ManifoldClockSnapshotAuthorityApplicationOutcome::ClockSnapshotApplicationRejected,
+                        None,
+                        Some(ManifoldAuthoritySnapshotApplicationRejection {
+                            schema_id: authority_snapshot_application_rejection_schema_id(),
+                            application_id: application_id.clone(),
+                            rejection_code: DottedId::new("review_rejected")
+                                .expect("rejection code literal is valid"),
+                            message: "clock snapshot review did not accept a clock snapshot"
+                                .to_owned(),
+                            retryable: review
+                                .rejection
+                                .as_ref()
+                                .map(|rejection| rejection.retryable)
+                                .unwrap_or(false),
+                            current_authority_revision: self.authority_revision,
+                        }),
+                    )
+                }
+                Ok(()) => {
+                    let Some(next_authority_revision) = self.authority_revision.next() else {
+                        return Err(ManifoldAuthorityValidationError::new(
+                            review.review_id.clone(),
+                            self.authority_revision.get().to_string(),
+                            ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                        ));
+                    };
+                    let accepted_clock = review.accepted.clone().ok_or_else(|| {
+                        ManifoldAuthorityValidationError::new(
+                            review.review_id.clone(),
+                            "accepted".to_owned(),
+                            ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                        )
+                    })?;
+                    let mut next_snapshot = self.clone();
+                    next_snapshot.authority_revision = next_authority_revision;
+                    next_snapshot.clock_snapshot = accepted_clock;
+                    next_snapshot.validate_authority_links()?;
+                    (
+                        ManifoldClockSnapshotAuthorityApplicationOutcome::ClockSnapshotApplied,
+                        Some(next_snapshot),
+                        None,
+                    )
+                }
+            };
+
+        let application = ManifoldClockSnapshotAuthorityApplication {
+            schema_id: clock_snapshot_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            from_clock_epoch_id,
+            from_clock_sequence,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    fn clock_snapshot_authority_decision(
+        &self,
+        request: &ManifoldClockSnapshotChangeRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> ClockSnapshotAuthorityDecision {
+        if request.schema_id != clock_snapshot_change_request_schema_id() {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "clock snapshot request schema is not supported".to_owned(),
+                retryable: false,
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message:
+                    "clock snapshot request expected authority revision does not match current revision"
+                        .to_owned(),
+                retryable: true,
+            };
+        }
+
+        if !self
+            .host_manifest
+            .capabilities
+            .iter()
+            .any(|capability| capability == &request.required_capability)
+        {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "capability_not_advertised".to_owned(),
+                message:
+                    "clock snapshot request capability is not advertised by the authority host"
+                        .to_owned(),
+                retryable: false,
+            };
+        }
+
+        let Some(lease_id) = &request.lease_id else {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "missing_lease".to_owned(),
+                message: "clock snapshot change requires an active clock lease".to_owned(),
+                retryable: true,
+            };
+        };
+
+        let Some(lease) = self.active_lease(lease_id) else {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "unknown_lease".to_owned(),
+                message: "clock snapshot request references an unknown lease".to_owned(),
+                retryable: true,
+            };
+        };
+
+        if lease.state != LeaseState::Active {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "inactive_lease".to_owned(),
+                message: "clock snapshot lease is not active".to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease_expired_at(lease, recorded_clock) {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "expired_lease".to_owned(),
+                message: "clock snapshot lease is expired at the review clock".to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease.granted_revision > self.authority_revision {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "lease_revision_ahead".to_owned(),
+                message: "clock snapshot lease was granted after this authority revision"
+                    .to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease.holder_id != request.holder_id
+            || lease.scope != clock_snapshot_lease_scope()
+            || lease.required_capability != request.required_capability
+        {
+            return ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: "lease_mismatch".to_owned(),
+                message: "clock snapshot request does not match the active lease".to_owned(),
+                retryable: true,
+            };
+        }
+
+        match self.validate_proposed_clock_snapshot(request) {
+            Ok(()) => ClockSnapshotAuthorityDecision::Accepted(request.proposed_snapshot.clone()),
+            Err(rejection) => ClockSnapshotAuthorityDecision::Rejected {
+                rejection_code: rejection.rejection_code,
+                message: rejection.message,
+                retryable: rejection.retryable,
+            },
+        }
+    }
+
+    fn validate_proposed_clock_snapshot(
+        &self,
+        request: &ManifoldClockSnapshotChangeRequest,
+    ) -> Result<(), ClockSnapshotRejection> {
+        let proposed = &request.proposed_snapshot;
+        if proposed.schema_id != clock_snapshot_schema_id() {
+            return Err(ClockSnapshotRejection::new(
+                "unsupported_schema",
+                "clock snapshot schema is not supported",
+                false,
+            ));
+        }
+
+        if request.from_clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || request.from_clock_sequence != self.clock_snapshot.sequence
+        {
+            return Err(ClockSnapshotRejection::new(
+                "clock_precondition_mismatch",
+                "clock snapshot request precondition does not match the accepted clock snapshot",
+                true,
+            ));
+        }
+
+        if proposed.clock_domain != self.clock_snapshot.clock_domain
+            || proposed.clock_domain != self.host_manifest.clock_domain
+        {
+            return Err(ClockSnapshotRejection::new(
+                "clock_domain_mismatch",
+                "clock snapshot proposal clock domain does not match the authority clock domain",
+                true,
+            ));
+        }
+
+        if proposed.clock_epoch_id != self.clock_snapshot.clock_epoch_id {
+            return Err(ClockSnapshotRejection::new(
+                "clock_epoch_mismatch",
+                "clock snapshot proposal changes the clock epoch without an epoch transition contract",
+                true,
+            ));
+        }
+
+        let Some(next_sequence) = self.clock_snapshot.sequence.checked_add(1) else {
+            return Err(ClockSnapshotRejection::new(
+                "clock_sequence_mismatch",
+                "accepted clock sequence cannot advance",
+                false,
+            ));
+        };
+        if proposed.sequence != next_sequence {
+            return Err(ClockSnapshotRejection::new(
+                "clock_sequence_mismatch",
+                "clock snapshot proposal must advance the clock sequence by one",
+                true,
+            ));
+        }
+
+        if proposed.monotonic_elapsed_ns <= self.clock_snapshot.monotonic_elapsed_ns {
+            return Err(ClockSnapshotRejection::new(
+                "monotonic_time_regression",
+                "clock snapshot proposal must advance monotonic elapsed time",
+                true,
+            ));
+        }
+
+        if proposed.wall_clock_adjustment_count < self.clock_snapshot.wall_clock_adjustment_count {
+            return Err(ClockSnapshotRejection::new(
+                "wall_clock_adjustment_regression",
+                "clock snapshot proposal cannot reduce the wall-clock adjustment count",
+                true,
+            ));
+        }
+
+        Ok(())
+    }
+}
