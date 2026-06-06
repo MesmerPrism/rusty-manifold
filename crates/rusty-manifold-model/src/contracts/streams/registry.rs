@@ -795,3 +795,567 @@ pub enum ManifoldStreamRegistryAuthorityApplicationOutcome {
     /// Stream-registry review could not be applied to accepted authority state.
     RegistryApplicationRejected,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum StreamRegistryAuthorityDecision {
+    Accepted(ManifoldStreamRegistrySnapshot),
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+    },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct StreamRegistryDiffRejection {
+    rejection_code: String,
+    message: String,
+    retryable: bool,
+}
+
+impl StreamRegistryDiffRejection {
+    fn new(rejection_code: impl Into<String>, message: impl Into<String>, retryable: bool) -> Self {
+        Self {
+            rejection_code: rejection_code.into(),
+            message: message.into(),
+            retryable,
+        }
+    }
+}
+
+impl ManifoldAuthoritySnapshot {
+    /// Deterministically reviews one stream-registry change request against this authority snapshot.
+    ///
+    /// The review is source-only: it applies the proposed diff to contract data
+    /// only and does not publish streams, open transports, start modules, or
+    /// mutate a runtime registry.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_stream_registry_change(
+        &self,
+        request: ManifoldStreamRegistryChangeRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldStreamRegistryAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.stream_registry_authority_decision(&request, &recorded_clock);
+        let lease = request
+            .lease_id
+            .as_ref()
+            .and_then(|lease_id| self.active_lease(lease_id))
+            .cloned();
+        let (outcome, accepted, rejection) = match decision {
+            StreamRegistryAuthorityDecision::Accepted(snapshot) => (
+                ManifoldStreamRegistryAuthorityReviewOutcome::RegistryAccepted,
+                Some(snapshot),
+                None,
+            ),
+            StreamRegistryAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+            } => (
+                ManifoldStreamRegistryAuthorityReviewOutcome::RegistryRejected,
+                None,
+                Some(ManifoldStreamRegistryRejection {
+                    schema_id: stream_registry_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_authority_revision: self.authority_revision,
+                    current_registry_revision: self.stream_registry.registry_revision,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldStreamRegistryAuthorityAuditEvent {
+            schema_id: stream_registry_authority_audit_event_schema_id(),
+            event_id: stream_registry_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            prior_registry_revision: self.stream_registry.registry_revision,
+            event_kind: outcome.into(),
+            request,
+            accepted: accepted.clone(),
+            rejection: rejection.clone(),
+            lease,
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldStreamRegistryAuthorityReview {
+            schema_id: stream_registry_authority_review_schema_id(),
+            review_id: stream_registry_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            registry_revision: self.stream_registry.registry_revision,
+            outcome,
+            accepted,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one stream-registry authority review to this snapshot.
+    ///
+    /// Accepted registry reviews produce a new `ManifoldAuthoritySnapshot` with
+    /// the authority revision advanced by one and the accepted stream registry
+    /// installed. Rejected reviews produce a machine-readable application
+    /// rejection and leave accepted state unchanged. This is source-only: it
+    /// does not publish streams, open transports, notify subscribers, or
+    /// mutate a runtime registry.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_stream_registry_authority_review(
+        &self,
+        review: ManifoldStreamRegistryAuthorityReview,
+    ) -> Result<ManifoldStreamRegistryAuthorityApplication, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        let application_id = stream_registry_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let from_registry_revision = self.stream_registry.registry_revision;
+
+        let (outcome, applied_snapshot, rejection) = match review.validate_against_snapshot(self) {
+            Err(error) => (
+                ManifoldStreamRegistryAuthorityApplicationOutcome::RegistryApplicationRejected,
+                None,
+                Some(ManifoldAuthoritySnapshotApplicationRejection {
+                    schema_id: authority_snapshot_application_rejection_schema_id(),
+                    application_id: application_id.clone(),
+                    rejection_code: DottedId::new(error.rejection_code())
+                        .expect("authority rejection code is a valid dotted id"),
+                    message: format!(
+                        "stream registry review does not match authority snapshot: {error}"
+                    ),
+                    retryable: authority_application_validation_retryable(error.kind()),
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+            Ok(())
+                if review.outcome
+                    == ManifoldStreamRegistryAuthorityReviewOutcome::RegistryRejected =>
+            {
+                (
+                    ManifoldStreamRegistryAuthorityApplicationOutcome::RegistryApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new("review_rejected")
+                            .expect("rejection code literal is valid"),
+                        message: "stream registry review did not accept a registry snapshot"
+                            .to_owned(),
+                        retryable: review
+                            .rejection
+                            .as_ref()
+                            .map(|rejection| rejection.retryable)
+                            .unwrap_or(false),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                )
+            }
+            Ok(()) => {
+                let Some(next_authority_revision) = self.authority_revision.next() else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        self.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                };
+                let mut next_snapshot = self.clone();
+                next_snapshot.authority_revision = next_authority_revision;
+                next_snapshot.stream_registry = review.accepted.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                next_snapshot.validate_authority_links()?;
+                (
+                    ManifoldStreamRegistryAuthorityApplicationOutcome::RegistrySnapshotApplied,
+                    Some(next_snapshot),
+                    None,
+                )
+            }
+        };
+
+        let application = ManifoldStreamRegistryAuthorityApplication {
+            schema_id: stream_registry_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            from_registry_revision,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    fn stream_registry_authority_decision(
+        &self,
+        request: &ManifoldStreamRegistryChangeRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> StreamRegistryAuthorityDecision {
+        if request.schema_id != stream_registry_change_request_schema_id() {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "stream registry request schema is not supported".to_owned(),
+                retryable: false,
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message: "stream registry request expected authority revision does not match current revision"
+                    .to_owned(),
+                retryable: true,
+            };
+        }
+
+        if !self
+            .host_manifest
+            .capabilities
+            .iter()
+            .any(|capability| capability == &request.required_capability)
+        {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "capability_not_advertised".to_owned(),
+                message:
+                    "stream registry request capability is not advertised by the authority host"
+                        .to_owned(),
+                retryable: false,
+            };
+        }
+
+        let Some(lease_id) = &request.lease_id else {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "missing_lease".to_owned(),
+                message: "stream registry change requires an active registry lease".to_owned(),
+                retryable: true,
+            };
+        };
+
+        let Some(lease) = self.active_lease(lease_id) else {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "unknown_lease".to_owned(),
+                message: "stream registry request references an unknown lease".to_owned(),
+                retryable: true,
+            };
+        };
+
+        if lease.state != LeaseState::Active {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "inactive_lease".to_owned(),
+                message: "stream registry lease is not active".to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease_expired_at(lease, recorded_clock) {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "expired_lease".to_owned(),
+                message: "stream registry lease is expired at the review clock".to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease.granted_revision > self.authority_revision {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "lease_revision_ahead".to_owned(),
+                message: "stream registry lease was granted after this authority revision"
+                    .to_owned(),
+                retryable: true,
+            };
+        }
+
+        if lease.holder_id != request.holder_id
+            || lease.scope != registry_lease_scope()
+            || lease.required_capability != request.required_capability
+        {
+            return StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: "lease_mismatch".to_owned(),
+                message: "stream registry request does not match the active lease".to_owned(),
+                retryable: true,
+            };
+        }
+
+        match self.apply_stream_registry_diff(&request.diff) {
+            Ok(snapshot) => StreamRegistryAuthorityDecision::Accepted(snapshot),
+            Err(rejection) => StreamRegistryAuthorityDecision::Rejected {
+                rejection_code: rejection.rejection_code,
+                message: rejection.message,
+                retryable: rejection.retryable,
+            },
+        }
+    }
+
+    fn apply_stream_registry_diff(
+        &self,
+        diff: &ManifoldStreamRegistryDiff,
+    ) -> Result<ManifoldStreamRegistrySnapshot, StreamRegistryDiffRejection> {
+        if diff.schema_id != stream_registry_diff_schema_id() {
+            return Err(StreamRegistryDiffRejection::new(
+                "unsupported_schema",
+                "stream registry diff schema is not supported",
+                false,
+            ));
+        }
+
+        if diff.from_revision != self.stream_registry.registry_revision {
+            return Err(StreamRegistryDiffRejection::new(
+                "registry_revision_mismatch",
+                "stream registry diff from_revision does not match current registry revision",
+                true,
+            ));
+        }
+
+        let Some(next_revision) = self.stream_registry.registry_revision.next() else {
+            return Err(StreamRegistryDiffRejection::new(
+                "registry_revision_mismatch",
+                "stream registry revision cannot advance",
+                false,
+            ));
+        };
+        if diff.to_revision != next_revision {
+            return Err(StreamRegistryDiffRejection::new(
+                "registry_revision_mismatch",
+                "stream registry diff to_revision must advance by one",
+                true,
+            ));
+        }
+
+        if diff.added_streams.is_empty()
+            && diff.removed_streams.is_empty()
+            && diff.changed_streams.is_empty()
+        {
+            return Err(StreamRegistryDiffRejection::new(
+                "empty_registry_diff",
+                "stream registry diff has no changes",
+                false,
+            ));
+        }
+
+        let mut streams = self.stream_registry.streams.clone();
+
+        for removed in &diff.removed_streams {
+            if self.active_stream_id(&removed.stream_id) {
+                return Err(StreamRegistryDiffRejection::new(
+                    "active_stream_conflict",
+                    "stream registry diff removes a stream still active in module runtime state",
+                    true,
+                ));
+            }
+
+            if self.active_subscription_count(&removed.stream_id) > 0 {
+                return Err(StreamRegistryDiffRejection::new(
+                    "active_subscription_conflict",
+                    "stream registry diff removes a stream with active subscriptions",
+                    true,
+                ));
+            }
+
+            let Some(index) = streams
+                .iter()
+                .position(|stream| stream.stream_id == removed.stream_id)
+            else {
+                return Err(StreamRegistryDiffRejection::new(
+                    "unknown_stream",
+                    "stream registry diff removes a stream absent from the current registry",
+                    true,
+                ));
+            };
+
+            if streams[index] != *removed {
+                return Err(StreamRegistryDiffRejection::new(
+                    "stream_diff_mismatch",
+                    "stream registry diff remove entry does not match the current stream",
+                    true,
+                ));
+            }
+
+            streams.remove(index);
+        }
+
+        for change in &diff.changed_streams {
+            if change.before.stream_id != change.stream_id
+                || change.after.stream_id != change.stream_id
+            {
+                return Err(StreamRegistryDiffRejection::new(
+                    "stream_diff_mismatch",
+                    "stream registry diff change entry has mismatched stream ids",
+                    false,
+                ));
+            }
+
+            let Some(index) = streams
+                .iter()
+                .position(|stream| stream.stream_id == change.stream_id)
+            else {
+                return Err(StreamRegistryDiffRejection::new(
+                    "unknown_stream",
+                    "stream registry diff changes a stream absent from the current registry",
+                    true,
+                ));
+            };
+
+            if streams[index] != change.before {
+                return Err(StreamRegistryDiffRejection::new(
+                    "stream_diff_mismatch",
+                    "stream registry diff before entry does not match the current stream",
+                    true,
+                ));
+            }
+
+            if change.after.source_module_id != change.before.source_module_id
+                && self.active_stream_id(&change.stream_id)
+            {
+                return Err(StreamRegistryDiffRejection::new(
+                    "active_stream_conflict",
+                    "stream registry diff changes the source module for an active stream",
+                    true,
+                ));
+            }
+
+            let active_subscription_count = self.active_subscription_count(&change.stream_id);
+            if active_subscription_count > 0 {
+                for subscription in self
+                    .active_stream_subscriptions
+                    .iter()
+                    .filter(|subscription| subscription.stream_id == change.stream_id)
+                {
+                    let offer_still_available = change.after.transport_offers.iter().any(|offer| {
+                        offer.transport_id == subscription.transport_id
+                            && offer.endpoint_id == subscription.endpoint_id
+                    });
+                    if !offer_still_available {
+                        return Err(StreamRegistryDiffRejection::new(
+                            "active_subscription_conflict",
+                            "stream registry diff removes a transport offer used by an active subscription",
+                            true,
+                        ));
+                    }
+
+                    if subscription.subscriber_kind == ManifoldStreamSubscriberKind::Ui
+                        && !change.after.subscription.ui_subscribable
+                    {
+                        return Err(StreamRegistryDiffRejection::new(
+                            "active_subscription_conflict",
+                            "stream registry diff disables UI subscription policy while UI subscriptions are active",
+                            true,
+                        ));
+                    }
+                }
+
+                if let Some(max_subscribers) = change.after.subscription.max_subscribers {
+                    if active_subscription_count > max_subscribers {
+                        return Err(StreamRegistryDiffRejection::new(
+                            "active_subscription_conflict",
+                            "stream registry diff lowers the subscriber limit below active subscriptions",
+                            true,
+                        ));
+                    }
+                }
+            }
+
+            streams[index] = change.after.clone();
+        }
+
+        for added in &diff.added_streams {
+            if streams
+                .iter()
+                .any(|stream| stream.stream_id == added.stream_id)
+            {
+                return Err(StreamRegistryDiffRejection::new(
+                    "stream_already_exists",
+                    "stream registry diff adds a stream id that already exists",
+                    true,
+                ));
+            }
+            streams.push(added.clone());
+        }
+
+        if let Some(stream_id) = duplicate_stream_id(&streams) {
+            return Err(StreamRegistryDiffRejection::new(
+                "duplicate_stream",
+                format!("stream registry contains duplicate stream id {stream_id}"),
+                false,
+            ));
+        }
+
+        let snapshot = ManifoldStreamRegistrySnapshot {
+            schema_id: stream_registry_snapshot_schema_id(),
+            registry_revision: diff.to_revision,
+            streams,
+        };
+        let module_ids = self
+            .module_runtime_states
+            .iter()
+            .map(|state| state.module_id.clone())
+            .collect::<Vec<_>>();
+        if let Err(error) = snapshot.validate_source_modules(&module_ids) {
+            return Err(StreamRegistryDiffRejection::new(
+                error.rejection_code(),
+                format!(
+                    "stream registry diff references unknown source module {}",
+                    error.rejected_id()
+                ),
+                false,
+            ));
+        }
+
+        let endpoint_ids = self
+            .host_manifest
+            .endpoints
+            .iter()
+            .map(|endpoint| endpoint.endpoint_id.clone())
+            .collect::<Vec<_>>();
+        if let Err(error) = snapshot.validate_transport_endpoints(&endpoint_ids) {
+            return Err(StreamRegistryDiffRejection::new(
+                error.rejection_code(),
+                format!(
+                    "stream registry diff references unknown transport endpoint {}",
+                    error.rejected_id()
+                ),
+                false,
+            ));
+        }
+
+        Ok(snapshot)
+    }
+}

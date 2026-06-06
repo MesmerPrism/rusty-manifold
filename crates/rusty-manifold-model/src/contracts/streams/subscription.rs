@@ -557,3 +557,369 @@ impl ManifoldStreamSubscriptionAuthorityApplication {
         }
     }
 }
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum StreamSubscriptionAuthorityDecision {
+    Accepted(ManifoldStreamSubscription),
+    Rejected {
+        rejection_code: String,
+        message: String,
+        retryable: bool,
+        active_subscriber_count: u32,
+    },
+}
+
+impl ManifoldAuthoritySnapshot {
+    /// Deterministically reviews one stream subscription request.
+    ///
+    /// The review is source-only: it admits or rejects a subscriber against the
+    /// accepted stream manifest and host capability state, but it does not open
+    /// transports, notify subscribers, or contact runtime providers.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when the authority snapshot
+    /// itself is invalid, the review clock is inconsistent, or evidence refs are empty.
+    pub fn review_stream_subscription(
+        &self,
+        request: ManifoldStreamSubscriptionRequest,
+        recorded_clock: ManifoldClockSnapshot,
+        evidence_refs: Vec<DottedId>,
+    ) -> Result<ManifoldStreamSubscriptionAuthorityReview, ManifoldAuthorityValidationError> {
+        self.validate_authority_links()?;
+
+        if recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+            || recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+            || recorded_clock.sequence < self.clock_snapshot.sequence
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                recorded_clock.clock_domain.to_string(),
+                ManifoldAuthorityValidationErrorKind::ClockSnapshotMismatch,
+            ));
+        }
+
+        if evidence_refs.is_empty() {
+            return Err(ManifoldAuthorityValidationError::new(
+                request.request_id.clone(),
+                "evidence_refs".to_owned(),
+                ManifoldAuthorityValidationErrorKind::MissingEvidence,
+            ));
+        }
+
+        let decision = self.stream_subscription_authority_decision(&request, &recorded_clock);
+        let active_subscriber_count = self.active_subscription_count(&request.stream_id);
+        let (outcome, accepted, rejection) = match decision {
+            StreamSubscriptionAuthorityDecision::Accepted(subscription) => (
+                ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionAccepted,
+                Some(subscription),
+                None,
+            ),
+            StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code,
+                message,
+                retryable,
+                active_subscriber_count,
+            } => (
+                ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionRejected,
+                None,
+                Some(ManifoldStreamSubscriptionRejection {
+                    schema_id: stream_subscription_rejection_schema_id(),
+                    request_id: request.request_id.clone(),
+                    rejection_code: DottedId::new(rejection_code)
+                        .expect("rejection code is a valid dotted id"),
+                    message,
+                    retryable,
+                    current_authority_revision: self.authority_revision,
+                    current_registry_revision: self.stream_registry.registry_revision,
+                    active_subscriber_count,
+                }),
+            ),
+        };
+
+        let audit_event = ManifoldStreamSubscriptionAuthorityAuditEvent {
+            schema_id: stream_subscription_authority_audit_event_schema_id(),
+            event_id: stream_subscription_authority_audit_event_id(&request.request_id, outcome),
+            authority_id: self.authority_id.clone(),
+            prior_authority_revision: self.authority_revision,
+            prior_registry_revision: self.stream_registry.registry_revision,
+            active_subscriber_count,
+            event_kind: outcome.into(),
+            request,
+            accepted: accepted.clone(),
+            rejection: rejection.clone(),
+            recorded_clock,
+            evidence_refs,
+        };
+
+        let review = ManifoldStreamSubscriptionAuthorityReview {
+            schema_id: stream_subscription_authority_review_schema_id(),
+            review_id: stream_subscription_authority_review_id(&audit_event.request.request_id),
+            authority_id: self.authority_id.clone(),
+            authority_revision: self.authority_revision,
+            registry_revision: self.stream_registry.registry_revision,
+            outcome,
+            accepted,
+            rejection,
+            audit_event,
+        };
+        review.validate_against_snapshot(self)?;
+        Ok(review)
+    }
+
+    /// Deterministically applies one stream subscription authority review.
+    ///
+    /// Accepted subscription reviews produce a new `ManifoldAuthoritySnapshot`
+    /// with the authority revision advanced by one and the accepted active
+    /// subscription appended. Rejected reviews produce a machine-readable
+    /// application rejection and leave accepted state unchanged. This is
+    /// source-only: it does not open transports, notify subscribers, or contact
+    /// runtime providers.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ManifoldAuthorityValidationError`] when this authority snapshot
+    /// itself is invalid.
+    pub fn apply_stream_subscription_authority_review(
+        &self,
+        review: ManifoldStreamSubscriptionAuthorityReview,
+    ) -> Result<ManifoldStreamSubscriptionAuthorityApplication, ManifoldAuthorityValidationError>
+    {
+        self.validate_authority_links()?;
+
+        let application_id = stream_subscription_authority_application_id(&review.review_id);
+        let from_authority_revision = self.authority_revision;
+        let from_registry_revision = self.stream_registry.registry_revision;
+        let stream_id = review.audit_event.request.stream_id.clone();
+        let from_active_subscriber_count = self.active_subscription_count(&stream_id);
+
+        let (outcome, applied_snapshot, rejection) = match review.validate_against_snapshot(self) {
+            Err(error) => (
+                ManifoldStreamSubscriptionAuthorityApplicationOutcome::SubscriptionApplicationRejected,
+                None,
+                Some(ManifoldAuthoritySnapshotApplicationRejection {
+                    schema_id: authority_snapshot_application_rejection_schema_id(),
+                    application_id: application_id.clone(),
+                    rejection_code: DottedId::new(error.rejection_code())
+                        .expect("authority rejection code is a valid dotted id"),
+                    message: format!(
+                        "stream subscription review does not match authority snapshot: {error}"
+                    ),
+                    retryable: authority_application_validation_retryable(error.kind()),
+                    current_authority_revision: self.authority_revision,
+                }),
+            ),
+            Ok(())
+                if review.outcome
+                    == ManifoldStreamSubscriptionAuthorityReviewOutcome::SubscriptionRejected =>
+            {
+                (
+                    ManifoldStreamSubscriptionAuthorityApplicationOutcome::SubscriptionApplicationRejected,
+                    None,
+                    Some(ManifoldAuthoritySnapshotApplicationRejection {
+                        schema_id: authority_snapshot_application_rejection_schema_id(),
+                        application_id: application_id.clone(),
+                        rejection_code: DottedId::new("review_rejected")
+                            .expect("rejection code literal is valid"),
+                        message: "stream subscription review did not accept a subscription"
+                            .to_owned(),
+                        retryable: review
+                            .rejection
+                            .as_ref()
+                            .map(|rejection| rejection.retryable)
+                            .unwrap_or(false),
+                        current_authority_revision: self.authority_revision,
+                    }),
+                )
+            }
+            Ok(()) => {
+                let Some(next_authority_revision) = self.authority_revision.next() else {
+                    return Err(ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        self.authority_revision.get().to_string(),
+                        ManifoldAuthorityValidationErrorKind::AcceptanceRevisionMismatch,
+                    ));
+                };
+                let accepted_subscription = review.accepted.clone().ok_or_else(|| {
+                    ManifoldAuthorityValidationError::new(
+                        review.review_id.clone(),
+                        "accepted".to_owned(),
+                        ManifoldAuthorityValidationErrorKind::DecisionShapeMismatch,
+                    )
+                })?;
+                let mut next_snapshot = self.clone();
+                next_snapshot.authority_revision = next_authority_revision;
+                next_snapshot
+                    .active_stream_subscriptions
+                    .push(accepted_subscription);
+                next_snapshot.validate_authority_links()?;
+                (
+                    ManifoldStreamSubscriptionAuthorityApplicationOutcome::SubscriptionApplied,
+                    Some(next_snapshot),
+                    None,
+                )
+            }
+        };
+
+        let application = ManifoldStreamSubscriptionAuthorityApplication {
+            schema_id: stream_subscription_authority_application_schema_id(),
+            application_id,
+            authority_id: self.authority_id.clone(),
+            from_authority_revision,
+            from_registry_revision,
+            stream_id,
+            from_active_subscriber_count,
+            outcome,
+            applied_snapshot,
+            rejection,
+            review,
+        };
+        application.validate_against_snapshot(self)?;
+        Ok(application)
+    }
+
+    fn stream_subscription_authority_decision(
+        &self,
+        request: &ManifoldStreamSubscriptionRequest,
+        recorded_clock: &ManifoldClockSnapshot,
+    ) -> StreamSubscriptionAuthorityDecision {
+        if request.schema_id != stream_subscription_request_schema_id() {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "unsupported_schema".to_owned(),
+                message: "stream subscription request schema is not supported".to_owned(),
+                retryable: false,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+            };
+        }
+
+        if request.expected_authority_revision != self.authority_revision {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "stale_revision".to_owned(),
+                message:
+                    "stream subscription request expected authority revision does not match current revision"
+                        .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+            };
+        }
+
+        if request.expected_registry_revision != self.stream_registry.registry_revision {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "registry_revision_mismatch".to_owned(),
+                message:
+                    "stream subscription request expected registry revision does not match current registry"
+                        .to_owned(),
+                retryable: true,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+            };
+        }
+
+        if request.requested_ttl_ms == 0 {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "invalid_ttl".to_owned(),
+                message: "stream subscription ttl must be greater than zero".to_owned(),
+                retryable: false,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+            };
+        }
+
+        if !self
+            .host_manifest
+            .capabilities
+            .iter()
+            .any(|capability| capability == &request.required_capability)
+        {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "capability_not_advertised".to_owned(),
+                message:
+                    "stream subscription request capability is not advertised by the authority host"
+                        .to_owned(),
+                retryable: false,
+                active_subscriber_count: self.active_subscription_count(&request.stream_id),
+            };
+        }
+
+        let active_subscriber_count = self.active_subscription_count(&request.stream_id);
+        let Some(stream) = self.stream_manifest(&request.stream_id) else {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "unknown_stream".to_owned(),
+                message: "stream subscription request references an unknown stream".to_owned(),
+                retryable: true,
+                active_subscriber_count,
+            };
+        };
+
+        if request.subscriber_kind == ManifoldStreamSubscriberKind::Ui
+            && !stream.subscription.ui_subscribable
+        {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "subscription_not_allowed".to_owned(),
+                message: "stream manifest does not allow direct UI subscriptions".to_owned(),
+                retryable: false,
+                active_subscriber_count,
+            };
+        }
+
+        if let Some(max_subscribers) = stream.subscription.max_subscribers {
+            if active_subscriber_count >= max_subscribers {
+                return StreamSubscriptionAuthorityDecision::Rejected {
+                    rejection_code: "subscriber_limit_reached".to_owned(),
+                    message: "stream subscription would exceed the stream subscriber limit"
+                        .to_owned(),
+                    retryable: true,
+                    active_subscriber_count,
+                };
+            }
+        }
+
+        let Some(offer) = stream
+            .transport_offers
+            .iter()
+            .find(|offer| offer.transport_id == request.transport_id)
+        else {
+            return StreamSubscriptionAuthorityDecision::Rejected {
+                rejection_code: "unknown_transport".to_owned(),
+                message: "stream subscription request selected an unknown transport offer"
+                    .to_owned(),
+                retryable: true,
+                active_subscriber_count,
+            };
+        };
+
+        if let Some(endpoint_id) = &offer.endpoint_id {
+            if !self
+                .host_manifest
+                .endpoints
+                .iter()
+                .any(|endpoint| &endpoint.endpoint_id == endpoint_id)
+            {
+                return StreamSubscriptionAuthorityDecision::Rejected {
+                    rejection_code: "unknown_transport_endpoint".to_owned(),
+                    message:
+                        "stream subscription request selected a transport with an unknown endpoint"
+                            .to_owned(),
+                    retryable: false,
+                    active_subscriber_count,
+                };
+            }
+        }
+
+        StreamSubscriptionAuthorityDecision::Accepted(ManifoldStreamSubscription {
+            schema_id: stream_subscription_schema_id(),
+            subscription_id: stream_subscription_id(&request.request_id),
+            request_id: request.request_id.clone(),
+            subscriber_id: request.subscriber_id.clone(),
+            subscriber_kind: request.subscriber_kind,
+            stream_id: request.stream_id.clone(),
+            transport_id: request.transport_id.clone(),
+            endpoint_id: offer.endpoint_id.clone(),
+            state: ManifoldStreamSubscriptionState::Active,
+            accepted_authority_revision: self.authority_revision,
+            accepted_registry_revision: self.stream_registry.registry_revision,
+            accepted_at_ms: wall_unix_ms_u64(recorded_clock),
+            expires_at_ms: wall_unix_ms_u64(recorded_clock)
+                .saturating_add(request.requested_ttl_ms),
+            required_capability: request.required_capability.clone(),
+        })
+    }
+}
