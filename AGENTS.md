@@ -11,6 +11,10 @@ host, clock, session, package, and audit surfaces. It should remain usable
 without UI frameworks, platform SDKs, runtime sockets, device APIs, media
 libraries, or external workflow tools.
 
+Makepad dependencies belong only in downstream app-shell/UI lanes such as
+Hostess Makepad shells, Studio Makepad/UI shells, and public Rusty XR Makepad
+examples. This repo stays Makepad-free.
+
 ## Read Order
 
 1. `README.md`
@@ -40,6 +44,8 @@ libraries, or external workflow tools.
   loaders, transports, or sidecars.
 - Put platform SDKs, media stacks, device APIs, UI frameworks, and optional
   transports in adapter crates or downstream products.
+- Do not add Makepad as a dependency, feature, fixture requirement, schema
+  owner, or validation prerequisite.
 
 ## Naming
 
