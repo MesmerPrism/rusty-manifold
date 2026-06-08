@@ -10,6 +10,11 @@ authority, graph plumbing, streams, leases, modules, clocks, transports, and
 audit. Do not introduce `rusty.morphospace.*` schemas here; use
 `rusty.manifold.*` for Manifold contracts.
 
+Project-owned source in this repo is licensed `AGPL-3.0-or-later`. Keep
+third-party dependencies, generated artifacts, fixtures imported from other
+projects, binary releases, and external tools under their own provenance and
+notice requirements; see `docs/LICENSING.md`.
+
 ## Purpose
 
 Rusty Manifold owns typed contracts for graph, stream, command, lease, module,
