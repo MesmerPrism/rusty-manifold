@@ -15,6 +15,13 @@ Makepad dependencies belong only in downstream app-shell/UI lanes such as
 Hostess Makepad shells, Studio Makepad/UI shells, and public Rusty XR Makepad
 examples. This repo stays Makepad-free.
 
+Rusty Lattice owns situated relation contracts: reference spaces, transforms,
+tracked poses, view sets, spatial input roles, frame-state binding,
+calibration, validity, confidence, and runtime capability snapshots. Manifold
+may route, authorize, lease, subscribe to, or audit Lattice observations, but
+it must not define Lattice relation semantics or default to legacy
+`rusty.xr.*` names for new command/session/stream work.
+
 ## Read Order
 
 1. `README.md`
