@@ -4,6 +4,12 @@ This is the clean source repository for Rusty Manifold. Keep committed content
 self-contained and free of local planning paths, private source references,
 private package names, and historical naming drift.
 
+Rusty Morphospace is the top-level project/platform umbrella. This repo remains
+the Manifold lane inside that umbrella: morphology of regulation, command
+authority, graph plumbing, streams, leases, modules, clocks, transports, and
+audit. Do not introduce `rusty.morphospace.*` schemas here; use
+`rusty.manifold.*` for Manifold contracts.
+
 ## Purpose
 
 Rusty Manifold owns typed contracts for graph, stream, command, lease, module,
