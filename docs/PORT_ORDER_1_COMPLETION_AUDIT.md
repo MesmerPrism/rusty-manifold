@@ -10,7 +10,8 @@ compatibility aliases remain outside Manifold core.
 
 Graph evidence:
 
-- `S:\Work\migration\coding-graph\rusty-manifold-port-order-audit-20260606`
+- local graph snapshot `rusty-manifold-port-order-audit-20260606` retained
+  outside the repository
 
 Validation command set:
 
