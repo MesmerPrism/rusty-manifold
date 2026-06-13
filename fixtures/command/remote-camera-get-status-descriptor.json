@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.command.descriptor.v1",
+  "command_id": "command.remote_camera.get_status",
+  "target_scope": "session.remote_camera.q2q_two_way_lan_smoke",
+  "input_schema": "rusty.manifold.command.input.remote_camera_get_status.v1",
+  "required_capability": "manifold.remote_camera.read",
+  "required_lease_scope": null,
+  "safety_class": "read_only",
+  "operator_confirmation_required": false
+}

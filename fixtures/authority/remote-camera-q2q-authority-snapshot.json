@@ -1,0 +1,108 @@
+{
+  "$schema": "rusty.manifold.authority.snapshot.v1",
+  "authority_id": "authority.remote_camera.q2q_two_way_lan_smoke",
+  "authority_revision": 1,
+  "host_manifest": {
+    "$schema": "rusty.manifold.host.manifest.v1",
+    "host_id": "host.remote_camera.coordinator",
+    "authority_role": "primary",
+    "host_category": "host.remote_camera.coordinator",
+    "clock_domain": "clock.host_monotonic",
+    "endpoints": [
+      {
+        "endpoint_id": "endpoint.remote_camera.control_loopback",
+        "visibility": "loopback",
+        "transport": "http",
+        "security": "local_process"
+      }
+    ],
+    "capabilities": [
+      "manifold.command.request",
+      "manifold.remote_camera.control",
+      "manifold.remote_camera.read"
+    ],
+    "supported_backends": [
+      "backend.remote_camera.source_only"
+    ],
+    "permissions": [],
+    "lifecycle_limits": [],
+    "missing_requirements": []
+  },
+  "clock_snapshot": {
+    "$schema": "rusty.manifold.clock.snapshot.v1",
+    "clock_domain": "clock.host_monotonic",
+    "clock_epoch_id": "clock_epoch.remote_camera_q2q_1",
+    "sequence": 42,
+    "monotonic_elapsed_ns": 1234567890,
+    "wall_unix_ms": 1765000000000,
+    "read_uncertainty_ns": 250000,
+    "health": "healthy",
+    "wall_clock_adjustment_count": 0
+  },
+  "stream_registry": {
+    "$schema": "rusty.manifold.stream.registry_snapshot.v1",
+    "registry_revision": 1,
+    "streams": []
+  },
+  "module_runtime_states": [],
+  "command_ids": [
+    "command.remote_camera.start_receiver",
+    "command.remote_camera.start_sender",
+    "command.remote_camera.get_status",
+    "command.remote_camera.stop"
+  ],
+  "command_descriptors": [
+    {
+      "$schema": "rusty.manifold.command.descriptor.v1",
+      "command_id": "command.remote_camera.start_receiver",
+      "target_scope": "session.remote_camera.q2q_two_way_lan_smoke",
+      "input_schema": "rusty.manifold.command.input.remote_camera_start_receiver.v1",
+      "required_capability": "manifold.remote_camera.control",
+      "required_lease_scope": "session.remote_camera.q2q_two_way_lan_smoke",
+      "safety_class": "bounded_mutation",
+      "operator_confirmation_required": true
+    },
+    {
+      "$schema": "rusty.manifold.command.descriptor.v1",
+      "command_id": "command.remote_camera.start_sender",
+      "target_scope": "session.remote_camera.q2q_two_way_lan_smoke",
+      "input_schema": "rusty.manifold.command.input.remote_camera_start_sender.v1",
+      "required_capability": "manifold.remote_camera.control",
+      "required_lease_scope": "session.remote_camera.q2q_two_way_lan_smoke",
+      "safety_class": "operator_confirmed",
+      "operator_confirmation_required": true
+    },
+    {
+      "$schema": "rusty.manifold.command.descriptor.v1",
+      "command_id": "command.remote_camera.get_status",
+      "target_scope": "session.remote_camera.q2q_two_way_lan_smoke",
+      "input_schema": "rusty.manifold.command.input.remote_camera_get_status.v1",
+      "required_capability": "manifold.remote_camera.read",
+      "required_lease_scope": null,
+      "safety_class": "read_only",
+      "operator_confirmation_required": false
+    },
+    {
+      "$schema": "rusty.manifold.command.descriptor.v1",
+      "command_id": "command.remote_camera.stop",
+      "target_scope": "session.remote_camera.q2q_two_way_lan_smoke",
+      "input_schema": "rusty.manifold.command.input.remote_camera_stop.v1",
+      "required_capability": "manifold.remote_camera.control",
+      "required_lease_scope": null,
+      "safety_class": "bounded_mutation",
+      "operator_confirmation_required": false
+    }
+  ],
+  "active_leases": [
+    {
+      "$schema": "rusty.manifold.command.control_lease.v1",
+      "lease_id": "lease.remote_camera.q2q_two_way_lan_smoke",
+      "holder_id": "holder.remote_camera.quest_a",
+      "scope": "session.remote_camera.q2q_two_way_lan_smoke",
+      "state": "active",
+      "granted_revision": 1,
+      "expires_at_ms": 1765000030000,
+      "required_capability": "manifold.remote_camera.control"
+    }
+  ]
+}

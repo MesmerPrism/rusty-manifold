@@ -10,6 +10,8 @@ to concrete protocols, tools, processes, files, or platform APIs.
 - Actions for long-running work.
 - Parameters for inspectable runtime settings.
 - Feedback for health, timing, and adaptation signals.
+- Coordination sessions for low-rate readiness, advisory peer status, relay
+  status, and scorecard evidence.
 
 ## Adapter Requirements
 
@@ -25,6 +27,20 @@ Every adapter proposal should declare:
 - provenance and release status.
 
 Core crates must remain usable without optional adapter dependencies.
+
+## Coordination Adapters
+
+Coordination adapters translate a `ManifoldCoordinationSessionPlan` into
+platform-specific readiness checks and return a `ManifoldCoordinationMessageLog`
+or scorecard evidence. Quest, Android phone, Termux, and remote relay adapters
+must keep Manifold's boundary intact:
+
+- control messages remain low-rate metadata;
+- peer mesh and relay status are advisory only;
+- sender start is authorized only after receiver-readiness gates pass;
+- camera 50/51 media payloads move through media-plane transports, not
+  coordination JSON;
+- live adapters require operator review before using real devices or relays.
 
 ## Command Surface Parity
 

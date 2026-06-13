@@ -108,6 +108,7 @@ fn schema_entries() -> Vec<SchemaEntry> {
     entries.extend(package_and_graph_entries());
     entries.extend(module_and_stream_entries());
     entries.extend(command_entries());
+    entries.extend(coordination_entries());
     entries.extend(authority_entries());
     entries.extend(host_and_deployment_entries());
     entries.extend(verification_entries());
@@ -299,13 +300,23 @@ fn command_entries() -> Vec<SchemaEntry> {
         entry(
             "rusty.manifold.command.descriptor.v1",
             "ManifoldCommandDescriptor",
-            &["fixtures/command/synthetic-command-descriptor.json"],
+            &[
+                "fixtures/command/synthetic-command-descriptor.json",
+                "fixtures/command/remote-camera-start-receiver-descriptor.json",
+                "fixtures/command/remote-camera-start-sender-descriptor.json",
+                "fixtures/command/remote-camera-get-status-descriptor.json",
+                "fixtures/command/remote-camera-stop-descriptor.json",
+            ],
         ),
         entry(
             "rusty.manifold.command.envelope.v1",
             "ManifoldCommandEnvelope",
             &[
                 "fixtures/command/synthetic-command-envelope.json",
+                "fixtures/command/remote-camera-start-receiver-envelope.json",
+                "fixtures/command/remote-camera-start-sender-envelope.json",
+                "fixtures/command/remote-camera-get-status-envelope.json",
+                "fixtures/command/remote-camera-stop-envelope.json",
                 "fixtures/damaged/stale-revision-command.json",
                 "fixtures/damaged/missing-lease-scope-command.json",
                 "fixtures/damaged/authority-review-unknown-command.json",
@@ -386,6 +397,47 @@ fn command_entries() -> Vec<SchemaEntry> {
     ]
 }
 
+fn coordination_entries() -> Vec<SchemaEntry> {
+    vec![
+        entry(
+            "rusty.manifold.coordination.session_plan.v1",
+            "ManifoldCoordinationSessionPlan",
+            &[
+                "fixtures/coordination/remote-camera-q2q-lan-plan.json",
+                "fixtures/coordination/remote-camera-quest-phone-lan-plan.json",
+                "fixtures/coordination/remote-camera-remote-relay-two-way-plan.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.coordination.message_log.v1",
+            "ManifoldCoordinationMessageLog",
+            &[
+                "fixtures/coordination/remote-camera-q2q-lan-messages.json",
+                "fixtures/coordination/remote-camera-quest-phone-lan-messages.json",
+                "fixtures/coordination/remote-camera-remote-relay-two-way-messages.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.coordination.message.v1",
+            "ManifoldCoordinationMessage",
+            &[
+                "fixtures/coordination/remote-camera-q2q-lan-messages.json",
+                "fixtures/coordination/remote-camera-quest-phone-lan-messages.json",
+                "fixtures/coordination/remote-camera-remote-relay-two-way-messages.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.coordination.scorecard.v1",
+            "ManifoldCoordinationScorecard",
+            &[
+                "fixtures/coordination/remote-camera-q2q-lan-scorecard.json",
+                "fixtures/coordination/remote-camera-quest-phone-lan-scorecard.json",
+                "fixtures/coordination/remote-camera-remote-relay-two-way-scorecard.json",
+            ],
+        ),
+    ]
+}
+
 fn authority_entries() -> Vec<SchemaEntry> {
     vec![
         entry(
@@ -399,6 +451,7 @@ fn authority_entries() -> Vec<SchemaEntry> {
                 "fixtures/authority/synthetic-stream-subscription-active-authority-snapshot.json",
                 "fixtures/authority/synthetic-stream-subscription-limit-authority-snapshot.json",
                 "fixtures/authority/synthetic-stream-subscription-ui-disabled-authority-snapshot.json",
+                "fixtures/authority/remote-camera-q2q-authority-snapshot.json",
             ],
         ),
         entry(
@@ -489,6 +542,10 @@ fn authority_entries() -> Vec<SchemaEntry> {
                 "fixtures/authority-review/synthetic-command-unknown-command-review.json",
                 "fixtures/authority-review/synthetic-command-unknown-lease-review.json",
                 "fixtures/authority-review/synthetic-command-capability-mismatch-review.json",
+                "fixtures/authority-review/remote-camera-q2q-start-receiver-review.json",
+                "fixtures/authority-review/remote-camera-q2q-start-sender-review.json",
+                "fixtures/authority-review/remote-camera-q2q-get-status-review.json",
+                "fixtures/authority-review/remote-camera-q2q-stop-review.json",
             ],
         ),
         entry(
@@ -502,6 +559,10 @@ fn authority_entries() -> Vec<SchemaEntry> {
             &[
                 "fixtures/command-dispatch/synthetic-command-dispatch-ready-receipt.json",
                 "fixtures/command-dispatch/synthetic-command-dispatch-rejected-receipt.json",
+                "fixtures/command-dispatch/remote-camera-q2q-start-receiver-dispatch-receipt.json",
+                "fixtures/command-dispatch/remote-camera-q2q-start-sender-dispatch-receipt.json",
+                "fixtures/command-dispatch/remote-camera-q2q-get-status-dispatch-receipt.json",
+                "fixtures/command-dispatch/remote-camera-q2q-stop-dispatch-receipt.json",
             ],
         ),
         entry(
@@ -811,6 +872,10 @@ fn verification_entries() -> Vec<SchemaEntry> {
                 "fixtures/clock/synthetic-clock-snapshot.json",
                 "fixtures/clock/synthetic-command-review-clock.json",
                 "fixtures/clock/synthetic-expired-command-review-clock.json",
+                "fixtures/clock/remote-camera-start-receiver-review-clock.json",
+                "fixtures/clock/remote-camera-start-sender-review-clock.json",
+                "fixtures/clock/remote-camera-get-status-review-clock.json",
+                "fixtures/clock/remote-camera-stop-review-clock.json",
             ],
         ),
         entry(

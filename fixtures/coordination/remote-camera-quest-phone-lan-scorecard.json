@@ -1,0 +1,120 @@
+{
+  "$schema": "rusty.manifold.coordination.scorecard.v1",
+  "scorecard_id": "scorecard.log.remote_camera.quest_phone_lan",
+  "session_id": "session.remote_camera.quest_phone_lan",
+  "mode": "same_network_quest_to_phone",
+  "status": "pass",
+  "accepted_message_ids": [
+    "message.quest_phone_lan.quest.online",
+    "message.quest_phone_lan.phone.online",
+    "message.quest_phone_lan.quest.inbox",
+    "message.quest_phone_lan.phone.inbox",
+    "message.quest_phone_lan.quest.peer",
+    "message.quest_phone_lan.phone.peer",
+    "message.quest_phone_lan.quest.receiver",
+    "message.quest_phone_lan.phone.receiver",
+    "message.quest_phone_lan.quest.ready",
+    "message.quest_phone_lan.phone.ready",
+    "message.quest_phone_lan.coordinator.sender_start",
+    "message.quest_phone_lan.quest.status",
+    "message.quest_phone_lan.phone.status",
+    "message.quest_phone_lan.quest.stopped",
+    "message.quest_phone_lan.phone.stopped"
+  ],
+  "gate_results": [
+    {
+      "gate_id": "gate.participants_identified",
+      "status": "pass",
+      "satisfied_at_ms": 1765000100010,
+      "message_ids": [
+        "message.quest_phone_lan.quest.online",
+        "message.quest_phone_lan.phone.online"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    },
+    {
+      "gate_id": "gate.control_inboxes_armed",
+      "status": "pass",
+      "satisfied_at_ms": 1765000100030,
+      "message_ids": [
+        "message.quest_phone_lan.quest.inbox",
+        "message.quest_phone_lan.phone.inbox"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    },
+    {
+      "gate_id": "gate.advisory_peer_status",
+      "status": "pass",
+      "satisfied_at_ms": 1765000100050,
+      "message_ids": [
+        "message.quest_phone_lan.quest.peer",
+        "message.quest_phone_lan.phone.peer"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    },
+    {
+      "gate_id": "gate.media_receivers_armed",
+      "status": "pass",
+      "satisfied_at_ms": 1765000100070,
+      "message_ids": [
+        "message.quest_phone_lan.quest.receiver",
+        "message.quest_phone_lan.phone.receiver"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    },
+    {
+      "gate_id": "gate.receiver_ready_announced",
+      "status": "pass",
+      "satisfied_at_ms": 1765000100090,
+      "message_ids": [
+        "message.quest_phone_lan.quest.ready",
+        "message.quest_phone_lan.phone.ready"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    },
+    {
+      "gate_id": "gate.sender_start_authorized",
+      "status": "pass",
+      "satisfied_at_ms": 1765000100100,
+      "message_ids": [
+        "message.quest_phone_lan.coordinator.sender_start"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    },
+    {
+      "gate_id": "gate.active_status_captured",
+      "status": "pass",
+      "satisfied_at_ms": 1765000100120,
+      "message_ids": [
+        "message.quest_phone_lan.quest.status",
+        "message.quest_phone_lan.phone.status"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    },
+    {
+      "gate_id": "gate.stopped",
+      "status": "pass",
+      "satisfied_at_ms": 1765000100140,
+      "message_ids": [
+        "message.quest_phone_lan.quest.stopped",
+        "message.quest_phone_lan.phone.stopped"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    }
+  ],
+  "rejected_messages": [],
+  "advisory_message_ids": [
+    "message.quest_phone_lan.quest.peer",
+    "message.quest_phone_lan.phone.peer"
+  ],
+  "media_payloads_seen": false,
+  "runtime_execution_performed": false
+}

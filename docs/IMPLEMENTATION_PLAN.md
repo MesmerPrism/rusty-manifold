@@ -145,7 +145,8 @@ Deliverables:
 - command acceptance and rejection fixtures;
 - runtime-state transition fixtures;
 - stream registry diff fixture.
-- lease and stream subscription admission, renewal, release, and expiry-sweep review/application fixtures.
+- lease and stream subscription admission, renewal, release, and expiry-sweep review/application fixtures;
+- remote-camera command authority and dispatch fixtures that prove receiver-first command handoff before Quest or Android media adapters execute it.
 
 The simulator may be a test helper or CLI. It should produce the same manifest
 and runtime-state shapes that a live host will produce later.

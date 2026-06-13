@@ -170,6 +170,159 @@ pub(super) fn push_command_checks(checks: &mut Vec<ValidationCheckReport>, fixtu
         ),
         "command dispatch receipt validation rejects top-level request ids that diverge from the embedded review",
     );
+
+    push_result(
+        checks,
+        "validation.check.remote_camera_authority_snapshot_links",
+        fixtures
+            .remote_camera_authority_snapshot
+            .validate_authority_links(),
+        "remote-camera authority snapshot aligns host capabilities, command descriptors, and active session lease",
+    );
+
+    push_result(
+        checks,
+        "validation.check.remote_camera_command_reviews_match_evaluator",
+        remote_camera_command_reviews_match_evaluator(fixtures),
+        "remote-camera receiver, sender, status, and stop reviews are deterministic authority decisions",
+    );
+
+    push_result(
+        checks,
+        "validation.check.remote_camera_command_dispatches_match_evaluator",
+        remote_camera_command_dispatches_match_evaluator(fixtures),
+        "remote-camera command dispatch receipts are deterministic source-only handoffs",
+    );
+
+    push_result(
+        checks,
+        "validation.check.remote_camera_receiver_first_sequence",
+        remote_camera_receiver_first_sequence(fixtures),
+        "remote-camera dispatch fixtures preserve receiver-first startup, status readback, and immediate stop order",
+    );
+}
+
+fn remote_camera_command_reviews_match_evaluator(fixtures: &FixtureSet) -> Result<(), String> {
+    for review in &fixtures.remote_camera_command_reviews {
+        command_review_matches_fixture(
+            &fixtures.remote_camera_authority_snapshot,
+            &review.audit_event.envelope,
+            &review.audit_event.recorded_clock,
+            review,
+        )?;
+
+        if review.outcome != ManifoldCommandAuthorityReviewOutcome::CommandAccepted {
+            return Err(format!(
+                "remote-camera review {} was not accepted",
+                review.review_id
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn remote_camera_command_dispatches_match_evaluator(fixtures: &FixtureSet) -> Result<(), String> {
+    if fixtures.remote_camera_command_reviews.len()
+        != fixtures.remote_camera_command_dispatches.len()
+    {
+        return Err("remote-camera review/dispatch fixture count mismatch".to_owned());
+    }
+
+    for (review, dispatch) in fixtures
+        .remote_camera_command_reviews
+        .iter()
+        .zip(fixtures.remote_camera_command_dispatches.iter())
+    {
+        command_dispatch_matches_fixture(
+            &fixtures.remote_camera_authority_snapshot,
+            review,
+            dispatch,
+        )?;
+
+        if dispatch.outcome != ManifoldCommandDispatchReceiptOutcome::CommandDispatchReady {
+            return Err(format!(
+                "remote-camera dispatch {} was not ready",
+                dispatch.dispatch_id
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn remote_camera_receiver_first_sequence(fixtures: &FixtureSet) -> Result<(), String> {
+    let expected_command_ids = [
+        "command.remote_camera.start_receiver",
+        "command.remote_camera.start_sender",
+        "command.remote_camera.get_status",
+        "command.remote_camera.stop",
+    ];
+    let mut previous_accepted_at_ms = 0;
+
+    for (expected_command_id, dispatch) in expected_command_ids
+        .iter()
+        .zip(fixtures.remote_camera_command_dispatches.iter())
+    {
+        if dispatch.command_id.as_str() != *expected_command_id {
+            return Err(format!(
+                "expected remote-camera dispatch command {expected_command_id}, got {}",
+                dispatch.command_id
+            ));
+        }
+
+        let ack = dispatch
+            .ack
+            .as_ref()
+            .ok_or_else(|| format!("dispatch {} is missing ack", dispatch.dispatch_id))?;
+        if ack.accepted_at_ms <= previous_accepted_at_ms {
+            return Err(format!(
+                "dispatch {} did not advance accepted_at_ms",
+                dispatch.dispatch_id
+            ));
+        }
+        previous_accepted_at_ms = ack.accepted_at_ms;
+    }
+
+    let start_receiver = fixtures
+        .remote_camera_command_dispatches
+        .first()
+        .expect("remote-camera dispatch sequence is non-empty");
+    if start_receiver
+        .ack
+        .as_ref()
+        .and_then(|ack| ack.lease_id.as_ref())
+        .is_none()
+    {
+        return Err(
+            "remote-camera start_receiver dispatch must carry the session lease".to_owned(),
+        );
+    }
+
+    let start_sender = &fixtures.remote_camera_command_dispatches[1];
+    if start_sender
+        .ack
+        .as_ref()
+        .and_then(|ack| ack.lease_id.as_ref())
+        .is_none()
+    {
+        return Err("remote-camera start_sender dispatch must carry the session lease".to_owned());
+    }
+
+    let stop = fixtures
+        .remote_camera_command_dispatches
+        .last()
+        .expect("remote-camera dispatch sequence is non-empty");
+    if stop
+        .ack
+        .as_ref()
+        .and_then(|ack| ack.lease_id.as_ref())
+        .is_some()
+    {
+        return Err("remote-camera stop dispatch must remain lease-free".to_owned());
+    }
+
+    Ok(())
 }
 
 pub(super) fn push_damaged_command_checks(

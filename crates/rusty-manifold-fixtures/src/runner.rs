@@ -1,10 +1,18 @@
+use std::path::PathBuf;
+
 use super::authority_commands::*;
 use super::cli::{Command, Options};
 use super::{
-    diff_synthetic_contracts, read_text, simulate_synthetic_topology, to_pretty_json,
-    validate_repo, write_text, CliError,
+    default_repo_root, diff_synthetic_contracts, read_text, resolve_input_path,
+    simulate_coordination_session, simulate_synthetic_topology, to_pretty_json, validate_repo,
+    write_text, CliError,
 };
+
 pub(super) fn run(args: Vec<String>) -> Result<String, CliError> {
+    if args.first().map(String::as_str) == Some("simulate-coordination") {
+        return run_simulate_coordination(args.into_iter().skip(1).collect());
+    }
+
     let options = Options::parse(args)?;
     match options.command {
         Command::Validate => {
@@ -757,4 +765,99 @@ pub(super) fn run(args: Vec<String>) -> Result<String, CliError> {
             Ok(serialized)
         }
     }
+}
+
+fn run_simulate_coordination(args: Vec<String>) -> Result<String, CliError> {
+    let options = CoordinationSimulationOptions::parse(args)?;
+    let plan_path = options.plan.ok_or_else(|| {
+        CliError::Usage("simulate-coordination requires --plan <path>".to_owned())
+    })?;
+    let messages_path = options.messages.ok_or_else(|| {
+        CliError::Usage("simulate-coordination requires --messages <path>".to_owned())
+    })?;
+    let scorecard = simulate_coordination_session(&options.repo_root, &plan_path, &messages_path)?;
+    let serialized = to_pretty_json(&scorecard)?;
+
+    if let Some(output_path) = options.output {
+        write_text(&output_path, &serialized)?;
+    }
+
+    if options.check {
+        let expected_path = options.expected.ok_or_else(|| {
+            CliError::Usage("simulate-coordination --check requires --expected <path>".to_owned())
+        })?;
+        let resolved_expected = resolve_input_path(&options.repo_root, &expected_path);
+        let expected = read_text(&resolved_expected)?;
+        if expected.trim_end() == serialized.trim_end() {
+            Ok("coordination scorecard matches fixture".to_owned())
+        } else {
+            Err(CliError::SnapshotMismatch {
+                expected_path: resolved_expected,
+                output: serialized,
+            })
+        }
+    } else {
+        Ok(serialized)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct CoordinationSimulationOptions {
+    repo_root: PathBuf,
+    plan: Option<PathBuf>,
+    messages: Option<PathBuf>,
+    expected: Option<PathBuf>,
+    output: Option<PathBuf>,
+    check: bool,
+}
+
+impl CoordinationSimulationOptions {
+    fn parse(args: Vec<String>) -> Result<Self, CliError> {
+        let mut args = args.into_iter();
+        let mut options = Self {
+            repo_root: default_repo_root(),
+            plan: None,
+            messages: None,
+            expected: None,
+            output: None,
+            check: false,
+        };
+
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--repo-root" => {
+                    options.repo_root = PathBuf::from(next_value(&mut args, "--repo-root")?);
+                }
+                "--plan" => {
+                    options.plan = Some(PathBuf::from(next_value(&mut args, "--plan")?));
+                }
+                "--messages" => {
+                    options.messages = Some(PathBuf::from(next_value(&mut args, "--messages")?));
+                }
+                "--expected" => {
+                    options.expected = Some(PathBuf::from(next_value(&mut args, "--expected")?));
+                }
+                "--output" => {
+                    options.output = Some(PathBuf::from(next_value(&mut args, "--output")?));
+                }
+                "--check" => {
+                    options.check = true;
+                }
+                "-h" | "--help" => return Err(CliError::Usage(coordination_usage())),
+                other => return Err(CliError::UnknownOption(other.to_owned())),
+            }
+        }
+
+        Ok(options)
+    }
+}
+
+fn next_value(args: &mut impl Iterator<Item = String>, option: &str) -> Result<String, CliError> {
+    args.next()
+        .ok_or_else(|| CliError::Usage(format!("{option} requires a value")))
+}
+
+fn coordination_usage() -> String {
+    "usage: rusty-manifold-fixtures simulate-coordination --plan <path> --messages <path> [--repo-root <path>] [--check --expected <path>] [--output <path>]"
+        .to_owned()
 }

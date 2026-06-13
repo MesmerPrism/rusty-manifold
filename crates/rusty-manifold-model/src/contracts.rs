@@ -6,6 +6,7 @@ use crate::{DottedId, Revision, SchemaId};
 
 mod clock;
 mod command_dispatch;
+mod coordination;
 mod expiry;
 mod host_manifest;
 mod ids;
@@ -16,6 +17,7 @@ mod validation_helpers;
 
 pub use self::clock::*;
 pub use self::command_dispatch::*;
+pub use self::coordination::*;
 pub use self::expiry::*;
 pub use self::host_manifest::*;
 use self::ids::*;

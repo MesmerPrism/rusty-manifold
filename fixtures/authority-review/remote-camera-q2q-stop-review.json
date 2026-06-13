@@ -1,0 +1,62 @@
+{
+  "$schema": "rusty.manifold.authority.command_review.v1",
+  "review_id": "command_review.request.remote_camera.stop.q2q_two_way_lan_smoke",
+  "authority_id": "authority.remote_camera.q2q_two_way_lan_smoke",
+  "authority_revision": 1,
+  "outcome": "command_accepted",
+  "accepted": {
+    "$schema": "rusty.manifold.command.ack.v1",
+    "request_id": "request.remote_camera.stop.q2q_two_way_lan_smoke",
+    "accepted_revision": 2,
+    "lease_id": null,
+    "authority_id": "authority.remote_camera.q2q_two_way_lan_smoke",
+    "accepted_at_ms": 1765000000400
+  },
+  "rejection": null,
+  "audit_event": {
+    "$schema": "rusty.manifold.authority.command_audit_event.v1",
+    "event_id": "audit.command.request.remote_camera.stop.q2q_two_way_lan_smoke.accepted",
+    "authority_id": "authority.remote_camera.q2q_two_way_lan_smoke",
+    "prior_authority_revision": 1,
+    "event_kind": "command_accepted",
+    "envelope": {
+      "$schema": "rusty.manifold.command.envelope.v1",
+      "request_id": "request.remote_camera.stop.q2q_two_way_lan_smoke",
+      "command_id": "command.remote_camera.stop",
+      "target_id": "session.remote_camera.q2q_two_way_lan_smoke",
+      "target_scope": "session.remote_camera.q2q_two_way_lan_smoke",
+      "input_schema": "rusty.manifold.command.input.remote_camera_stop.v1",
+      "expected_revision": 1,
+      "required_capability": "manifold.remote_camera.control",
+      "lease_id": null,
+      "preconditions": [],
+      "safety_class": "bounded_mutation",
+      "requested_at_ms": 1765000000300,
+      "holder_id": "holder.remote_camera.quest_a"
+    },
+    "accepted": {
+      "$schema": "rusty.manifold.command.ack.v1",
+      "request_id": "request.remote_camera.stop.q2q_two_way_lan_smoke",
+      "accepted_revision": 2,
+      "lease_id": null,
+      "authority_id": "authority.remote_camera.q2q_two_way_lan_smoke",
+      "accepted_at_ms": 1765000000400
+    },
+    "rejection": null,
+    "lease": null,
+    "recorded_clock": {
+      "$schema": "rusty.manifold.clock.snapshot.v1",
+      "clock_domain": "clock.host_monotonic",
+      "clock_epoch_id": "clock_epoch.remote_camera_q2q_1",
+      "sequence": 46,
+      "monotonic_elapsed_ns": 1234568290,
+      "wall_unix_ms": 1765000000400,
+      "read_uncertainty_ns": 250000,
+      "health": "healthy",
+      "wall_clock_adjustment_count": 0
+    },
+    "evidence_refs": [
+      "evidence.command_authority.request.remote_camera.stop.q2q_two_way_lan_smoke"
+    ]
+  }
+}

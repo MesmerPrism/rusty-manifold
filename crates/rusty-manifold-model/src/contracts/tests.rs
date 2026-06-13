@@ -2,6 +2,7 @@ use super::*;
 
 mod clock;
 mod command_dispatch;
+mod coordination;
 mod expiry;
 mod host_manifest;
 mod leases;

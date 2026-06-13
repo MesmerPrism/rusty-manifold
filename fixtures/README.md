@@ -9,11 +9,15 @@ and safe to use in tests, generated schemas, documentation, and clients.
 - `module/`: module manifest and runtime-state examples.
 - `stream/`: stream registry examples.
 - `stream-subscription/`: stream subscription request, renewal, release, accepted, and rejection examples.
-- `command/`: command and lease request, renewal, release, acknowledgement, and rejection examples.
-- `authority/`: command authority snapshots tying host, clock, stream registry, module runtime, command ids, and leases together.
+- `command/`: command and lease request, renewal, release, acknowledgement,
+  rejection, and remote-camera command handoff examples.
+- `authority/`: command authority snapshots tying host, clock, stream registry, module runtime, command ids, and leases together, including the remote-camera Q2Q session authority snapshot.
 - `audit/`: authority audit-event examples.
-- `authority-review/`: deterministic command authority review outputs from the fixture CLI.
-- `command-dispatch/`: deterministic source-only command dispatch receipt outputs from the fixture CLI.
+- `authority-review/`: deterministic command authority review outputs from the fixture CLI, including the remote-camera Q2Q receiver, sender, status, and stop reviews.
+- `command-dispatch/`: deterministic source-only command dispatch receipt outputs from the fixture CLI, including the remote-camera Q2Q receiver-first handoff receipts.
+- `coordination/`: deterministic coordination session plans, message logs,
+  and scorecards for Quest-to-Quest LAN, Quest-to-phone LAN, and remote relay
+  two-way streaming.
 - `lease-review/`: deterministic lease authority review outputs from the fixture CLI.
 - `lease-release-review/`: deterministic lease release authority review outputs from the fixture CLI.
 - `lease-renewal-review/`: deterministic lease renewal authority review outputs from the fixture CLI.

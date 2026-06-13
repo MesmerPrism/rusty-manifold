@@ -1,0 +1,11 @@
+{
+  "$schema": "rusty.manifold.clock.snapshot.v1",
+  "clock_domain": "clock.host_monotonic",
+  "clock_epoch_id": "clock_epoch.remote_camera_q2q_1",
+  "sequence": 46,
+  "monotonic_elapsed_ns": 1234568290,
+  "wall_unix_ms": 1765000000400,
+  "read_uncertainty_ns": 250000,
+  "health": "healthy",
+  "wall_clock_adjustment_count": 0
+}

@@ -14,9 +14,11 @@ use rusty_manifold_model::{
     ManifoldClockSnapshot, ManifoldClockSnapshotAuthorityApplication,
     ManifoldClockSnapshotAuthorityAuditEvent, ManifoldClockSnapshotAuthorityReview,
     ManifoldClockSnapshotChangeRequest, ManifoldClockSnapshotRejection, ManifoldCommandAck,
-    ManifoldCommandAuthorityAuditEvent, ManifoldCommandAuthorityReview, ManifoldCommandDescriptor,
-    ManifoldCommandDispatchReceipt, ManifoldCommandDispatchRejection, ManifoldCommandEnvelope,
-    ManifoldCommandRejection, ManifoldControlLease, ManifoldControlLeaseAuthorityApplication,
+    ManifoldCommandAuthorityAuditEvent, ManifoldCommandAuthorityReview,
+    ManifoldCommandAuthorityReviewOutcome, ManifoldCommandDescriptor,
+    ManifoldCommandDispatchReceipt, ManifoldCommandDispatchReceiptOutcome,
+    ManifoldCommandDispatchRejection, ManifoldCommandEnvelope, ManifoldCommandRejection,
+    ManifoldControlLease, ManifoldControlLeaseAuthorityApplication,
     ManifoldControlLeaseAuthorityAuditEvent, ManifoldControlLeaseAuthorityReview,
     ManifoldControlLeaseRejection, ManifoldControlLeaseReleaseAuthorityApplication,
     ManifoldControlLeaseReleaseAuthorityAuditEvent, ManifoldControlLeaseReleaseAuthorityReview,
@@ -24,13 +26,14 @@ use rusty_manifold_model::{
     ManifoldControlLeaseRenewalAuthorityApplication,
     ManifoldControlLeaseRenewalAuthorityAuditEvent, ManifoldControlLeaseRenewalAuthorityReview,
     ManifoldControlLeaseRenewalRejection, ManifoldControlLeaseRenewalRequest,
-    ManifoldControlLeaseRequest, ManifoldDeploymentManifest, ManifoldDeploymentSelectionSnapshot,
-    ManifoldGraphDiff, ManifoldGraphManifest, ManifoldHostManifest,
-    ManifoldHostManifestAuthorityApplication, ManifoldHostManifestAuthorityAuditEvent,
-    ManifoldHostManifestAuthorityReview, ManifoldHostManifestChangeRequest,
-    ManifoldHostManifestRejection, ManifoldHostRunBundle, ManifoldHostRunCommandEnvelope,
-    ManifoldHostRunEvidence, ManifoldHostRunInstallLaunchProfile, ManifoldHostRunValidationSlot,
-    ManifoldModuleManifest, ManifoldModuleRuntimeState,
+    ManifoldControlLeaseRequest, ManifoldCoordinationMessageLog, ManifoldCoordinationScorecard,
+    ManifoldCoordinationSessionPlan, ManifoldDeploymentManifest,
+    ManifoldDeploymentSelectionSnapshot, ManifoldGraphDiff, ManifoldGraphManifest,
+    ManifoldHostManifest, ManifoldHostManifestAuthorityApplication,
+    ManifoldHostManifestAuthorityAuditEvent, ManifoldHostManifestAuthorityReview,
+    ManifoldHostManifestChangeRequest, ManifoldHostManifestRejection, ManifoldHostRunBundle,
+    ManifoldHostRunCommandEnvelope, ManifoldHostRunEvidence, ManifoldHostRunInstallLaunchProfile,
+    ManifoldHostRunValidationSlot, ManifoldModuleManifest, ManifoldModuleRuntimeState,
     ManifoldModuleRuntimeStateAuthorityApplication, ManifoldModuleRuntimeStateAuthorityAuditEvent,
     ManifoldModuleRuntimeStateAuthorityReview, ManifoldModuleRuntimeStateChangeRequest,
     ManifoldModuleRuntimeStateRejection, ManifoldModuleRuntimeTransition, ManifoldPackageManifest,
@@ -250,6 +253,19 @@ fn diff_synthetic_contracts(repo_root: &Path) -> Result<FixtureDiffSnapshot, Cli
     })
 }
 
+fn simulate_coordination_session(
+    repo_root: &Path,
+    plan_path: &Path,
+    messages_path: &Path,
+) -> Result<ManifoldCoordinationScorecard, CliError> {
+    let plan =
+        read_model::<ManifoldCoordinationSessionPlan>(resolve_input_path(repo_root, plan_path))?;
+    let message_log =
+        read_model::<ManifoldCoordinationMessageLog>(resolve_input_path(repo_root, messages_path))?;
+    plan.simulate_message_log(&message_log)
+        .map_err(CliError::from)
+}
+
 fn resolve_input_path(repo_root: &Path, path: &Path) -> PathBuf {
     if path.is_absolute() {
         path.to_path_buf()
@@ -404,6 +420,7 @@ enum CliError {
         rusty_manifold_model::ShellHandoffReviewReceiptValidationError,
     ),
     CommandAuthorityValidation(rusty_manifold_model::ManifoldAuthorityValidationError),
+    CoordinationValidation(rusty_manifold_model::CoordinationValidationError),
 }
 
 impl fmt::Display for CliError {
@@ -436,6 +453,7 @@ impl fmt::Display for CliError {
             Self::StreamRegistryValidation(source) => write!(formatter, "{source}"),
             Self::ShellHandoffReviewReceiptValidation(source) => write!(formatter, "{source}"),
             Self::CommandAuthorityValidation(source) => write!(formatter, "{source}"),
+            Self::CoordinationValidation(source) => write!(formatter, "{source}"),
         }
     }
 }
@@ -481,6 +499,12 @@ impl From<rusty_manifold_model::ShellHandoffReviewReceiptValidationError> for Cl
 impl From<rusty_manifold_model::ManifoldAuthorityValidationError> for CliError {
     fn from(source: rusty_manifold_model::ManifoldAuthorityValidationError) -> Self {
         Self::CommandAuthorityValidation(source)
+    }
+}
+
+impl From<rusty_manifold_model::CoordinationValidationError> for CliError {
+    fn from(source: rusty_manifold_model::CoordinationValidationError) -> Self {
+        Self::CoordinationValidation(source)
     }
 }
 

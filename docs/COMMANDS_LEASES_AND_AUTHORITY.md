@@ -54,6 +54,39 @@ The fixture CLI route is:
 cargo run -p rusty-manifold-fixtures -- prepare-command-dispatch --snapshot fixtures/authority/synthetic-authority-snapshot.json --review fixtures/authority-review/synthetic-command-accepted-review.json
 ```
 
+Remote-camera control uses the same source-only path. The committed Q2Q
+fixtures start from
+`fixtures/authority/remote-camera-q2q-authority-snapshot.json`, review the
+`command.remote_camera.start_receiver`,
+`command.remote_camera.start_sender`,
+`command.remote_camera.get_status`, and `command.remote_camera.stop`
+envelopes, then prepare matching dispatch receipts under
+`fixtures/command-dispatch/remote-camera-q2q-*.json`. The fixture order is
+receiver first, then sender, status readback, and immediate stop. Start
+receiver and start sender carry the remote-camera session lease; status and
+stop remain lease-free. These fixtures do not start cameras, open sockets,
+decode H.264, or mutate live session state.
+
+## Coordination Sessions
+
+Coordination sessions are the source-only timing layer above those command
+handoffs. They model participants, control/advisory transports, inbox TTLs,
+receiver-readiness gates, command refs, camera 50/51 stream refs, and safety
+policy. The simulator accepts an ordered low-rate message log and emits a
+deterministic scorecard without opening sockets, contacting devices, running
+ADB, starting relays, or carrying media payloads.
+
+The fixture CLI route is:
+
+```powershell
+cargo run -p rusty-manifold-fixtures -- simulate-coordination --plan fixtures/coordination/remote-camera-q2q-lan-plan.json --messages fixtures/coordination/remote-camera-q2q-lan-messages.json --check --expected fixtures/coordination/remote-camera-q2q-lan-scorecard.json
+```
+
+Committed fixtures cover same-network Quest-to-Quest, same-network
+Quest-to-phone, and remote relay two-way routes. Damaged fixtures reject sender
+start before receiver readiness, advisory peer/relay status used as command
+authorization, and high-rate media payloads embedded in coordination JSON.
+
 Given a `ManifoldAuthoritySnapshot`, `ManifoldControlLeaseRequest`, review
 clock snapshot, and evidence ids, the evaluator produces a
 `ManifoldControlLeaseAuthorityReview` containing either a

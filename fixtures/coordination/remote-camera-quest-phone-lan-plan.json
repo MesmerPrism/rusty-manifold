@@ -1,0 +1,227 @@
+{
+  "$schema": "rusty.manifold.coordination.session_plan.v1",
+  "session_id": "session.remote_camera.quest_phone_lan",
+  "session_revision": 1,
+  "authority_id": "authority.manifold.coordination",
+  "mode": "same_network_quest_to_phone",
+  "participants": [
+    {
+      "participant_id": "participant.coordinator",
+      "role": "coordinator",
+      "host_profile_id": "host.desktop.coordinator",
+      "required_capabilities": [
+        "manifold.coordination.control"
+      ],
+      "advisory_only": false
+    },
+    {
+      "participant_id": "participant.quest",
+      "role": "quest_headset",
+      "host_profile_id": "host.quest.source",
+      "required_capabilities": [
+        "quest.camera_50_51.remote_stream"
+      ],
+      "advisory_only": false
+    },
+    {
+      "participant_id": "participant.phone",
+      "role": "android_phone",
+      "host_profile_id": "host.android_phone.viewer",
+      "required_capabilities": [
+        "android.remote_camera.h264.receive"
+      ],
+      "advisory_only": false
+    }
+  ],
+  "transports": [
+    {
+      "transport_id": "transport.coordination.control",
+      "transport_kind": "transport.kind.control_inbox",
+      "payload_policy": "media_payload_forbidden",
+      "authoritative": true,
+      "advisory_only": false,
+      "same_network_only": true,
+      "remote_relay": false,
+      "bidirectional": true,
+      "operator_review_required": true
+    },
+    {
+      "transport_id": "transport.coordination.peer_gossip",
+      "transport_kind": "transport.kind.peer_status_gossip",
+      "payload_policy": "advisory_status_only",
+      "authoritative": false,
+      "advisory_only": true,
+      "same_network_only": true,
+      "remote_relay": false,
+      "bidirectional": true,
+      "operator_review_required": true
+    }
+  ],
+  "inboxes": [
+    {
+      "inbox_id": "inbox.quest.control",
+      "owner_participant_id": "participant.quest",
+      "transport_id": "transport.coordination.control",
+      "lease_id": "lease.coordination.quest.control",
+      "channel_id": "channel.control",
+      "heartbeat_ttl_ms": 30000
+    },
+    {
+      "inbox_id": "inbox.phone.control",
+      "owner_participant_id": "participant.phone",
+      "transport_id": "transport.coordination.control",
+      "lease_id": "lease.coordination.phone.control",
+      "channel_id": "channel.control",
+      "heartbeat_ttl_ms": 30000
+    }
+  ],
+  "gates": [
+    {
+      "gate_id": "gate.participants_identified",
+      "phase": "coordination.phase.identify",
+      "depends_on_gate_ids": [],
+      "required_participant_ids": [
+        "participant.quest",
+        "participant.phone"
+      ],
+      "required_message_kinds": [
+        "coordination.message.participant_online"
+      ],
+      "required_before_sender_start": false
+    },
+    {
+      "gate_id": "gate.control_inboxes_armed",
+      "phase": "coordination.phase.arm_control",
+      "depends_on_gate_ids": [
+        "gate.participants_identified"
+      ],
+      "required_participant_ids": [
+        "participant.quest",
+        "participant.phone"
+      ],
+      "required_message_kinds": [
+        "coordination.message.inbox_armed"
+      ],
+      "required_before_sender_start": false
+    },
+    {
+      "gate_id": "gate.advisory_peer_status",
+      "phase": "coordination.phase.advisory_status",
+      "depends_on_gate_ids": [
+        "gate.control_inboxes_armed"
+      ],
+      "required_participant_ids": [
+        "participant.quest",
+        "participant.phone"
+      ],
+      "required_message_kinds": [
+        "coordination.message.peer_gossip_status"
+      ],
+      "required_before_sender_start": false
+    },
+    {
+      "gate_id": "gate.media_receivers_armed",
+      "phase": "coordination.phase.arm_receivers",
+      "depends_on_gate_ids": [
+        "gate.control_inboxes_armed"
+      ],
+      "required_participant_ids": [
+        "participant.quest",
+        "participant.phone"
+      ],
+      "required_message_kinds": [
+        "coordination.message.media_receiver_armed"
+      ],
+      "authorizes_command_id": "command.remote_camera.start_receiver",
+      "required_before_sender_start": true
+    },
+    {
+      "gate_id": "gate.receiver_ready_announced",
+      "phase": "coordination.phase.receiver_ready",
+      "depends_on_gate_ids": [
+        "gate.media_receivers_armed"
+      ],
+      "required_participant_ids": [
+        "participant.quest",
+        "participant.phone"
+      ],
+      "required_message_kinds": [
+        "coordination.message.receiver_ready_announced"
+      ],
+      "required_before_sender_start": true
+    },
+    {
+      "gate_id": "gate.sender_start_authorized",
+      "phase": "coordination.phase.authorize_sender",
+      "depends_on_gate_ids": [
+        "gate.receiver_ready_announced"
+      ],
+      "required_participant_ids": [
+        "participant.coordinator"
+      ],
+      "required_message_kinds": [
+        "coordination.message.sender_start_authorized"
+      ],
+      "authorizes_command_id": "command.remote_camera.start_sender",
+      "required_before_sender_start": false
+    },
+    {
+      "gate_id": "gate.active_status_captured",
+      "phase": "coordination.phase.status_capture",
+      "depends_on_gate_ids": [
+        "gate.sender_start_authorized"
+      ],
+      "required_participant_ids": [
+        "participant.quest",
+        "participant.phone"
+      ],
+      "required_message_kinds": [
+        "coordination.message.stream_status_report"
+      ],
+      "authorizes_command_id": "command.remote_camera.get_status",
+      "required_before_sender_start": false
+    },
+    {
+      "gate_id": "gate.stopped",
+      "phase": "coordination.phase.stop",
+      "depends_on_gate_ids": [
+        "gate.active_status_captured"
+      ],
+      "required_participant_ids": [
+        "participant.quest",
+        "participant.phone"
+      ],
+      "required_message_kinds": [
+        "coordination.message.stopped"
+      ],
+      "authorizes_command_id": "command.remote_camera.stop",
+      "required_before_sender_start": false
+    }
+  ],
+  "allowed_message_kinds": [
+    "coordination.message.participant_online",
+    "coordination.message.inbox_armed",
+    "coordination.message.peer_gossip_status",
+    "coordination.message.media_receiver_armed",
+    "coordination.message.receiver_ready_announced",
+    "coordination.message.sender_start_authorized",
+    "coordination.message.stream_status_report",
+    "coordination.message.stopped"
+  ],
+  "command_refs": [
+    "command.remote_camera.start_receiver",
+    "command.remote_camera.start_sender",
+    "command.remote_camera.get_status",
+    "command.remote_camera.stop"
+  ],
+  "media_stream_refs": [
+    "stream.remote_camera.quest.camera_50.left_h264",
+    "stream.remote_camera.quest.camera_51.right_h264"
+  ],
+  "safety": {
+    "max_control_payload_bytes": 16384,
+    "high_rate_payloads_forbidden": true,
+    "peer_gossip_can_authorize_commands": false,
+    "operator_review_required_for_live_routes": true
+  }
+}

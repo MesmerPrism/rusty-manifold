@@ -2,6 +2,7 @@ use super::*;
 
 mod clock;
 mod command;
+mod coordination;
 mod expiry;
 mod host_manifest;
 mod leases;
@@ -10,6 +11,7 @@ mod streams;
 
 use self::clock::push_clock_checks;
 use self::command::{push_command_checks, push_damaged_command_checks};
+use self::coordination::push_coordination_checks;
 use self::expiry::push_expiry_checks;
 use self::host_manifest::push_host_manifest_checks;
 use self::leases::push_lease_checks;
@@ -34,6 +36,7 @@ pub(super) fn validate_repo(repo_root: &Path) -> Result<ValidationReport, CliErr
         &module_ids,
         &endpoint_ids,
     )?;
+    push_coordination_checks(repo_root, &mut checks)?;
 
     let failed = checks.iter().any(|check| check.status == "fail");
     Ok(ValidationReport {

@@ -30,6 +30,9 @@ pub(super) struct FixtureSet {
     pub(super) command_dispatch_rejection: ManifoldCommandDispatchRejection,
     pub(super) accepted_command_dispatch: Box<ManifoldCommandDispatchReceipt>,
     pub(super) rejected_command_dispatch: Box<ManifoldCommandDispatchReceipt>,
+    pub(super) remote_camera_authority_snapshot: ManifoldAuthoritySnapshot,
+    pub(super) remote_camera_command_reviews: Vec<ManifoldCommandAuthorityReview>,
+    pub(super) remote_camera_command_dispatches: Vec<Box<ManifoldCommandDispatchReceipt>>,
     pub(super) lease_rejection: ManifoldControlLeaseRejection,
     pub(super) lease_authority_audit_event: ManifoldControlLeaseAuthorityAuditEvent,
     pub(super) accepted_lease_review: ManifoldControlLeaseAuthorityReview,
@@ -431,6 +434,41 @@ impl FixtureSet {
             repo_root
                 .join("fixtures/command-dispatch/synthetic-command-dispatch-rejected-receipt.json"),
         )?;
+        let remote_camera_authority_snapshot = read_model(
+            repo_root.join("fixtures/authority/remote-camera-q2q-authority-snapshot.json"),
+        )?;
+        let remote_camera_command_reviews = vec![
+            read_model(
+                repo_root
+                    .join("fixtures/authority-review/remote-camera-q2q-start-receiver-review.json"),
+            )?,
+            read_model(
+                repo_root
+                    .join("fixtures/authority-review/remote-camera-q2q-start-sender-review.json"),
+            )?,
+            read_model(
+                repo_root
+                    .join("fixtures/authority-review/remote-camera-q2q-get-status-review.json"),
+            )?,
+            read_model(
+                repo_root.join("fixtures/authority-review/remote-camera-q2q-stop-review.json"),
+            )?,
+        ];
+        let remote_camera_command_dispatches = vec![
+            read_model(repo_root.join(
+                "fixtures/command-dispatch/remote-camera-q2q-start-receiver-dispatch-receipt.json",
+            ))?,
+            read_model(repo_root.join(
+                "fixtures/command-dispatch/remote-camera-q2q-start-sender-dispatch-receipt.json",
+            ))?,
+            read_model(repo_root.join(
+                "fixtures/command-dispatch/remote-camera-q2q-get-status-dispatch-receipt.json",
+            ))?,
+            read_model(
+                repo_root
+                    .join("fixtures/command-dispatch/remote-camera-q2q-stop-dispatch-receipt.json"),
+            )?,
+        ];
         let lease_rejection =
             read_model(repo_root.join("fixtures/command/synthetic-lease-rejection.json"))?;
         let lease_authority_audit_event =
@@ -1191,6 +1229,9 @@ impl FixtureSet {
             command_dispatch_rejection,
             accepted_command_dispatch,
             rejected_command_dispatch,
+            remote_camera_authority_snapshot,
+            remote_camera_command_reviews,
+            remote_camera_command_dispatches,
             lease_rejection,
             lease_authority_audit_event,
             accepted_lease_review,

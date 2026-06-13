@@ -1,0 +1,89 @@
+{
+  "$schema": "rusty.manifold.authority.command_dispatch_receipt.v1",
+  "dispatch_id": "command_dispatch.command_review.request.remote_camera.start_sender.q2q_two_way_lan_smoke",
+  "authority_id": "authority.remote_camera.q2q_two_way_lan_smoke",
+  "authority_revision": 1,
+  "command_id": "command.remote_camera.start_sender",
+  "request_id": "request.remote_camera.start_sender.q2q_two_way_lan_smoke",
+  "outcome": "command_dispatch_ready",
+  "ack": {
+    "$schema": "rusty.manifold.command.ack.v1",
+    "request_id": "request.remote_camera.start_sender.q2q_two_way_lan_smoke",
+    "accepted_revision": 2,
+    "lease_id": "lease.remote_camera.q2q_two_way_lan_smoke",
+    "authority_id": "authority.remote_camera.q2q_two_way_lan_smoke",
+    "accepted_at_ms": 1765000000200
+  },
+  "rejection": null,
+  "review": {
+    "$schema": "rusty.manifold.authority.command_review.v1",
+    "review_id": "command_review.request.remote_camera.start_sender.q2q_two_way_lan_smoke",
+    "authority_id": "authority.remote_camera.q2q_two_way_lan_smoke",
+    "authority_revision": 1,
+    "outcome": "command_accepted",
+    "accepted": {
+      "$schema": "rusty.manifold.command.ack.v1",
+      "request_id": "request.remote_camera.start_sender.q2q_two_way_lan_smoke",
+      "accepted_revision": 2,
+      "lease_id": "lease.remote_camera.q2q_two_way_lan_smoke",
+      "authority_id": "authority.remote_camera.q2q_two_way_lan_smoke",
+      "accepted_at_ms": 1765000000200
+    },
+    "rejection": null,
+    "audit_event": {
+      "$schema": "rusty.manifold.authority.command_audit_event.v1",
+      "event_id": "audit.command.request.remote_camera.start_sender.q2q_two_way_lan_smoke.accepted",
+      "authority_id": "authority.remote_camera.q2q_two_way_lan_smoke",
+      "prior_authority_revision": 1,
+      "event_kind": "command_accepted",
+      "envelope": {
+        "$schema": "rusty.manifold.command.envelope.v1",
+        "request_id": "request.remote_camera.start_sender.q2q_two_way_lan_smoke",
+        "command_id": "command.remote_camera.start_sender",
+        "target_id": "session.remote_camera.q2q_two_way_lan_smoke",
+        "target_scope": "session.remote_camera.q2q_two_way_lan_smoke",
+        "input_schema": "rusty.manifold.command.input.remote_camera_start_sender.v1",
+        "expected_revision": 1,
+        "required_capability": "manifold.remote_camera.control",
+        "lease_id": "lease.remote_camera.q2q_two_way_lan_smoke",
+        "preconditions": [],
+        "safety_class": "operator_confirmed",
+        "requested_at_ms": 1765000000100,
+        "holder_id": "holder.remote_camera.quest_a"
+      },
+      "accepted": {
+        "$schema": "rusty.manifold.command.ack.v1",
+        "request_id": "request.remote_camera.start_sender.q2q_two_way_lan_smoke",
+        "accepted_revision": 2,
+        "lease_id": "lease.remote_camera.q2q_two_way_lan_smoke",
+        "authority_id": "authority.remote_camera.q2q_two_way_lan_smoke",
+        "accepted_at_ms": 1765000000200
+      },
+      "rejection": null,
+      "lease": {
+        "$schema": "rusty.manifold.command.control_lease.v1",
+        "lease_id": "lease.remote_camera.q2q_two_way_lan_smoke",
+        "holder_id": "holder.remote_camera.quest_a",
+        "scope": "session.remote_camera.q2q_two_way_lan_smoke",
+        "state": "active",
+        "granted_revision": 1,
+        "expires_at_ms": 1765000030000,
+        "required_capability": "manifold.remote_camera.control"
+      },
+      "recorded_clock": {
+        "$schema": "rusty.manifold.clock.snapshot.v1",
+        "clock_domain": "clock.host_monotonic",
+        "clock_epoch_id": "clock_epoch.remote_camera_q2q_1",
+        "sequence": 44,
+        "monotonic_elapsed_ns": 1234568090,
+        "wall_unix_ms": 1765000000200,
+        "read_uncertainty_ns": 250000,
+        "health": "healthy",
+        "wall_clock_adjustment_count": 0
+      },
+      "evidence_refs": [
+        "evidence.command_authority.request.remote_camera.start_sender.q2q_two_way_lan_smoke"
+      ]
+    }
+  }
+}

@@ -151,8 +151,44 @@ fn valid_fixtures_deserialize_into_contract_models() {
     fixture::<ManifoldCommandDescriptor>(include_str!(
         "../../../../fixtures/command/synthetic-command-descriptor.json"
     ));
+    fixture::<ManifoldCommandDescriptor>(include_str!(
+        "../../../../fixtures/command/remote-camera-start-receiver-descriptor.json"
+    ));
+    fixture::<ManifoldCommandDescriptor>(include_str!(
+        "../../../../fixtures/command/remote-camera-start-sender-descriptor.json"
+    ));
+    fixture::<ManifoldCommandDescriptor>(include_str!(
+        "../../../../fixtures/command/remote-camera-get-status-descriptor.json"
+    ));
+    fixture::<ManifoldCommandDescriptor>(include_str!(
+        "../../../../fixtures/command/remote-camera-stop-descriptor.json"
+    ));
     fixture::<ManifoldCommandEnvelope>(include_str!(
         "../../../../fixtures/command/synthetic-command-envelope.json"
+    ));
+    fixture::<ManifoldCommandEnvelope>(include_str!(
+        "../../../../fixtures/command/remote-camera-start-receiver-envelope.json"
+    ));
+    fixture::<ManifoldCommandEnvelope>(include_str!(
+        "../../../../fixtures/command/remote-camera-start-sender-envelope.json"
+    ));
+    fixture::<ManifoldCommandEnvelope>(include_str!(
+        "../../../../fixtures/command/remote-camera-get-status-envelope.json"
+    ));
+    fixture::<ManifoldCommandEnvelope>(include_str!(
+        "../../../../fixtures/command/remote-camera-stop-envelope.json"
+    ));
+    fixture::<ManifoldClockSnapshot>(include_str!(
+        "../../../../fixtures/clock/remote-camera-start-receiver-review-clock.json"
+    ));
+    fixture::<ManifoldClockSnapshot>(include_str!(
+        "../../../../fixtures/clock/remote-camera-start-sender-review-clock.json"
+    ));
+    fixture::<ManifoldClockSnapshot>(include_str!(
+        "../../../../fixtures/clock/remote-camera-get-status-review-clock.json"
+    ));
+    fixture::<ManifoldClockSnapshot>(include_str!(
+        "../../../../fixtures/clock/remote-camera-stop-review-clock.json"
     ));
     fixture::<ManifoldCommandAck>(include_str!(
         "../../../../fixtures/command/synthetic-command-ack.json"
@@ -251,8 +287,11 @@ fn valid_fixtures_deserialize_into_contract_models() {
             "../../../../fixtures/authority/synthetic-stream-subscription-limit-authority-snapshot.json"
         ));
     fixture::<ManifoldAuthoritySnapshot>(include_str!(
-            "../../../../fixtures/authority/synthetic-stream-subscription-ui-disabled-authority-snapshot.json"
-        ));
+        "../../../../fixtures/authority/synthetic-stream-subscription-ui-disabled-authority-snapshot.json"
+    ));
+    fixture::<ManifoldAuthoritySnapshot>(include_str!(
+        "../../../../fixtures/authority/remote-camera-q2q-authority-snapshot.json"
+    ));
     fixture::<ManifoldCommandAuthorityAuditEvent>(include_str!(
         "../../../../fixtures/audit/synthetic-command-accepted-event.json"
     ));
@@ -304,6 +343,18 @@ fn valid_fixtures_deserialize_into_contract_models() {
     fixture::<ManifoldCommandAuthorityReview>(include_str!(
         "../../../../fixtures/authority-review/synthetic-command-capability-mismatch-review.json"
     ));
+    fixture::<ManifoldCommandAuthorityReview>(include_str!(
+        "../../../../fixtures/authority-review/remote-camera-q2q-start-receiver-review.json"
+    ));
+    fixture::<ManifoldCommandAuthorityReview>(include_str!(
+        "../../../../fixtures/authority-review/remote-camera-q2q-start-sender-review.json"
+    ));
+    fixture::<ManifoldCommandAuthorityReview>(include_str!(
+        "../../../../fixtures/authority-review/remote-camera-q2q-get-status-review.json"
+    ));
+    fixture::<ManifoldCommandAuthorityReview>(include_str!(
+        "../../../../fixtures/authority-review/remote-camera-q2q-stop-review.json"
+    ));
     fixture::<ManifoldCommandDispatchRejection>(include_str!(
         "../../../../fixtures/command-dispatch/synthetic-command-dispatch-rejection.json"
     ));
@@ -312,6 +363,18 @@ fn valid_fixtures_deserialize_into_contract_models() {
     ));
     fixture::<ManifoldCommandDispatchReceipt>(include_str!(
         "../../../../fixtures/command-dispatch/synthetic-command-dispatch-rejected-receipt.json"
+    ));
+    fixture::<ManifoldCommandDispatchReceipt>(include_str!(
+        "../../../../fixtures/command-dispatch/remote-camera-q2q-start-receiver-dispatch-receipt.json"
+    ));
+    fixture::<ManifoldCommandDispatchReceipt>(include_str!(
+        "../../../../fixtures/command-dispatch/remote-camera-q2q-start-sender-dispatch-receipt.json"
+    ));
+    fixture::<ManifoldCommandDispatchReceipt>(include_str!(
+        "../../../../fixtures/command-dispatch/remote-camera-q2q-get-status-dispatch-receipt.json"
+    ));
+    fixture::<ManifoldCommandDispatchReceipt>(include_str!(
+        "../../../../fixtures/command-dispatch/remote-camera-q2q-stop-dispatch-receipt.json"
     ));
     fixture::<ManifoldControlLeaseAuthorityReview>(include_str!(
         "../../../../fixtures/lease-review/synthetic-lease-accepted-review.json"
@@ -803,6 +866,69 @@ fn damaged_missing_lease_fixture_rejects_required_lease() {
 }
 
 #[test]
+fn remote_camera_command_fixtures_match_descriptors() {
+    let lease = ManifoldControlLease {
+        schema_id: SchemaId::new("rusty.manifold.command.control_lease.v1").unwrap(),
+        lease_id: DottedId::new("lease.remote_camera.q2q_two_way_lan_smoke").unwrap(),
+        holder_id: DottedId::new("holder.remote_camera.quest_a").unwrap(),
+        scope: DottedId::new("session.remote_camera.q2q_two_way_lan_smoke").unwrap(),
+        state: LeaseState::Active,
+        granted_revision: Revision::INITIAL,
+        expires_at_ms: 1765000030000,
+        required_capability: DottedId::new("manifold.remote_camera.control").unwrap(),
+    };
+    let leased_pairs = [
+        (
+            fixture::<ManifoldCommandDescriptor>(include_str!(
+                "../../../../fixtures/command/remote-camera-start-receiver-descriptor.json"
+            )),
+            fixture::<ManifoldCommandEnvelope>(include_str!(
+                "../../../../fixtures/command/remote-camera-start-receiver-envelope.json"
+            )),
+        ),
+        (
+            fixture::<ManifoldCommandDescriptor>(include_str!(
+                "../../../../fixtures/command/remote-camera-start-sender-descriptor.json"
+            )),
+            fixture::<ManifoldCommandEnvelope>(include_str!(
+                "../../../../fixtures/command/remote-camera-start-sender-envelope.json"
+            )),
+        ),
+    ];
+    for (descriptor, envelope) in leased_pairs {
+        assert_eq!(
+            envelope.validate_request(&descriptor, Revision::INITIAL, Some(&lease)),
+            Ok(())
+        );
+    }
+
+    let lease_free_pairs = [
+        (
+            fixture::<ManifoldCommandDescriptor>(include_str!(
+                "../../../../fixtures/command/remote-camera-get-status-descriptor.json"
+            )),
+            fixture::<ManifoldCommandEnvelope>(include_str!(
+                "../../../../fixtures/command/remote-camera-get-status-envelope.json"
+            )),
+        ),
+        (
+            fixture::<ManifoldCommandDescriptor>(include_str!(
+                "../../../../fixtures/command/remote-camera-stop-descriptor.json"
+            )),
+            fixture::<ManifoldCommandEnvelope>(include_str!(
+                "../../../../fixtures/command/remote-camera-stop-envelope.json"
+            )),
+        ),
+    ];
+    for (descriptor, envelope) in lease_free_pairs {
+        assert_eq!(
+            envelope.validate_request(&descriptor, Revision::INITIAL, None),
+            Ok(())
+        );
+    }
+}
+
+#[test]
 fn valid_authority_audit_fixture_matches_snapshot() {
     let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
         "../../../../fixtures/authority/synthetic-authority-snapshot.json"
@@ -869,6 +995,83 @@ fn valid_command_dispatch_receipt_fixtures_match_evaluator() {
         expected_rejected.validate_against_snapshot(&snapshot),
         Ok(())
     );
+}
+
+#[test]
+fn valid_remote_camera_command_sequence_fixtures_match_evaluator() {
+    let snapshot = fixture::<ManifoldAuthoritySnapshot>(include_str!(
+        "../../../../fixtures/authority/remote-camera-q2q-authority-snapshot.json"
+    ));
+    let reviews = [
+        fixture::<ManifoldCommandAuthorityReview>(include_str!(
+            "../../../../fixtures/authority-review/remote-camera-q2q-start-receiver-review.json"
+        )),
+        fixture::<ManifoldCommandAuthorityReview>(include_str!(
+            "../../../../fixtures/authority-review/remote-camera-q2q-start-sender-review.json"
+        )),
+        fixture::<ManifoldCommandAuthorityReview>(include_str!(
+            "../../../../fixtures/authority-review/remote-camera-q2q-get-status-review.json"
+        )),
+        fixture::<ManifoldCommandAuthorityReview>(include_str!(
+            "../../../../fixtures/authority-review/remote-camera-q2q-stop-review.json"
+        )),
+    ];
+    let dispatches = [
+        fixture::<ManifoldCommandDispatchReceipt>(include_str!(
+            "../../../../fixtures/command-dispatch/remote-camera-q2q-start-receiver-dispatch-receipt.json"
+        )),
+        fixture::<ManifoldCommandDispatchReceipt>(include_str!(
+            "../../../../fixtures/command-dispatch/remote-camera-q2q-start-sender-dispatch-receipt.json"
+        )),
+        fixture::<ManifoldCommandDispatchReceipt>(include_str!(
+            "../../../../fixtures/command-dispatch/remote-camera-q2q-get-status-dispatch-receipt.json"
+        )),
+        fixture::<ManifoldCommandDispatchReceipt>(include_str!(
+            "../../../../fixtures/command-dispatch/remote-camera-q2q-stop-dispatch-receipt.json"
+        )),
+    ];
+    let expected_commands = [
+        "command.remote_camera.start_receiver",
+        "command.remote_camera.start_sender",
+        "command.remote_camera.get_status",
+        "command.remote_camera.stop",
+    ];
+
+    assert_eq!(snapshot.validate_authority_links(), Ok(()));
+    let mut previous_accepted_at_ms = 0;
+    for ((review, dispatch), expected_command) in reviews
+        .iter()
+        .zip(dispatches.iter())
+        .zip(expected_commands.iter())
+    {
+        let generated_review = snapshot
+            .review_command(
+                review.audit_event.envelope.clone(),
+                review.audit_event.recorded_clock.clone(),
+                review.audit_event.evidence_refs.clone(),
+            )
+            .unwrap();
+        let generated_dispatch = snapshot
+            .prepare_command_dispatch(generated_review.clone())
+            .unwrap();
+
+        assert_eq!(&generated_review, review);
+        assert_eq!(&generated_dispatch, dispatch);
+        assert_eq!(
+            dispatch.outcome,
+            ManifoldCommandDispatchReceiptOutcome::CommandDispatchReady
+        );
+        assert_eq!(dispatch.command_id.as_str(), *expected_command);
+
+        let accepted_at_ms = dispatch.ack.as_ref().unwrap().accepted_at_ms;
+        assert!(accepted_at_ms > previous_accepted_at_ms);
+        previous_accepted_at_ms = accepted_at_ms;
+    }
+
+    assert!(dispatches[0].ack.as_ref().unwrap().lease_id.is_some());
+    assert!(dispatches[1].ack.as_ref().unwrap().lease_id.is_some());
+    assert!(dispatches[2].ack.as_ref().unwrap().lease_id.is_none());
+    assert!(dispatches[3].ack.as_ref().unwrap().lease_id.is_none());
 }
 
 #[test]

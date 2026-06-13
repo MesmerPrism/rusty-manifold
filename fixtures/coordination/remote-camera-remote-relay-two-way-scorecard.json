@@ -1,0 +1,129 @@
+{
+  "$schema": "rusty.manifold.coordination.scorecard.v1",
+  "scorecard_id": "scorecard.log.remote_camera.remote_relay_two_way",
+  "session_id": "session.remote_camera.remote_relay_two_way",
+  "mode": "remote_relay_two_way",
+  "status": "pass",
+  "accepted_message_ids": [
+    "message.remote_relay.quest_a.online",
+    "message.remote_relay.quest_b.online",
+    "message.remote_relay.relay.online",
+    "message.remote_relay.quest_a.inbox",
+    "message.remote_relay.quest_b.inbox",
+    "message.remote_relay.relay.inbox",
+    "message.remote_relay.quest_a.peer",
+    "message.remote_relay.quest_b.peer",
+    "message.remote_relay.relay.peer",
+    "message.remote_relay.quest_a.receiver",
+    "message.remote_relay.quest_b.receiver",
+    "message.remote_relay.quest_a.ready",
+    "message.remote_relay.quest_b.ready",
+    "message.remote_relay.coordinator.sender_start",
+    "message.remote_relay.quest_a.status",
+    "message.remote_relay.quest_b.status",
+    "message.remote_relay.quest_a.stopped",
+    "message.remote_relay.quest_b.stopped"
+  ],
+  "gate_results": [
+    {
+      "gate_id": "gate.participants_identified",
+      "status": "pass",
+      "satisfied_at_ms": 1765000200020,
+      "message_ids": [
+        "message.remote_relay.quest_a.online",
+        "message.remote_relay.quest_b.online",
+        "message.remote_relay.relay.online"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    },
+    {
+      "gate_id": "gate.control_inboxes_armed",
+      "status": "pass",
+      "satisfied_at_ms": 1765000200050,
+      "message_ids": [
+        "message.remote_relay.quest_a.inbox",
+        "message.remote_relay.quest_b.inbox",
+        "message.remote_relay.relay.inbox"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    },
+    {
+      "gate_id": "gate.advisory_peer_status",
+      "status": "pass",
+      "satisfied_at_ms": 1765000200080,
+      "message_ids": [
+        "message.remote_relay.quest_a.peer",
+        "message.remote_relay.quest_b.peer",
+        "message.remote_relay.relay.peer"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    },
+    {
+      "gate_id": "gate.media_receivers_armed",
+      "status": "pass",
+      "satisfied_at_ms": 1765000200100,
+      "message_ids": [
+        "message.remote_relay.quest_a.receiver",
+        "message.remote_relay.quest_b.receiver"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    },
+    {
+      "gate_id": "gate.receiver_ready_announced",
+      "status": "pass",
+      "satisfied_at_ms": 1765000200120,
+      "message_ids": [
+        "message.remote_relay.quest_a.ready",
+        "message.remote_relay.quest_b.ready"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    },
+    {
+      "gate_id": "gate.sender_start_authorized",
+      "status": "pass",
+      "satisfied_at_ms": 1765000200130,
+      "message_ids": [
+        "message.remote_relay.coordinator.sender_start"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    },
+    {
+      "gate_id": "gate.active_status_captured",
+      "status": "pass",
+      "satisfied_at_ms": 1765000200150,
+      "message_ids": [
+        "message.remote_relay.quest_a.status",
+        "message.remote_relay.quest_b.status"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    },
+    {
+      "gate_id": "gate.stopped",
+      "status": "pass",
+      "satisfied_at_ms": 1765000200170,
+      "message_ids": [
+        "message.remote_relay.quest_a.stopped",
+        "message.remote_relay.quest_b.stopped"
+      ],
+      "evidence": "gate satisfied by accepted coordination messages",
+      "issue_codes": []
+    }
+  ],
+  "rejected_messages": [],
+  "advisory_message_ids": [
+    "message.remote_relay.relay.online",
+    "message.remote_relay.relay.inbox",
+    "message.remote_relay.quest_a.peer",
+    "message.remote_relay.quest_b.peer",
+    "message.remote_relay.relay.peer"
+  ],
+  "media_payloads_seen": false,
+  "runtime_execution_performed": false
+}

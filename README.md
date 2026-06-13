@@ -14,6 +14,12 @@ can reject bad state.
 - Stable names and identifier grammar.
 - Versioned manifests and descriptors.
 - Command, capability, lease, and rejection vocabulary.
+- Remote camera command descriptors plus source-only authority review and
+  dispatch receipt fixtures for receiver-first start receiver, start sender,
+  status, and immediate stop handoff.
+- Coordination-session contracts and simulator fixtures for same-network
+  Quest-to-Quest, same-network Quest-to-phone, and remote relay two-way stream
+  timing.
 - Stream registry and topology fixtures.
 - Clock domain and correlation vocabulary.
 - Validation scorecards and damaged-input fixtures.
@@ -39,6 +45,7 @@ can reject bad state.
 ## Planning Entry Points
 
 - `docs/IMPLEMENTATION_PLAN.md`
+- `docs/COORDINATION_SESSIONS.md`
 - `docs/MODULE_PACKAGE_STRATEGY.md`
 - `docs/MODULES.md`
 - `docs/HOSTS_AND_DEPLOYMENT.md`

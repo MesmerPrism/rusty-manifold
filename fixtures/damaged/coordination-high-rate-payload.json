@@ -1,0 +1,30 @@
+{
+  "expected_rejection": "media_payload_in_control",
+  "plan_path": "fixtures/coordination/remote-camera-q2q-lan-plan.json",
+  "message_log": {
+    "$schema": "rusty.manifold.coordination.message_log.v1",
+    "log_id": "log.remote_camera.q2q_lan.high_rate_payload",
+    "session_id": "session.remote_camera.q2q_lan",
+    "messages": [
+      {
+        "$schema": "rusty.manifold.coordination.message.v1",
+        "message_id": "message.high_rate_payload.quest_a.online",
+        "session_id": "session.remote_camera.q2q_lan",
+        "participant_id": "participant.quest_a",
+        "message_kind": "coordination.message.participant_online",
+        "sequence": 1,
+        "created_at_ms": 1765000500000,
+        "expires_at_ms": 1765000530000,
+        "idempotency_key": "idempotency.high_rate_payload.quest_a.online",
+        "depends_on_message_ids": [],
+        "gate_id": "gate.participants_identified",
+        "transport_id": "transport.coordination.control",
+        "payload_class": "media_payload",
+        "sensitivity": "synthetic",
+        "payload_size_bytes": 1048576,
+        "inline_binary_payload": true,
+        "artifact_refs": []
+      }
+    ]
+  }
+}
