@@ -51,6 +51,10 @@ it must not define Lattice relation semantics or default to legacy
   decisions, lifecycle records, registries, clocks, session evidence, and audit.
 - Clients observe or request through typed contracts. They do not mutate
   accepted state directly.
+- When CLI, API, GUI, bridge, or platform helpers can request the same state
+  change, they must all map into one Manifold command/schema/review path.
+  Helper-local readback or UI state is observation evidence only until the
+  Manifold acceptance/rejection receipt records the result.
 - Every mutating GUI action must have a CLI route that calls the same command
   implementation. Agents validate behavior through CLI/command outputs; humans
   judge usability, layout, focus, and interaction quality.
