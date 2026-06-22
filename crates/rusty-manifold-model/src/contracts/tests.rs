@@ -9,6 +9,7 @@ mod leases;
 mod lineage;
 mod manifests_and_handoff;
 mod module_runtime;
+mod samples;
 mod streams;
 
 fn id(value: &str) -> DottedId {

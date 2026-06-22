@@ -85,6 +85,9 @@ fn valid_fixtures_deserialize_into_contract_models() {
     fixture::<ManifoldStreamRegistryRejection>(include_str!(
         "../../../../fixtures/stream/synthetic-stream-registry-rejection.json"
     ));
+    fixture::<ManifoldSyntheticScalarOscillatorProfile>(include_str!(
+        "../../../../fixtures/synthetic/synthetic-scalar-oscillator-profile.json"
+    ));
     fixture::<ManifoldStreamSubscriptionRequest>(include_str!(
         "../../../../fixtures/stream-subscription/synthetic-stream-subscription-request.json"
     ));

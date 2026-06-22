@@ -23,6 +23,37 @@ Stream manifests should describe:
 A registry snapshot records one accepted topology revision. It should be
 diffable and safe for read-only clients to render without becoming authority.
 
+## Synthetic Scalar Samples
+
+Synthetic scalar sources are contract-shaped stream producers, not private app
+shortcuts. `ManifoldSyntheticScalarOscillatorProfile` defines a deterministic
+bounded oscillator and emits `ManifoldScalarF32Sample` records with raw `value`
+plus normalized `value01`. Runtime subscribers should consume the sample shape
+the same way they would consume a later OSC, LSL, Bluetooth, or replay-backed
+provider for the same stream id.
+
+The fixture CLI route is:
+
+```powershell
+cargo run -p rusty-manifold-fixtures -- emit-synthetic-scalar --check --expected fixtures/synthetic/synthetic-scalar-oscillator-samples.jsonl
+```
+
+This route generates samples only. It does not open transports, publish live
+queues, start providers, or encode downstream app parameters into Manifold.
+
+For live adapter validation against an already-running broker, the same
+profile can be published as low-rate Manifold `publish_stream_event` command
+envelopes:
+
+```powershell
+cargo run -p rusty-manifold-fixtures -- publish-synthetic-scalar --broker-host 127.0.0.1 --broker-port 8765 --sample-count 40
+```
+
+This publish route is still source-generic: it sends bounded
+`rusty.manifold.sample.scalar_f32.v1` samples for `stream.synthetic_wave`. It
+does not name private app parameters; downstream subscribers decide how to map
+`value01`.
+
 ## Registry Change Review
 
 Stream registry changes are authority-reviewed requests. A

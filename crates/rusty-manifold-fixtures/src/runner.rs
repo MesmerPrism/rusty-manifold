@@ -1,16 +1,24 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 use super::authority_commands::*;
 use super::cli::{Command, Options};
 use super::{
-    default_repo_root, diff_synthetic_contracts, read_text, resolve_input_path,
-    simulate_coordination_session, simulate_synthetic_topology, to_pretty_json, validate_repo,
-    write_text, CliError,
+    default_repo_root, diff_synthetic_contracts, emit_synthetic_scalar_samples,
+    publish_synthetic_scalar_profile, read_text, resolve_input_path, simulate_coordination_session,
+    simulate_synthetic_topology, to_json_lines, to_pretty_json, validate_repo, write_text,
+    CliError, SyntheticScalarPublishConfig,
 };
 
 pub(super) fn run(args: Vec<String>) -> Result<String, CliError> {
     if args.first().map(String::as_str) == Some("simulate-coordination") {
         return run_simulate_coordination(args.into_iter().skip(1).collect());
+    }
+    if args.first().map(String::as_str) == Some("emit-synthetic-scalar") {
+        return run_emit_synthetic_scalar(args.into_iter().skip(1).collect());
+    }
+    if args.first().map(String::as_str) == Some("publish-synthetic-scalar") {
+        return run_publish_synthetic_scalar(args.into_iter().skip(1).collect());
     }
 
     let options = Options::parse(args)?;
@@ -801,6 +809,56 @@ fn run_simulate_coordination(args: Vec<String>) -> Result<String, CliError> {
     }
 }
 
+fn run_emit_synthetic_scalar(args: Vec<String>) -> Result<String, CliError> {
+    let options = SyntheticScalarOptions::parse(args)?;
+    let samples = emit_synthetic_scalar_samples(&options.repo_root, &options.profile)?;
+    let serialized = to_json_lines(&samples)?;
+
+    if let Some(output_path) = options.output {
+        write_text(&output_path, &serialized)?;
+    }
+
+    if options.check {
+        let expected_path = options.expected.ok_or_else(|| {
+            CliError::Usage("emit-synthetic-scalar --check requires --expected <path>".to_owned())
+        })?;
+        let resolved_expected = resolve_input_path(&options.repo_root, &expected_path);
+        let expected = read_text(&resolved_expected)?;
+        if expected.trim_end() == serialized.trim_end() {
+            Ok("synthetic scalar samples match fixture".to_owned())
+        } else {
+            Err(CliError::SnapshotMismatch {
+                expected_path: resolved_expected,
+                output: serialized,
+            })
+        }
+    } else {
+        Ok(serialized)
+    }
+}
+
+fn run_publish_synthetic_scalar(args: Vec<String>) -> Result<String, CliError> {
+    let options = SyntheticScalarPublishOptions::parse(args)?;
+    let sample_count = options.sample_count.unwrap_or_else(|| {
+        options
+            .repeat
+            .saturating_mul(options.profile_sample_count_hint.unwrap_or(5))
+    });
+    let config = SyntheticScalarPublishConfig {
+        broker_host: options.broker_host,
+        broker_port: options.broker_port,
+        broker_path: options.broker_path,
+        sample_interval: options.sample_interval,
+    };
+    let report = publish_synthetic_scalar_profile(
+        &options.repo_root,
+        &options.profile,
+        sample_count.max(1),
+        &config,
+    )?;
+    to_pretty_json(&report)
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct CoordinationSimulationOptions {
     repo_root: PathBuf,
@@ -852,12 +910,173 @@ impl CoordinationSimulationOptions {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SyntheticScalarOptions {
+    repo_root: PathBuf,
+    profile: PathBuf,
+    expected: Option<PathBuf>,
+    output: Option<PathBuf>,
+    check: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct SyntheticScalarPublishOptions {
+    repo_root: PathBuf,
+    profile: PathBuf,
+    broker_host: String,
+    broker_port: u16,
+    broker_path: String,
+    sample_count: Option<u32>,
+    profile_sample_count_hint: Option<u32>,
+    repeat: u32,
+    sample_interval: Option<Duration>,
+}
+
+impl SyntheticScalarPublishOptions {
+    fn parse(args: Vec<String>) -> Result<Self, CliError> {
+        let mut args = args.into_iter();
+        let mut options = Self {
+            repo_root: default_repo_root(),
+            profile: PathBuf::from("fixtures/synthetic/synthetic-scalar-oscillator-profile.json"),
+            broker_host: "127.0.0.1".to_owned(),
+            broker_port: 8765,
+            broker_path: "/manifold/v1/events".to_owned(),
+            sample_count: None,
+            profile_sample_count_hint: Some(5),
+            repeat: 1,
+            sample_interval: None,
+        };
+        let mut explicit_interval = false;
+        let mut no_sleep = false;
+
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--repo-root" => {
+                    options.repo_root = PathBuf::from(next_value(&mut args, "--repo-root")?);
+                }
+                "--profile" => {
+                    options.profile = PathBuf::from(next_value(&mut args, "--profile")?);
+                }
+                "--broker-host" | "--host" => {
+                    options.broker_host = next_value(&mut args, "--broker-host")?;
+                }
+                "--broker-port" | "--port" => {
+                    let value = next_value(&mut args, "--broker-port")?;
+                    options.broker_port = value.parse::<u16>().map_err(|_| {
+                        CliError::Usage(format!("--broker-port must be 1..65535, got {value}"))
+                    })?;
+                }
+                "--broker-path" | "--path" => {
+                    options.broker_path = next_value(&mut args, "--broker-path")?;
+                }
+                "--sample-count" => {
+                    let value = next_value(&mut args, "--sample-count")?;
+                    options.sample_count = Some(parse_positive_u32("--sample-count", &value)?);
+                }
+                "--repeat" => {
+                    let value = next_value(&mut args, "--repeat")?;
+                    options.repeat = parse_positive_u32("--repeat", &value)?;
+                }
+                "--interval-ms" => {
+                    let value = next_value(&mut args, "--interval-ms")?;
+                    let interval_ms = parse_nonnegative_u64("--interval-ms", &value)?;
+                    options.sample_interval = Some(Duration::from_millis(interval_ms));
+                    explicit_interval = true;
+                }
+                "--no-sleep" => {
+                    options.sample_interval = Some(Duration::ZERO);
+                    no_sleep = true;
+                }
+                "-h" | "--help" => {
+                    return Err(CliError::Usage(synthetic_scalar_publish_usage()));
+                }
+                other => return Err(CliError::UnknownOption(other.to_owned())),
+            }
+        }
+
+        let profile = super::read_model::<super::ManifoldSyntheticScalarOscillatorProfile>(
+            super::resolve_input_path(&options.repo_root, &options.profile),
+        )?;
+        profile.validate().map_err(CliError::from)?;
+        options.profile_sample_count_hint = Some(profile.sample_count);
+        if !explicit_interval && !no_sleep {
+            let interval_ms = (1000.0_f32 / profile.sample_rate_hz).round().max(1.0) as u64;
+            options.sample_interval = Some(Duration::from_millis(interval_ms));
+        }
+
+        Ok(options)
+    }
+}
+
+impl SyntheticScalarOptions {
+    fn parse(args: Vec<String>) -> Result<Self, CliError> {
+        let mut args = args.into_iter();
+        let mut options = Self {
+            repo_root: default_repo_root(),
+            profile: PathBuf::from("fixtures/synthetic/synthetic-scalar-oscillator-profile.json"),
+            expected: None,
+            output: None,
+            check: false,
+        };
+
+        while let Some(arg) = args.next() {
+            match arg.as_str() {
+                "--repo-root" => {
+                    options.repo_root = PathBuf::from(next_value(&mut args, "--repo-root")?);
+                }
+                "--profile" => {
+                    options.profile = PathBuf::from(next_value(&mut args, "--profile")?);
+                }
+                "--expected" => {
+                    options.expected = Some(PathBuf::from(next_value(&mut args, "--expected")?));
+                }
+                "--output" => {
+                    options.output = Some(PathBuf::from(next_value(&mut args, "--output")?));
+                }
+                "--check" => {
+                    options.check = true;
+                }
+                "-h" | "--help" => return Err(CliError::Usage(synthetic_scalar_usage())),
+                other => return Err(CliError::UnknownOption(other.to_owned())),
+            }
+        }
+
+        Ok(options)
+    }
+}
+
 fn next_value(args: &mut impl Iterator<Item = String>, option: &str) -> Result<String, CliError> {
     args.next()
         .ok_or_else(|| CliError::Usage(format!("{option} requires a value")))
 }
 
+fn parse_positive_u32(option: &str, value: &str) -> Result<u32, CliError> {
+    value
+        .parse::<u32>()
+        .ok()
+        .filter(|parsed| *parsed > 0)
+        .ok_or_else(|| CliError::Usage(format!("{option} must be a positive integer, got {value}")))
+}
+
+fn parse_nonnegative_u64(option: &str, value: &str) -> Result<u64, CliError> {
+    value.parse::<u64>().map_err(|_| {
+        CliError::Usage(format!(
+            "{option} must be a non-negative integer number of milliseconds, got {value}"
+        ))
+    })
+}
+
 fn coordination_usage() -> String {
     "usage: rusty-manifold-fixtures simulate-coordination --plan <path> --messages <path> [--repo-root <path>] [--check --expected <path>] [--output <path>]"
+        .to_owned()
+}
+
+fn synthetic_scalar_usage() -> String {
+    "usage: rusty-manifold-fixtures emit-synthetic-scalar [--profile <path>] [--repo-root <path>] [--check --expected <path>] [--output <path>]"
+        .to_owned()
+}
+
+fn synthetic_scalar_publish_usage() -> String {
+    "usage: rusty-manifold-fixtures publish-synthetic-scalar [--profile <path>] [--repo-root <path>] [--broker-host <host>] [--broker-port <port>] [--broker-path <path>] [--sample-count <n>|--repeat <n>] [--interval-ms <ms>|--no-sleep]"
         .to_owned()
 }

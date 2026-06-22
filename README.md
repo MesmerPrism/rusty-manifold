@@ -21,13 +21,18 @@ can reject bad state.
   Quest-to-Quest, same-network Quest-to-phone, and remote relay two-way stream
   timing.
 - Stream registry and topology fixtures.
+- Synthetic scalar stream sample and oscillator profile fixtures for adapter
+  bring-up, plus an opt-in fixture CLI publisher that can send those same
+  bounded samples into an already-running Manifold broker for live validation.
 - Clock domain and correlation vocabulary.
 - Validation scorecards and damaged-input fixtures.
 - Supply-chain and provenance fields for packages and adapters.
 
 ## Non-Scope
 
-- Runtime daemons or sockets.
+- Runtime daemons or sockets in the core model crates. The fixture CLI's
+  explicit `publish-synthetic-scalar` command is a validation adapter, not a
+  Manifold authority daemon.
 - Dynamic plugin loading.
 - Platform SDK dependencies.
 - UI or application-shell code.
@@ -58,5 +63,12 @@ cargo test --workspace
 cargo run -p rusty-manifold-fixtures -- validate
 cargo run -p rusty-manifold-fixtures -- simulate --check
 cargo run -p rusty-manifold-fixtures -- diff --check
+cargo run -p rusty-manifold-fixtures -- emit-synthetic-scalar --check --expected fixtures/synthetic/synthetic-scalar-oscillator-samples.jsonl
 cargo run -p rusty-manifold-schema -- export --check
+```
+
+To drive an already-running local broker with the same synthetic stream shape:
+
+```powershell
+cargo run -p rusty-manifold-fixtures -- publish-synthetic-scalar --broker-host 127.0.0.1 --broker-port 8765 --sample-count 40
 ```

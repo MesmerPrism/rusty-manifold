@@ -8,6 +8,8 @@ and safe to use in tests, generated schemas, documentation, and clients.
 - `host/`: host manifest examples.
 - `module/`: module manifest and runtime-state examples.
 - `stream/`: stream registry examples.
+- `synthetic/`: deterministic synthetic scalar source profiles and generated
+  JSONL sample fixtures.
 - `stream-subscription/`: stream subscription request, renewal, release, accepted, and rejection examples.
 - `command/`: command and lease request, renewal, release, acknowledgement,
   rejection, and remote-camera command handoff examples.

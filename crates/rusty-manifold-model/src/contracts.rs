@@ -12,6 +12,7 @@ mod host_manifest;
 mod ids;
 mod leases;
 mod module_runtime;
+mod samples;
 mod streams;
 mod validation_helpers;
 
@@ -23,6 +24,7 @@ pub use self::host_manifest::*;
 use self::ids::*;
 pub use self::leases::*;
 pub use self::module_runtime::*;
+pub use self::samples::*;
 pub use self::streams::*;
 use self::validation_helpers::*;
 

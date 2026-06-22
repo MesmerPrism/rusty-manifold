@@ -30,6 +30,19 @@ fn diff_snapshot_is_deterministic() {
 }
 
 #[test]
+fn synthetic_scalar_oscillator_output_is_deterministic() {
+    let output = run(vec![
+        "emit-synthetic-scalar".to_string(),
+        "--check".to_string(),
+        "--expected".to_string(),
+        "fixtures/synthetic/synthetic-scalar-oscillator-samples.jsonl".to_string(),
+    ])
+    .unwrap();
+
+    assert_eq!(output, "synthetic scalar samples match fixture");
+}
+
+#[test]
 fn shell_handoff_review_receipt_is_generated_from_handoff() {
     let handoff_path =
         default_repo_root().join("fixtures/shell-handoff/synthetic-loopback-shell.json");

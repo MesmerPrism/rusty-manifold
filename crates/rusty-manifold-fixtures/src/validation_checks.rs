@@ -8,6 +8,7 @@ mod host_manifest;
 mod leases;
 mod module_runtime;
 mod streams;
+mod synthetic;
 
 use self::clock::push_clock_checks;
 use self::command::{push_command_checks, push_damaged_command_checks};
@@ -17,6 +18,7 @@ use self::host_manifest::push_host_manifest_checks;
 use self::leases::push_lease_checks;
 use self::module_runtime::push_module_runtime_checks;
 use self::streams::{push_damaged_stream_checks, push_stream_checks};
+use self::synthetic::push_synthetic_checks;
 
 pub(super) fn validate_repo(repo_root: &Path) -> Result<ValidationReport, CliError> {
     let fixtures = FixtureSet::load(repo_root)?;
@@ -37,6 +39,7 @@ pub(super) fn validate_repo(repo_root: &Path) -> Result<ValidationReport, CliErr
         &endpoint_ids,
     )?;
     push_coordination_checks(repo_root, &mut checks)?;
+    push_synthetic_checks(repo_root, &mut checks)?;
 
     let failed = checks.iter().any(|check| check.status == "fail");
     Ok(ValidationReport {

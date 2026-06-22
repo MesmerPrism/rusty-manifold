@@ -121,6 +121,20 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.synthetic.scalar_oscillator_profile.v1",
+      "rust_type": "ManifoldSyntheticScalarOscillatorProfile",
+      "fixture_paths": [
+        "fixtures/synthetic/synthetic-scalar-oscillator-profile.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.sample.scalar_f32.v1",
+      "rust_type": "ManifoldScalarF32Sample",
+      "fixture_paths": [
+        "fixtures/synthetic/synthetic-scalar-oscillator-samples.jsonl"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.stream.subscription_request.v1",
       "rust_type": "ManifoldStreamSubscriptionRequest",
       "fixture_paths": [

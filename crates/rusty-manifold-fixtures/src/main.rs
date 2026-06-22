@@ -37,7 +37,8 @@ use rusty_manifold_model::{
     ManifoldModuleRuntimeStateAuthorityApplication, ManifoldModuleRuntimeStateAuthorityAuditEvent,
     ManifoldModuleRuntimeStateAuthorityReview, ManifoldModuleRuntimeStateChangeRequest,
     ManifoldModuleRuntimeStateRejection, ManifoldModuleRuntimeTransition, ManifoldPackageManifest,
-    ManifoldShellHandoffManifest, ManifoldShellHandoffReviewReceipt, ManifoldStreamManifest,
+    ManifoldSampleValidationError, ManifoldScalarF32Sample, ManifoldShellHandoffManifest,
+    ManifoldShellHandoffReviewReceipt, ManifoldStreamManifest,
     ManifoldStreamRegistryAuthorityApplication, ManifoldStreamRegistryAuthorityAuditEvent,
     ManifoldStreamRegistryAuthorityReview, ManifoldStreamRegistryChangeRequest,
     ManifoldStreamRegistryDiff, ManifoldStreamRegistryRejection, ManifoldStreamRegistrySnapshot,
@@ -51,7 +52,7 @@ use rusty_manifold_model::{
     ManifoldStreamSubscriptionRenewalAuthorityAuditEvent,
     ManifoldStreamSubscriptionRenewalAuthorityReview, ManifoldStreamSubscriptionRenewalRejection,
     ManifoldStreamSubscriptionRenewalRequest, ManifoldStreamSubscriptionRequest,
-    ManifoldValidationScorecard, Revision,
+    ManifoldSyntheticScalarOscillatorProfile, ManifoldValidationScorecard, Revision,
 };
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -59,11 +60,15 @@ use serde::Serialize;
 mod authority_commands;
 mod cli;
 mod fixture_set;
+mod live_synthetic;
 mod runner;
 mod validation_checks;
 
 use self::authority_commands::*;
 use self::fixture_set::FixtureSet;
+use self::live_synthetic::{
+    publish_synthetic_scalar_samples, SyntheticScalarPublishConfig, SyntheticScalarPublishReport,
+};
 use self::runner::run;
 use self::validation_checks::*;
 
@@ -266,6 +271,32 @@ fn simulate_coordination_session(
         .map_err(CliError::from)
 }
 
+fn emit_synthetic_scalar_samples(
+    repo_root: &Path,
+    profile_path: &Path,
+) -> Result<Vec<ManifoldScalarF32Sample>, CliError> {
+    let profile = read_model::<ManifoldSyntheticScalarOscillatorProfile>(resolve_input_path(
+        repo_root,
+        profile_path,
+    ))?;
+    profile.generate_samples().map_err(CliError::from)
+}
+
+fn publish_synthetic_scalar_profile(
+    repo_root: &Path,
+    profile_path: &Path,
+    sample_count: u32,
+    config: &SyntheticScalarPublishConfig,
+) -> Result<SyntheticScalarPublishReport, CliError> {
+    let mut profile = read_model::<ManifoldSyntheticScalarOscillatorProfile>(resolve_input_path(
+        repo_root,
+        profile_path,
+    ))?;
+    profile.sample_count = sample_count;
+    let samples = profile.generate_samples().map_err(CliError::from)?;
+    publish_synthetic_scalar_samples(config, &samples)
+}
+
 fn resolve_input_path(repo_root: &Path, path: &Path) -> PathBuf {
     if path.is_absolute() {
         path.to_path_buf()
@@ -374,6 +405,20 @@ where
     serde_json::to_string_pretty(value).map_err(CliError::Serialize)
 }
 
+fn to_json_lines<T>(values: &[T]) -> Result<String, CliError>
+where
+    T: Serialize,
+{
+    let mut output = String::new();
+    for value in values {
+        if !output.is_empty() {
+            output.push('\n');
+        }
+        output.push_str(&serde_json::to_string(value).map_err(CliError::Serialize)?);
+    }
+    Ok(output)
+}
+
 fn to_json_string<T>(value: &T) -> String
 where
     T: Serialize,
@@ -403,6 +448,7 @@ enum CliError {
         source: serde_json::Error,
     },
     Serialize(serde_json::Error),
+    Transport(String),
     MissingExpectedRejection {
         path: PathBuf,
     },
@@ -416,6 +462,7 @@ enum CliError {
     DeploymentSelection(rusty_manifold_model::DeploymentSelectionError),
     GraphValidation(rusty_manifold_model::GraphValidationError),
     StreamRegistryValidation(rusty_manifold_model::StreamRegistryValidationError),
+    SampleValidation(ManifoldSampleValidationError),
     ShellHandoffReviewReceiptValidation(
         rusty_manifold_model::ShellHandoffReviewReceiptValidationError,
     ),
@@ -432,6 +479,7 @@ impl fmt::Display for CliError {
             Self::Io { path, source } => write!(formatter, "{}: {source}", path.display()),
             Self::Json { path, source } => write!(formatter, "{}: {source}", path.display()),
             Self::Serialize(source) => write!(formatter, "failed to serialize output: {source}"),
+            Self::Transport(message) => write!(formatter, "transport error: {message}"),
             Self::MissingExpectedRejection { path } => {
                 write!(formatter, "{}: missing expected_rejection", path.display())
             }
@@ -451,6 +499,7 @@ impl fmt::Display for CliError {
             Self::DeploymentSelection(source) => write!(formatter, "{source}"),
             Self::GraphValidation(source) => write!(formatter, "{source}"),
             Self::StreamRegistryValidation(source) => write!(formatter, "{source}"),
+            Self::SampleValidation(source) => write!(formatter, "{source}"),
             Self::ShellHandoffReviewReceiptValidation(source) => write!(formatter, "{source}"),
             Self::CommandAuthorityValidation(source) => write!(formatter, "{source}"),
             Self::CoordinationValidation(source) => write!(formatter, "{source}"),
@@ -487,6 +536,12 @@ impl From<rusty_manifold_model::GraphValidationError> for CliError {
 impl From<rusty_manifold_model::StreamRegistryValidationError> for CliError {
     fn from(source: rusty_manifold_model::StreamRegistryValidationError) -> Self {
         Self::StreamRegistryValidation(source)
+    }
+}
+
+impl From<ManifoldSampleValidationError> for CliError {
+    fn from(source: ManifoldSampleValidationError) -> Self {
+        Self::SampleValidation(source)
     }
 }
 

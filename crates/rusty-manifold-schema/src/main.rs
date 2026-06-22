@@ -231,6 +231,16 @@ fn module_and_stream_entries() -> Vec<SchemaEntry> {
             &["fixtures/stream/synthetic-stream-registry-rejection.json"],
         ),
         entry(
+            "rusty.manifold.synthetic.scalar_oscillator_profile.v1",
+            "ManifoldSyntheticScalarOscillatorProfile",
+            &["fixtures/synthetic/synthetic-scalar-oscillator-profile.json"],
+        ),
+        entry(
+            "rusty.manifold.sample.scalar_f32.v1",
+            "ManifoldScalarF32Sample",
+            &["fixtures/synthetic/synthetic-scalar-oscillator-samples.jsonl"],
+        ),
+        entry(
             "rusty.manifold.stream.subscription_request.v1",
             "ManifoldStreamSubscriptionRequest",
             &[

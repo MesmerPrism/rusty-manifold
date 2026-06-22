@@ -1,0 +1,18 @@
+{
+  "$schema": "rusty.manifold.synthetic.scalar_oscillator_profile.v1",
+  "profile_id": "profile.synthetic_quest_driver_wave",
+  "stream_id": "stream.synthetic_wave",
+  "source_module_id": "module.synthetic_wave_provider",
+  "timestamp_domain": "clock.host_monotonic",
+  "sample_count": 5,
+  "sample_rate_hz": 4.0,
+  "frequency_hz": 1.0,
+  "phase_offset_radians": 0.0,
+  "amplitude": 0.4,
+  "offset": 0.5,
+  "value_min": 0.0,
+  "value_max": 1.0,
+  "start_timestamp_ms": 100000,
+  "units": "normalized",
+  "quality": "synthetic"
+}
