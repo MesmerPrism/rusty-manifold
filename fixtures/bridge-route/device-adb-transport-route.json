@@ -18,5 +18,46 @@
   "issue_codes": [
     "issue.bridge_route.device_missing",
     "issue.bridge_route.transport_failed"
-  ]
+  ],
+  "required_conditions": [
+    {
+      "condition_id": "condition.device.adb_online",
+      "scope": "device",
+      "kind": "adb_device_online",
+      "required_state": "active",
+      "check_ref": "check.device.adb_online",
+      "issue_codes": [
+        "issue.bridge_route.device_missing"
+      ],
+      "remediation": {
+        "action_ref": "remediation.device.connect_adb",
+        "operator_label": "Connect and authorize the headset over ADB"
+      }
+    },
+    {
+      "condition_id": "condition.network.adb_forward_active",
+      "scope": "network",
+      "kind": "adb_forward_active",
+      "required_state": "active",
+      "check_ref": "check.network.adb_forward_active",
+      "issue_codes": [
+        "issue.bridge_route.transport_failed"
+      ],
+      "remediation": {
+        "action_ref": "remediation.network.create_adb_forward",
+        "operator_label": "Create the required ADB forward or reverse tunnel"
+      }
+    }
+  ],
+  "timing": {
+    "rtt_strategy": "transport_echo",
+    "clock_domain": "clock.host_monotonic",
+    "min_round_trips": 1,
+    "timeout_ms": 5000,
+    "warmup_ms": 0,
+    "reported_metrics": [
+      "rtt_ms",
+      "jitter_ms"
+    ]
+  }
 }

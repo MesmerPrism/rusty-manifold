@@ -21,5 +21,46 @@
   "issue_codes": [
     "issue.bridge_route.timeout",
     "issue.bridge_route.runtime_rejected"
-  ]
+  ],
+  "required_conditions": [
+    {
+      "condition_id": "condition.host.websocket_firewall_inbound",
+      "scope": "security",
+      "kind": "host_firewall_inbound_allowed",
+      "required_state": "allowed",
+      "check_ref": "check.host.firewall.websocket_inbound",
+      "issue_codes": [
+        "issue.host.firewall_blocked"
+      ],
+      "remediation": {
+        "action_ref": "remediation.host.allow_websocket_port",
+        "operator_label": "Allow the Hostess WebSocket port through Windows Firewall"
+      }
+    },
+    {
+      "condition_id": "condition.runtime.websocket_command_subscriber",
+      "scope": "runtime",
+      "kind": "runtime_subscriber_active",
+      "required_state": "active",
+      "check_ref": "check.runtime.websocket_command_subscriber",
+      "issue_codes": [
+        "issue.runtime.subscriber_missing"
+      ],
+      "remediation": {
+        "action_ref": "remediation.runtime.start_command_subscriber",
+        "operator_label": "Start the runtime command subscriber"
+      }
+    }
+  ],
+  "timing": {
+    "rtt_strategy": "applied_receipt_echo",
+    "clock_domain": "clock.host_monotonic",
+    "min_round_trips": 1,
+    "timeout_ms": 5000,
+    "warmup_ms": 0,
+    "reported_metrics": [
+      "rtt_ms",
+      "jitter_ms"
+    ]
+  }
 }

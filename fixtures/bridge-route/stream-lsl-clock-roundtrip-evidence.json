@@ -1,0 +1,43 @@
+{
+  "$schema": "rusty.manifold.bridge.route_evidence.v1",
+  "evidence_id": "evidence.bridge_route.clock.lsl.roundtrip_echo.live",
+  "route_id": "bridge_route.clock.lsl.roundtrip_echo",
+  "status": "pass",
+  "started_at_ms": 1765000002000,
+  "ended_at_ms": 1765000014000,
+  "stage_reports": [
+    {
+      "stage": "sent",
+      "status": "pass",
+      "observed_at_ms": 1765000002100,
+      "evidence_refs": [
+        "evidence.lsl.probe_outlet.published"
+      ],
+      "issue_codes": []
+    },
+    {
+      "stage": "transport_ok",
+      "status": "pass",
+      "observed_at_ms": 1765000002400,
+      "evidence_refs": [
+        "evidence.lsl.echo_inlet.resolved",
+        "evidence.lsl.native_runtime.available"
+      ],
+      "issue_codes": []
+    },
+    {
+      "stage": "observed",
+      "status": "pass",
+      "observed_at_ms": 1765000013900,
+      "evidence_refs": [
+        "evidence.lsl.echo_samples.received",
+        "evidence.lsl.roundtrip_clock_offset.estimated"
+      ],
+      "issue_codes": []
+    }
+  ],
+  "artifact_refs": [
+    "artifact.lsl.clock_roundtrip.report"
+  ],
+  "issues": []
+}

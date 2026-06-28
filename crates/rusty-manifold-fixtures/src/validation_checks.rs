@@ -182,6 +182,50 @@ fn push_valid_checks(
         "bridge-route descriptors validate and applied WebSocket command evidence satisfies required runtime stages",
     );
 
+    let bridge_route_zeromq_result = fixtures
+        .bridge_route_descriptors
+        .iter()
+        .find(|route| route.route_id == fixtures.bridge_route_zeromq_evidence.route_id)
+        .ok_or_else(|| {
+            format!(
+                "bridge route {} missing from descriptor fixtures",
+                fixtures.bridge_route_zeromq_evidence.route_id
+            )
+        })
+        .and_then(|route| {
+            route
+                .validate_evidence_summary(&fixtures.bridge_route_zeromq_evidence)
+                .map_err(|error| error.to_string())
+        });
+    push_result(
+        checks,
+        "validation.check.bridge_route_zeromq_profile_evidence",
+        bridge_route_zeromq_result,
+        "generic ZeroMQ PUB/SUB route profile and loopback evidence satisfy data-plane stream bridge stages",
+    );
+
+    let bridge_route_lsl_clock_result = fixtures
+        .bridge_route_descriptors
+        .iter()
+        .find(|route| route.route_id == fixtures.bridge_route_lsl_clock_evidence.route_id)
+        .ok_or_else(|| {
+            format!(
+                "bridge route {} missing from descriptor fixtures",
+                fixtures.bridge_route_lsl_clock_evidence.route_id
+            )
+        })
+        .and_then(|route| {
+            route
+                .validate_evidence_summary(&fixtures.bridge_route_lsl_clock_evidence)
+                .map_err(|error| error.to_string())
+        });
+    push_result(
+        checks,
+        "validation.check.bridge_route_lsl_clock_profile_evidence",
+        bridge_route_lsl_clock_result,
+        "generic LSL clock round-trip route profile and live-style evidence satisfy stream bridge stages",
+    );
+
     push_result(
         checks,
         "validation.check.shell_handoff_links",
@@ -244,6 +288,62 @@ fn push_damaged_checks(
                     .map_err(|error| error.rejection_code().to_owned())
             }),
         "transport-only evidence is rejected for a route that requires runtime acceptance and applied evidence",
+    );
+
+    push_damaged(
+        checks,
+        "validation.check.damaged_bridge_route_zeromq_missing_profile",
+        expected_rejection(
+            repo_root,
+            "fixtures/damaged/bridge-route-zeromq-missing-profile.json",
+        )?,
+        fixtures
+            .damaged_bridge_route_zeromq_missing_profile
+            .validate_shape()
+            .map_err(|error| error.rejection_code().to_owned()),
+        "ZeroMQ route descriptors must declare socket pattern, endpoint open mode, message bounds, and queue policy",
+    );
+
+    push_damaged(
+        checks,
+        "validation.check.damaged_bridge_route_lsl_missing_profile",
+        expected_rejection(
+            repo_root,
+            "fixtures/damaged/bridge-route-lsl-missing-profile.json",
+        )?,
+        fixtures
+            .damaged_bridge_route_lsl_missing_profile
+            .validate_shape()
+            .map_err(|error| error.rejection_code().to_owned()),
+        "LSL route descriptors must declare stream name, type, endpoint role, channel shape, clock policy, and timing bounds",
+    );
+
+    push_damaged(
+        checks,
+        "validation.check.damaged_bridge_route_missing_conditions",
+        expected_rejection(
+            repo_root,
+            "fixtures/damaged/bridge-route-missing-conditions.json",
+        )?,
+        fixtures
+            .damaged_bridge_route_missing_conditions
+            .validate_shape()
+            .map_err(|error| error.rejection_code().to_owned()),
+        "operational route descriptors must declare environment, device, runtime, and dependency conditions",
+    );
+
+    push_damaged(
+        checks,
+        "validation.check.damaged_bridge_route_invalid_timing",
+        expected_rejection(
+            repo_root,
+            "fixtures/damaged/bridge-route-invalid-timing.json",
+        )?,
+        fixtures
+            .damaged_bridge_route_invalid_timing
+            .validate_shape()
+            .map_err(|error| error.rejection_code().to_owned()),
+        "parallel LSL timing policies must identify the clock route and report bounded RTT metrics",
     );
 
     push_damaged(

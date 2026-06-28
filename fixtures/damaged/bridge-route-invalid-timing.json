@@ -1,0 +1,49 @@
+{
+  "$schema": "rusty.manifold.bridge.route_descriptor.v1",
+  "expected_rejection": "invalid_timing_policy",
+  "route_id": "bridge_route.stream.websocket.invalid_timing",
+  "route_kind": "stream_bridge",
+  "plane": "data",
+  "transport_family": "web_socket",
+  "delivery": "ordered",
+  "payload_class": "stream_packet",
+  "rate_class": "periodic",
+  "authority_role": "adapter",
+  "required_evidence_stages": [
+    "sent",
+    "transport_ok",
+    "observed"
+  ],
+  "fallback_route_ids": [],
+  "issue_codes": [
+    "issue.bridge_route.timeout"
+  ],
+  "required_conditions": [
+    {
+      "condition_id": "condition.host.websocket_port_available",
+      "scope": "host",
+      "kind": "host_port_available",
+      "required_state": "available",
+      "check_ref": "check.host.websocket_port_available",
+      "issue_codes": [
+        "issue.host.port_unavailable"
+      ],
+      "remediation": {
+        "action_ref": "remediation.host.choose_websocket_port",
+        "operator_label": "Choose an available Hostess WebSocket port"
+      }
+    }
+  ],
+  "timing": {
+    "rtt_strategy": "parallel_lsl_clock_echo",
+    "clock_domain": "clock.host_monotonic",
+    "min_round_trips": 8,
+    "timeout_ms": 5000,
+    "warmup_ms": 250,
+    "reported_metrics": [
+      "rtt_ms",
+      "clock_offset_ms",
+      "jitter_ms"
+    ]
+  }
+}

@@ -1,51 +1,53 @@
 {
   "$schema": "rusty.manifold.bridge.route_descriptor.v1",
-  "route_id": "bridge_route.media.h264.data_plane",
-  "route_kind": "media_payload",
-  "plane": "media_data",
-  "transport_family": "media_data_plane",
+  "route_id": "bridge_route.stream.zeromq.pub_sub",
+  "route_kind": "stream_bridge",
+  "plane": "data",
+  "transport_family": "zeromq",
   "delivery": "best_effort",
-  "payload_class": "media_frame",
-  "rate_class": "burst",
+  "payload_class": "stream_packet",
+  "rate_class": "periodic",
   "authority_role": "adapter",
   "required_evidence_stages": [
     "sent",
     "transport_ok",
     "observed"
   ],
-  "fallback_route_ids": [],
+  "fallback_route_ids": [
+    "bridge_route.stream.websocket.ordered"
+  ],
   "issue_codes": [
-    "issue.bridge_route.frame_drop",
-    "issue.bridge_route.decode_not_ready",
+    "issue.bridge_route.packet_loss",
+    "issue.bridge_route.decode_error",
     "issue.bridge_route.queue_overflow"
   ],
   "required_conditions": [
     {
-      "condition_id": "condition.tooling.h264_codec_available",
+      "condition_id": "condition.tooling.zeromq.library",
       "scope": "tooling",
-      "kind": "media_codec_available",
+      "kind": "protocol_library_available",
       "required_state": "available",
-      "check_ref": "check.tooling.h264_codec_available",
+      "check_ref": "check.tooling.zeromq.library",
       "issue_codes": [
-        "issue.bridge_route.decode_not_ready"
+        "issue.tooling.protocol_library_missing"
       ],
       "remediation": {
-        "action_ref": "remediation.tooling.enable_h264_codec",
-        "operator_label": "Enable an H.264 decoder for the media route"
+        "action_ref": "remediation.tooling.enable_zeromq_adapter",
+        "operator_label": "Install or enable the ZeroMQ adapter runtime"
       }
     },
     {
-      "condition_id": "condition.runtime.media_consumer_active",
-      "scope": "runtime",
-      "kind": "runtime_subscriber_active",
-      "required_state": "active",
-      "check_ref": "check.runtime.media_consumer_active",
+      "condition_id": "condition.network.zeromq_tcp_endpoint",
+      "scope": "network",
+      "kind": "tcp_endpoint_reachable",
+      "required_state": "reachable",
+      "check_ref": "check.network.zeromq_tcp_endpoint",
       "issue_codes": [
-        "issue.runtime.subscriber_missing"
+        "issue.network.not_reachable"
       ],
       "remediation": {
-        "action_ref": "remediation.runtime.start_media_consumer",
-        "operator_label": "Start the media consumer before streaming frames"
+        "action_ref": "remediation.network.open_zeromq_endpoint",
+        "operator_label": "Bind or connect the declared ZeroMQ TCP endpoint"
       }
     },
     {
@@ -78,5 +80,15 @@
       "sample_loss",
       "queue_delay_ms"
     ]
+  },
+  "zeromq": {
+    "socket_pattern": "pub_sub",
+    "endpoint_open_mode": "connect",
+    "endpoint_url": "tcp://127.0.0.1:5570",
+    "topic_prefix": "rusty.manifold.qcl084",
+    "payload_encoding": "json",
+    "max_message_bytes": 4096,
+    "high_water_mark": 16,
+    "queue_policy": "drop_oldest"
   }
 }

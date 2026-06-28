@@ -1,0 +1,49 @@
+{
+  "$schema": "rusty.manifold.bridge.route_descriptor.v1",
+  "route_id": "bridge_route.clock.lsl.missing_profile",
+  "route_kind": "stream_bridge",
+  "plane": "telemetry",
+  "transport_family": "lsl",
+  "delivery": "ordered",
+  "payload_class": "stream_packet",
+  "rate_class": "event",
+  "authority_role": "adapter",
+  "required_evidence_stages": [
+    "sent",
+    "transport_ok",
+    "observed"
+  ],
+  "fallback_route_ids": [],
+  "issue_codes": [
+    "issue.bridge_route.lsl_native_unavailable"
+  ],
+  "required_conditions": [
+    {
+      "condition_id": "condition.tooling.lsl.native_library",
+      "scope": "tooling",
+      "kind": "native_library_available",
+      "required_state": "available",
+      "check_ref": "check.tooling.lsl.native_library",
+      "issue_codes": [
+        "issue.bridge_route.lsl_native_unavailable"
+      ],
+      "remediation": {
+        "action_ref": "remediation.tooling.install_lsl_runtime",
+        "operator_label": "Install or package the LSL native runtime"
+      }
+    }
+  ],
+  "timing": {
+    "rtt_strategy": "native_round_trip",
+    "clock_domain": "clock.lsl_local",
+    "min_round_trips": 8,
+    "timeout_ms": 5000,
+    "warmup_ms": 250,
+    "reported_metrics": [
+      "rtt_ms",
+      "clock_offset_ms",
+      "jitter_ms"
+    ]
+  },
+  "expected_rejection": "missing_transport_profile"
+}

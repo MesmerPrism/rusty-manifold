@@ -826,7 +826,22 @@ fn valid_fixtures_deserialize_into_contract_models() {
         "../../../../fixtures/bridge-route/marker-lsl-timestamped-route.json"
     ));
     fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/bridge-route/stream-lsl-clock-roundtrip-route.json"
+    ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
         "../../../../fixtures/bridge-route/telemetry-udp-best-effort-route.json"
+    ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/bridge-route/stream-websocket-ordered-route.json"
+    ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/bridge-route/stream-osc-udp-route.json"
+    ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/bridge-route/stream-bluetooth-rfcomm-route.json"
+    ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/bridge-route/stream-bluetooth-gatt-notify-route.json"
     ));
     fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
         "../../../../fixtures/bridge-route/device-adb-transport-route.json"
@@ -834,8 +849,29 @@ fn valid_fixtures_deserialize_into_contract_models() {
     fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
         "../../../../fixtures/bridge-route/media-h264-data-plane-route.json"
     ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/bridge-route/stream-zeromq-pubsub-route.json"
+    ));
+    fixture::<ManifoldBridgeRouteEvidence>(include_str!(
+        "../../../../fixtures/bridge-route/stream-lsl-clock-roundtrip-evidence.json"
+    ));
+    fixture::<ManifoldBridgeRouteEvidence>(include_str!(
+        "../../../../fixtures/bridge-route/stream-zeromq-pubsub-evidence.json"
+    ));
     fixture::<ManifoldBridgeRouteEvidence>(include_str!(
         "../../../../fixtures/damaged/bridge-route-command-transport-only-evidence.json"
+    ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/damaged/bridge-route-lsl-missing-profile.json"
+    ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/damaged/bridge-route-zeromq-missing-profile.json"
+    ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/damaged/bridge-route-missing-conditions.json"
+    ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/damaged/bridge-route-invalid-timing.json"
     ));
     fixture::<ManifoldShellHandoffManifest>(include_str!(
         "../../../../fixtures/shell-handoff/synthetic-loopback-shell.json"

@@ -1,0 +1,41 @@
+{
+  "$schema": "rusty.manifold.bridge.route_evidence.v1",
+  "evidence_id": "evidence.bridge_route.stream.zeromq.pub_sub.loopback",
+  "route_id": "bridge_route.stream.zeromq.pub_sub",
+  "status": "pass",
+  "started_at_ms": 1765000001000,
+  "ended_at_ms": 1765000001200,
+  "stage_reports": [
+    {
+      "stage": "sent",
+      "status": "pass",
+      "observed_at_ms": 1765000001010,
+      "evidence_refs": [
+        "evidence.zeromq.publisher.sent"
+      ],
+      "issue_codes": []
+    },
+    {
+      "stage": "transport_ok",
+      "status": "pass",
+      "observed_at_ms": 1765000001040,
+      "evidence_refs": [
+        "evidence.zeromq.subscriber.connected"
+      ],
+      "issue_codes": []
+    },
+    {
+      "stage": "observed",
+      "status": "pass",
+      "observed_at_ms": 1765000001190,
+      "evidence_refs": [
+        "evidence.zeromq.subscriber.received"
+      ],
+      "issue_codes": []
+    }
+  ],
+  "artifact_refs": [
+    "artifact.zeromq.loopback.report"
+  ],
+  "issues": []
+}

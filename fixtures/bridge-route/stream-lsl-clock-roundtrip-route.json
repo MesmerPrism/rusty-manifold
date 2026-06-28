@@ -1,21 +1,24 @@
 {
   "$schema": "rusty.manifold.bridge.route_descriptor.v1",
-  "route_id": "bridge_route.marker.lsl.timestamped",
-  "route_kind": "marker",
+  "route_id": "bridge_route.clock.lsl.roundtrip_echo",
+  "route_kind": "stream_bridge",
   "plane": "telemetry",
   "transport_family": "lsl",
   "delivery": "ordered",
-  "payload_class": "marker",
+  "payload_class": "stream_packet",
   "rate_class": "event",
-  "authority_role": "observer",
+  "authority_role": "adapter",
   "required_evidence_stages": [
     "sent",
+    "transport_ok",
     "observed"
   ],
   "fallback_route_ids": [],
   "issue_codes": [
+    "issue.bridge_route.lsl_native_unavailable",
     "issue.bridge_route.clock_uncorrelated",
-    "issue.bridge_route.marker_stale"
+    "issue.bridge_route.sample_loss",
+    "issue.bridge_route.discovery_timeout"
   ],
   "required_conditions": [
     {
@@ -45,36 +48,52 @@
         "action_ref": "remediation.network.allow_lsl_multicast",
         "operator_label": "Use a LAN profile that permits LSL multicast discovery"
       }
+    },
+    {
+      "condition_id": "condition.runtime.lsl_echo_subscriber",
+      "scope": "runtime",
+      "kind": "runtime_subscriber_active",
+      "required_state": "active",
+      "check_ref": "check.runtime.lsl_echo_subscriber",
+      "issue_codes": [
+        "issue.runtime.subscriber_missing"
+      ],
+      "remediation": {
+        "action_ref": "remediation.runtime.start_lsl_echo",
+        "operator_label": "Start the runtime LSL echo subscriber"
+      }
     }
   ],
   "timing": {
-    "rtt_strategy": "protocol_clock_correction",
+    "rtt_strategy": "native_round_trip",
     "clock_domain": "clock.lsl_local",
-    "min_round_trips": 1,
+    "min_round_trips": 8,
     "timeout_ms": 5000,
     "warmup_ms": 250,
     "reported_metrics": [
+      "rtt_ms",
       "clock_offset_ms",
       "clock_uncertainty_ms",
-      "jitter_ms"
+      "jitter_ms",
+      "sample_loss"
     ]
   },
   "lsl": {
-    "stream_name": "MarkerEvents",
-    "stream_type": "rusty.manifold.marker",
-    "source_id": "rusty.manifold.marker.source",
-    "endpoint_role": "outlet",
+    "stream_name": "ClockEcho",
+    "stream_type": "rusty.manifold.clock.echo",
+    "source_id": "rusty.manifold.clock.echo.source",
+    "endpoint_role": "round_trip",
     "resolve_policy": "name_and_type",
     "channel_count": 1,
     "channel_format": "string",
     "channel_labels": [
-      "marker_json"
+      "clock_alignment_echo"
     ],
-    "sample_rate_policy": "event",
-    "clock_policy": "time_correction",
+    "sample_rate_policy": "irregular",
+    "clock_policy": "round_trip_offset",
     "resolve_timeout_ms": 5000,
     "sample_timeout_ms": 2000,
     "warmup_ms": 250,
-    "min_samples": 1
+    "min_samples": 8
   }
 }

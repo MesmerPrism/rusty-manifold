@@ -1,0 +1,78 @@
+{
+  "$schema": "rusty.manifold.bridge.route_descriptor.v1",
+  "route_id": "bridge_route.stream.websocket.ordered",
+  "route_kind": "stream_bridge",
+  "plane": "data",
+  "transport_family": "web_socket",
+  "delivery": "ordered",
+  "payload_class": "stream_packet",
+  "rate_class": "periodic",
+  "authority_role": "adapter",
+  "required_evidence_stages": [
+    "sent",
+    "transport_ok",
+    "observed"
+  ],
+  "fallback_route_ids": [],
+  "issue_codes": [
+    "issue.bridge_route.timeout",
+    "issue.bridge_route.packet_loss",
+    "issue.bridge_route.runtime_rejected"
+  ],
+  "required_conditions": [
+    {
+      "condition_id": "condition.host.websocket_port_available",
+      "scope": "host",
+      "kind": "host_port_available",
+      "required_state": "available",
+      "check_ref": "check.host.websocket_port_available",
+      "issue_codes": [
+        "issue.host.port_unavailable"
+      ],
+      "remediation": {
+        "action_ref": "remediation.host.choose_websocket_port",
+        "operator_label": "Choose an available Hostess WebSocket port"
+      }
+    },
+    {
+      "condition_id": "condition.host.websocket_firewall_inbound",
+      "scope": "security",
+      "kind": "host_firewall_inbound_allowed",
+      "required_state": "allowed",
+      "check_ref": "check.host.firewall.websocket_inbound",
+      "issue_codes": [
+        "issue.host.firewall_blocked"
+      ],
+      "remediation": {
+        "action_ref": "remediation.host.allow_websocket_port",
+        "operator_label": "Allow the Hostess WebSocket port through Windows Firewall"
+      }
+    },
+    {
+      "condition_id": "condition.runtime.websocket_stream_subscriber",
+      "scope": "runtime",
+      "kind": "runtime_subscriber_active",
+      "required_state": "active",
+      "check_ref": "check.runtime.websocket_stream_subscriber",
+      "issue_codes": [
+        "issue.runtime.subscriber_missing"
+      ],
+      "remediation": {
+        "action_ref": "remediation.runtime.start_websocket_subscriber",
+        "operator_label": "Start the WebSocket stream subscriber"
+      }
+    }
+  ],
+  "timing": {
+    "rtt_strategy": "transport_echo",
+    "clock_domain": "clock.host_monotonic",
+    "min_round_trips": 8,
+    "timeout_ms": 5000,
+    "warmup_ms": 250,
+    "reported_metrics": [
+      "rtt_ms",
+      "jitter_ms",
+      "sample_loss"
+    ]
+  }
+}

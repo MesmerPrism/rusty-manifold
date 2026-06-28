@@ -1,0 +1,50 @@
+{
+  "$schema": "rusty.manifold.bridge.route_descriptor.v1",
+  "expected_rejection": "missing_transport_profile",
+  "route_id": "bridge_route.stream.zeromq.missing_profile",
+  "route_kind": "stream_bridge",
+  "plane": "data",
+  "transport_family": "zeromq",
+  "delivery": "best_effort",
+  "payload_class": "stream_packet",
+  "rate_class": "periodic",
+  "authority_role": "adapter",
+  "required_evidence_stages": [
+    "sent",
+    "transport_ok",
+    "observed"
+  ],
+  "fallback_route_ids": [],
+  "issue_codes": [
+    "issue.bridge_route.missing_transport_profile"
+  ],
+  "required_conditions": [
+    {
+      "condition_id": "condition.tooling.zeromq.library",
+      "scope": "tooling",
+      "kind": "protocol_library_available",
+      "required_state": "available",
+      "check_ref": "check.tooling.zeromq.library",
+      "issue_codes": [
+        "issue.tooling.protocol_library_missing"
+      ],
+      "remediation": {
+        "action_ref": "remediation.tooling.enable_zeromq_adapter",
+        "operator_label": "Install or enable the ZeroMQ adapter runtime"
+      }
+    }
+  ],
+  "timing": {
+    "rtt_strategy": "parallel_lsl_clock_echo",
+    "clock_domain": "clock.host_monotonic",
+    "parallel_clock_route_id": "bridge_route.clock.lsl.roundtrip_echo",
+    "min_round_trips": 8,
+    "timeout_ms": 5000,
+    "warmup_ms": 250,
+    "reported_metrics": [
+      "rtt_ms",
+      "clock_offset_ms",
+      "jitter_ms"
+    ]
+  }
+}

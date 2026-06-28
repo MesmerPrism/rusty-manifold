@@ -326,9 +326,15 @@ pub(super) struct FixtureSet {
     pub(super) host_run_evidence: ManifoldHostRunEvidence,
     pub(super) bridge_route_descriptors: Vec<ManifoldBridgeRouteDescriptor>,
     pub(super) bridge_route_evidence: ManifoldBridgeRouteEvidence,
+    pub(super) bridge_route_zeromq_evidence: ManifoldBridgeRouteEvidence,
+    pub(super) bridge_route_lsl_clock_evidence: ManifoldBridgeRouteEvidence,
     pub(super) shell_handoff: ManifoldShellHandoffManifest,
     pub(super) shell_handoff_review: ManifoldShellHandoffReviewReceipt,
     pub(super) damaged_bridge_route_evidence: ManifoldBridgeRouteEvidence,
+    pub(super) damaged_bridge_route_zeromq_missing_profile: ManifoldBridgeRouteDescriptor,
+    pub(super) damaged_bridge_route_lsl_missing_profile: ManifoldBridgeRouteDescriptor,
+    pub(super) damaged_bridge_route_missing_conditions: ManifoldBridgeRouteDescriptor,
+    pub(super) damaged_bridge_route_invalid_timing: ManifoldBridgeRouteDescriptor,
     pub(super) damaged_shell_handoff: ManifoldShellHandoffManifest,
     pub(super) damaged_shell_handoff_review: ManifoldShellHandoffReviewReceipt,
 }
@@ -1183,12 +1189,32 @@ impl FixtureSet {
         let bridge_route_telemetry_udp = read_model(
             repo_root.join("fixtures/bridge-route/telemetry-udp-best-effort-route.json"),
         )?;
+        let bridge_route_stream_websocket = read_model(
+            repo_root.join("fixtures/bridge-route/stream-websocket-ordered-route.json"),
+        )?;
+        let bridge_route_stream_osc =
+            read_model(repo_root.join("fixtures/bridge-route/stream-osc-udp-route.json"))?;
+        let bridge_route_stream_bluetooth_rfcomm =
+            read_model(repo_root.join("fixtures/bridge-route/stream-bluetooth-rfcomm-route.json"))?;
+        let bridge_route_stream_bluetooth_gatt = read_model(
+            repo_root.join("fixtures/bridge-route/stream-bluetooth-gatt-notify-route.json"),
+        )?;
         let bridge_route_device_adb =
             read_model(repo_root.join("fixtures/bridge-route/device-adb-transport-route.json"))?;
         let bridge_route_media_h264 =
             read_model(repo_root.join("fixtures/bridge-route/media-h264-data-plane-route.json"))?;
+        let bridge_route_stream_zeromq =
+            read_model(repo_root.join("fixtures/bridge-route/stream-zeromq-pubsub-route.json"))?;
+        let bridge_route_lsl_clock = read_model(
+            repo_root.join("fixtures/bridge-route/stream-lsl-clock-roundtrip-route.json"),
+        )?;
         let bridge_route_evidence = read_model(
             repo_root.join("fixtures/bridge-route/command-websocket-applied-evidence.json"),
+        )?;
+        let bridge_route_zeromq_evidence =
+            read_model(repo_root.join("fixtures/bridge-route/stream-zeromq-pubsub-evidence.json"))?;
+        let bridge_route_lsl_clock_evidence = read_model(
+            repo_root.join("fixtures/bridge-route/stream-lsl-clock-roundtrip-evidence.json"),
         )?;
         let shell_handoff =
             read_model(repo_root.join("fixtures/shell-handoff/synthetic-loopback-shell.json"))?;
@@ -1215,6 +1241,15 @@ impl FixtureSet {
         let damaged_bridge_route_evidence = read_model(
             repo_root.join("fixtures/damaged/bridge-route-command-transport-only-evidence.json"),
         )?;
+        let damaged_bridge_route_zeromq_missing_profile = read_model(
+            repo_root.join("fixtures/damaged/bridge-route-zeromq-missing-profile.json"),
+        )?;
+        let damaged_bridge_route_lsl_missing_profile =
+            read_model(repo_root.join("fixtures/damaged/bridge-route-lsl-missing-profile.json"))?;
+        let damaged_bridge_route_missing_conditions =
+            read_model(repo_root.join("fixtures/damaged/bridge-route-missing-conditions.json"))?;
+        let damaged_bridge_route_invalid_timing =
+            read_model(repo_root.join("fixtures/damaged/bridge-route-invalid-timing.json"))?;
         let damaged_shell_handoff =
             read_model(repo_root.join("fixtures/damaged/shell-handoff-missing-stream.json"))?;
         let damaged_shell_handoff_review = read_model(
@@ -1490,13 +1525,25 @@ impl FixtureSet {
                 bridge_route_command_websocket,
                 bridge_route_marker_lsl,
                 bridge_route_telemetry_udp,
+                bridge_route_stream_websocket,
+                bridge_route_stream_osc,
+                bridge_route_stream_bluetooth_rfcomm,
+                bridge_route_stream_bluetooth_gatt,
                 bridge_route_device_adb,
                 bridge_route_media_h264,
+                bridge_route_stream_zeromq,
+                bridge_route_lsl_clock,
             ],
             bridge_route_evidence,
+            bridge_route_zeromq_evidence,
+            bridge_route_lsl_clock_evidence,
             shell_handoff,
             shell_handoff_review,
             damaged_bridge_route_evidence,
+            damaged_bridge_route_zeromq_missing_profile,
+            damaged_bridge_route_lsl_missing_profile,
+            damaged_bridge_route_missing_conditions,
+            damaged_bridge_route_invalid_timing,
             damaged_shell_handoff,
             damaged_shell_handoff_review,
         })

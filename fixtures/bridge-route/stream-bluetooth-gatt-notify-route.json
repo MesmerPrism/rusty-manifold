@@ -1,0 +1,127 @@
+{
+  "$schema": "rusty.manifold.bridge.route_descriptor.v1",
+  "route_id": "bridge_route.stream.bluetooth_gatt.notify",
+  "route_kind": "stream_bridge",
+  "plane": "telemetry",
+  "transport_family": "bluetooth_gatt",
+  "delivery": "best_effort",
+  "payload_class": "stream_packet",
+  "rate_class": "periodic",
+  "authority_role": "adapter",
+  "required_evidence_stages": [
+    "sent",
+    "transport_ok",
+    "observed"
+  ],
+  "fallback_route_ids": [
+    "bridge_route.stream.bluetooth_rfcomm",
+    "bridge_route.stream.websocket.ordered"
+  ],
+  "issue_codes": [
+    "issue.bluetooth.adapter_disabled",
+    "issue.bluetooth.device_unpaired",
+    "issue.bluetooth.gatt_service_missing",
+    "issue.bridge_route.clock_uncorrelated"
+  ],
+  "required_conditions": [
+    {
+      "condition_id": "condition.host.bluetooth_adapter_enabled",
+      "scope": "host",
+      "kind": "bluetooth_adapter_enabled",
+      "required_state": "enabled",
+      "check_ref": "check.host.bluetooth_adapter_enabled",
+      "issue_codes": [
+        "issue.bluetooth.adapter_disabled"
+      ],
+      "remediation": {
+        "action_ref": "remediation.host.enable_bluetooth",
+        "operator_label": "Enable the host Bluetooth adapter"
+      }
+    },
+    {
+      "condition_id": "condition.device.bluetooth_paired",
+      "scope": "device",
+      "kind": "bluetooth_device_paired",
+      "required_state": "paired",
+      "check_ref": "check.device.bluetooth_paired",
+      "issue_codes": [
+        "issue.bluetooth.device_unpaired"
+      ],
+      "remediation": {
+        "action_ref": "remediation.device.pair_bluetooth",
+        "operator_label": "Pair the headset or companion device over Bluetooth"
+      }
+    },
+    {
+      "condition_id": "condition.protocol.gatt_service",
+      "scope": "protocol",
+      "kind": "bluetooth_gatt_service_available",
+      "required_state": "available",
+      "check_ref": "check.protocol.gatt_service",
+      "issue_codes": [
+        "issue.bluetooth.gatt_service_missing"
+      ],
+      "remediation": {
+        "action_ref": "remediation.protocol.expose_gatt_service",
+        "operator_label": "Expose the required BLE GATT service"
+      }
+    },
+    {
+      "condition_id": "condition.protocol.gatt_notify_characteristic",
+      "scope": "protocol",
+      "kind": "bluetooth_characteristic_available",
+      "required_state": "available",
+      "check_ref": "check.protocol.gatt_notify_characteristic",
+      "issue_codes": [
+        "issue.bluetooth.gatt_characteristic_missing"
+      ],
+      "remediation": {
+        "action_ref": "remediation.protocol.expose_gatt_characteristic",
+        "operator_label": "Expose a notify characteristic for the BLE stream"
+      }
+    },
+    {
+      "condition_id": "condition.device.android_bluetooth_connect_permission",
+      "scope": "security",
+      "kind": "android_permission_granted",
+      "required_state": "allowed",
+      "check_ref": "check.device.android_bluetooth_connect_permission",
+      "issue_codes": [
+        "issue.android.permission_missing"
+      ],
+      "remediation": {
+        "action_ref": "remediation.device.grant_bluetooth_permission",
+        "operator_label": "Grant Android Bluetooth connection permission"
+      }
+    },
+    {
+      "condition_id": "condition.clock.lsl_parallel_route",
+      "scope": "protocol",
+      "kind": "clock_reference_route_available",
+      "required_state": "available",
+      "check_ref": "check.clock.lsl_parallel_route",
+      "issue_codes": [
+        "issue.bridge_route.clock_uncorrelated"
+      ],
+      "remediation": {
+        "action_ref": "remediation.clock.start_lsl_echo",
+        "operator_label": "Start the LSL clock echo route for timing alignment"
+      }
+    }
+  ],
+  "timing": {
+    "rtt_strategy": "parallel_lsl_clock_echo",
+    "clock_domain": "clock.host_monotonic",
+    "parallel_clock_route_id": "bridge_route.clock.lsl.roundtrip_echo",
+    "min_round_trips": 8,
+    "timeout_ms": 5000,
+    "warmup_ms": 250,
+    "reported_metrics": [
+      "rtt_ms",
+      "one_way_estimate_ms",
+      "clock_offset_ms",
+      "jitter_ms",
+      "sample_loss"
+    ]
+  }
+}
