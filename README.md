@@ -21,6 +21,9 @@ can reject bad state.
   Quest-to-Quest, same-network Quest-to-phone, and remote relay two-way stream
   timing.
 - Stream registry and topology fixtures.
+- Transport-neutral bridge-route descriptors and evidence summaries that
+  classify WebSocket, UDP/OSC, LSL, ADB, file staging, platform tooling, and
+  media data-plane roles without opening those transports.
 - Synthetic scalar stream sample and oscillator profile fixtures for adapter
   bring-up, plus an opt-in fixture CLI publisher that can send those same
   bounded samples into an already-running Manifold broker for live validation.
@@ -51,6 +54,7 @@ can reject bad state.
 
 - `docs/IMPLEMENTATION_PLAN.md`
 - `docs/COORDINATION_SESSIONS.md`
+- `docs/BRIDGE_ROUTES.md`
 - `docs/MODULE_PACKAGE_STRATEGY.md`
 - `docs/MODULES.md`
 - `docs/HOSTS_AND_DEPLOYMENT.md`

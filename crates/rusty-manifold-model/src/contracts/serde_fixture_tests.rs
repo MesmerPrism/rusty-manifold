@@ -816,6 +816,27 @@ fn valid_fixtures_deserialize_into_contract_models() {
     fixture::<ManifoldHostRunEvidence>(include_str!(
         "../../../../fixtures/host-run/run-evidence-live-smoke.json"
     ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/bridge-route/command-websocket-applied-route.json"
+    ));
+    fixture::<ManifoldBridgeRouteEvidence>(include_str!(
+        "../../../../fixtures/bridge-route/command-websocket-applied-evidence.json"
+    ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/bridge-route/marker-lsl-timestamped-route.json"
+    ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/bridge-route/telemetry-udp-best-effort-route.json"
+    ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/bridge-route/device-adb-transport-route.json"
+    ));
+    fixture::<ManifoldBridgeRouteDescriptor>(include_str!(
+        "../../../../fixtures/bridge-route/media-h264-data-plane-route.json"
+    ));
+    fixture::<ManifoldBridgeRouteEvidence>(include_str!(
+        "../../../../fixtures/damaged/bridge-route-command-transport-only-evidence.json"
+    ));
     fixture::<ManifoldShellHandoffManifest>(include_str!(
         "../../../../fixtures/shell-handoff/synthetic-loopback-shell.json"
     ));

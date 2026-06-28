@@ -1,0 +1,20 @@
+{
+  "$schema": "rusty.manifold.bridge.route_descriptor.v1",
+  "route_id": "bridge_route.marker.lsl.timestamped",
+  "route_kind": "marker",
+  "plane": "telemetry",
+  "transport_family": "lsl",
+  "delivery": "ordered",
+  "payload_class": "marker",
+  "rate_class": "event",
+  "authority_role": "observer",
+  "required_evidence_stages": [
+    "sent",
+    "observed"
+  ],
+  "fallback_route_ids": [],
+  "issue_codes": [
+    "issue.bridge_route.clock_uncorrelated",
+    "issue.bridge_route.marker_stale"
+  ]
+}

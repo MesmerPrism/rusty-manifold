@@ -4,6 +4,7 @@ use core::fmt;
 
 use crate::{DottedId, Revision, SchemaId};
 
+mod bridge_route;
 mod clock;
 mod command_dispatch;
 mod coordination;
@@ -16,6 +17,7 @@ mod samples;
 mod streams;
 mod validation_helpers;
 
+pub use self::bridge_route::*;
 pub use self::clock::*;
 pub use self::command_dispatch::*;
 pub use self::coordination::*;

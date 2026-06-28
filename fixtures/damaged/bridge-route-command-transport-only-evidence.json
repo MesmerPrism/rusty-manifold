@@ -1,0 +1,42 @@
+{
+  "$schema": "rusty.manifold.bridge.route_evidence.v1",
+  "expected_rejection": "missing_required_evidence",
+  "evidence_id": "evidence.bridge_route.command.websocket.transport_only",
+  "route_id": "bridge_route.command.websocket.applied",
+  "status": "pass",
+  "started_at_ms": 1765000000000,
+  "ended_at_ms": 1765000000050,
+  "stage_reports": [
+    {
+      "stage": "sent",
+      "status": "pass",
+      "observed_at_ms": 1765000000001,
+      "evidence_refs": [
+        "evidence.command.request"
+      ],
+      "issue_codes": []
+    },
+    {
+      "stage": "transport_ok",
+      "status": "pass",
+      "observed_at_ms": 1765000000020,
+      "evidence_refs": [
+        "evidence.websocket.ack"
+      ],
+      "issue_codes": []
+    },
+    {
+      "stage": "authority_accepted",
+      "status": "pass",
+      "observed_at_ms": 1765000000040,
+      "evidence_refs": [
+        "evidence.manifold.command_ack"
+      ],
+      "issue_codes": []
+    }
+  ],
+  "artifact_refs": [
+    "artifact.transport_ack"
+  ],
+  "issues": []
+}

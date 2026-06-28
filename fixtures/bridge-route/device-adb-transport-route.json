@@ -1,0 +1,22 @@
+{
+  "$schema": "rusty.manifold.bridge.route_descriptor.v1",
+  "route_id": "bridge_route.device.adb.transport_only",
+  "route_kind": "device_management",
+  "plane": "control",
+  "transport_family": "adb",
+  "delivery": "transport_acknowledged",
+  "payload_class": "device_command",
+  "rate_class": "on_demand",
+  "authority_role": "adapter",
+  "required_evidence_stages": [
+    "sent",
+    "transport_ok"
+  ],
+  "fallback_route_ids": [
+    "bridge_route.device.platform_tooling.transport_only"
+  ],
+  "issue_codes": [
+    "issue.bridge_route.device_missing",
+    "issue.bridge_route.transport_failed"
+  ]
+}

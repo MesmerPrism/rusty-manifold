@@ -45,6 +45,9 @@ and media routing remain separate authority and data planes.
 - Discovery: package, graph, module, host, and stream descriptors.
 - Coordination: low-rate session plans, readiness messages, gates, and
   scorecards.
+- Bridge routes: transport-neutral intent, delivery semantics, and required
+  evidence stages for WebSocket, UDP/OSC, LSL, ADB, file, platform-tooling,
+  and media data-plane adapters.
 - Data descriptors: stream, packet, frame, and transport metadata.
 - Render adoption: resource adoption evidence for visual routes.
 - Feedback: health, timing, downgrade reasons, and scorecards.

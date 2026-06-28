@@ -39,6 +39,9 @@ and safe to use in tests, generated schemas, documentation, and clients.
 - `clock/`: clock snapshot examples.
 - `validation/`: scorecard examples.
 - `host-run/`: install, launch, validation-slot, command, and run-evidence examples for generic host shells.
+- `bridge-route/`: transport-neutral bridge route descriptors and evidence
+  summaries for command, marker, telemetry, device-management, and media
+  data-plane routes.
 - `shell-handoff/`: contract-backed shell handoff and Manifold review receipt examples for downstream operator or render shells.
 - `simulator/`: deterministic source-only simulator snapshots.
 - `damaged/`: intentionally invalid examples.

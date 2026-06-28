@@ -110,6 +110,7 @@ fn schema_entries() -> Vec<SchemaEntry> {
     entries.extend(command_entries());
     entries.extend(coordination_entries());
     entries.extend(authority_entries());
+    entries.extend(bridge_route_entries());
     entries.extend(host_and_deployment_entries());
     entries.extend(verification_entries());
     entries
@@ -823,6 +824,30 @@ fn authority_entries() -> Vec<SchemaEntry> {
             &[
                 "fixtures/authority-application/synthetic-clock-accepted-application.json",
                 "fixtures/authority-application/synthetic-clock-rejected-application.json",
+            ],
+        ),
+    ]
+}
+
+fn bridge_route_entries() -> Vec<SchemaEntry> {
+    vec![
+        entry(
+            "rusty.manifold.bridge.route_descriptor.v1",
+            "ManifoldBridgeRouteDescriptor",
+            &[
+                "fixtures/bridge-route/command-websocket-applied-route.json",
+                "fixtures/bridge-route/marker-lsl-timestamped-route.json",
+                "fixtures/bridge-route/telemetry-udp-best-effort-route.json",
+                "fixtures/bridge-route/device-adb-transport-route.json",
+                "fixtures/bridge-route/media-h264-data-plane-route.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.bridge.route_evidence.v1",
+            "ManifoldBridgeRouteEvidence",
+            &[
+                "fixtures/bridge-route/command-websocket-applied-evidence.json",
+                "fixtures/damaged/bridge-route-command-transport-only-evidence.json",
             ],
         ),
     ]

@@ -1,0 +1,25 @@
+{
+  "$schema": "rusty.manifold.bridge.route_descriptor.v1",
+  "route_id": "bridge_route.command.websocket.applied",
+  "route_kind": "command",
+  "plane": "control",
+  "transport_family": "web_socket",
+  "delivery": "applied_receipt_required",
+  "payload_class": "command_envelope",
+  "rate_class": "event",
+  "authority_role": "authority",
+  "required_evidence_stages": [
+    "sent",
+    "transport_ok",
+    "authority_accepted",
+    "runtime_accepted",
+    "applied"
+  ],
+  "fallback_route_ids": [
+    "bridge_route.command.file_hotload.applied"
+  ],
+  "issue_codes": [
+    "issue.bridge_route.timeout",
+    "issue.bridge_route.runtime_rejected"
+  ]
+}

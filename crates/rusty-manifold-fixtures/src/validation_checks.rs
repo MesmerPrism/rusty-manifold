@@ -155,6 +155,33 @@ fn push_valid_checks(
         "host-run bundle, command envelope, validation slot, profiles, and evidence align",
     );
 
+    let bridge_route_result = fixtures
+        .bridge_route_descriptors
+        .iter()
+        .try_for_each(ManifoldBridgeRouteDescriptor::validate_shape)
+        .map_err(|error| error.to_string())
+        .and_then(|()| {
+            let Some(route) = fixtures
+                .bridge_route_descriptors
+                .iter()
+                .find(|route| route.route_id == fixtures.bridge_route_evidence.route_id)
+            else {
+                return Err(format!(
+                    "bridge route {} missing from descriptor fixtures",
+                    fixtures.bridge_route_evidence.route_id
+                ));
+            };
+            route
+                .validate_evidence_summary(&fixtures.bridge_route_evidence)
+                .map_err(|error| error.to_string())
+        });
+    push_result(
+        checks,
+        "validation.check.bridge_route_evidence",
+        bridge_route_result,
+        "bridge-route descriptors validate and applied WebSocket command evidence satisfies required runtime stages",
+    );
+
     push_result(
         checks,
         "validation.check.shell_handoff_links",
@@ -198,6 +225,26 @@ fn push_damaged_checks(
     push_damaged_command_checks(repo_root, checks, fixtures)?;
 
     push_damaged_stream_checks(repo_root, checks, fixtures, module_ids)?;
+
+    push_damaged(
+        checks,
+        "validation.check.damaged_bridge_route_transport_only_evidence",
+        expected_rejection(
+            repo_root,
+            "fixtures/damaged/bridge-route-command-transport-only-evidence.json",
+        )?,
+        fixtures
+            .bridge_route_descriptors
+            .iter()
+            .find(|route| route.route_id == fixtures.damaged_bridge_route_evidence.route_id)
+            .ok_or_else(|| "route_mismatch".to_owned())
+            .and_then(|route| {
+                route
+                    .validate_evidence_summary(&fixtures.damaged_bridge_route_evidence)
+                    .map_err(|error| error.rejection_code().to_owned())
+            }),
+        "transport-only evidence is rejected for a route that requires runtime acceptance and applied evidence",
+    );
 
     push_damaged(
         checks,

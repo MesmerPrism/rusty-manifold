@@ -1,0 +1,21 @@
+{
+  "$schema": "rusty.manifold.bridge.route_descriptor.v1",
+  "route_id": "bridge_route.telemetry.udp.best_effort",
+  "route_kind": "telemetry",
+  "plane": "telemetry",
+  "transport_family": "udp",
+  "delivery": "best_effort",
+  "payload_class": "scalar_sample",
+  "rate_class": "periodic",
+  "authority_role": "adapter",
+  "required_evidence_stages": [
+    "sent"
+  ],
+  "fallback_route_ids": [
+    "bridge_route.telemetry.websocket.ordered"
+  ],
+  "issue_codes": [
+    "issue.bridge_route.packet_loss",
+    "issue.bridge_route.stale"
+  ]
+}

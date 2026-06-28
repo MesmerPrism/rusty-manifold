@@ -749,6 +749,25 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.bridge.route_descriptor.v1",
+      "rust_type": "ManifoldBridgeRouteDescriptor",
+      "fixture_paths": [
+        "fixtures/bridge-route/command-websocket-applied-route.json",
+        "fixtures/bridge-route/marker-lsl-timestamped-route.json",
+        "fixtures/bridge-route/telemetry-udp-best-effort-route.json",
+        "fixtures/bridge-route/device-adb-transport-route.json",
+        "fixtures/bridge-route/media-h264-data-plane-route.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.bridge.route_evidence.v1",
+      "rust_type": "ManifoldBridgeRouteEvidence",
+      "fixture_paths": [
+        "fixtures/bridge-route/command-websocket-applied-evidence.json",
+        "fixtures/damaged/bridge-route-command-transport-only-evidence.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.host.manifest.v1",
       "rust_type": "ManifoldHostManifest",
       "fixture_paths": [

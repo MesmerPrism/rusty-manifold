@@ -1,0 +1,22 @@
+{
+  "$schema": "rusty.manifold.bridge.route_descriptor.v1",
+  "route_id": "bridge_route.media.h264.data_plane",
+  "route_kind": "media_payload",
+  "plane": "media_data",
+  "transport_family": "media_data_plane",
+  "delivery": "best_effort",
+  "payload_class": "media_frame",
+  "rate_class": "burst",
+  "authority_role": "adapter",
+  "required_evidence_stages": [
+    "sent",
+    "transport_ok",
+    "observed"
+  ],
+  "fallback_route_ids": [],
+  "issue_codes": [
+    "issue.bridge_route.frame_drop",
+    "issue.bridge_route.decode_not_ready",
+    "issue.bridge_route.queue_overflow"
+  ]
+}

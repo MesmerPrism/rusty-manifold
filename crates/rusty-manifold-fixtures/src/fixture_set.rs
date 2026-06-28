@@ -324,8 +324,11 @@ pub(super) struct FixtureSet {
     pub(super) host_run_bundle: ManifoldHostRunBundle,
     pub(super) host_run_command: ManifoldHostRunCommandEnvelope,
     pub(super) host_run_evidence: ManifoldHostRunEvidence,
+    pub(super) bridge_route_descriptors: Vec<ManifoldBridgeRouteDescriptor>,
+    pub(super) bridge_route_evidence: ManifoldBridgeRouteEvidence,
     pub(super) shell_handoff: ManifoldShellHandoffManifest,
     pub(super) shell_handoff_review: ManifoldShellHandoffReviewReceipt,
+    pub(super) damaged_bridge_route_evidence: ManifoldBridgeRouteEvidence,
     pub(super) damaged_shell_handoff: ManifoldShellHandoffManifest,
     pub(super) damaged_shell_handoff_review: ManifoldShellHandoffReviewReceipt,
 }
@@ -1172,6 +1175,21 @@ impl FixtureSet {
             read_model(repo_root.join("fixtures/host-run/command-envelope-run-live.json"))?;
         let host_run_evidence =
             read_model(repo_root.join("fixtures/host-run/run-evidence-live-smoke.json"))?;
+        let bridge_route_command_websocket = read_model(
+            repo_root.join("fixtures/bridge-route/command-websocket-applied-route.json"),
+        )?;
+        let bridge_route_marker_lsl =
+            read_model(repo_root.join("fixtures/bridge-route/marker-lsl-timestamped-route.json"))?;
+        let bridge_route_telemetry_udp = read_model(
+            repo_root.join("fixtures/bridge-route/telemetry-udp-best-effort-route.json"),
+        )?;
+        let bridge_route_device_adb =
+            read_model(repo_root.join("fixtures/bridge-route/device-adb-transport-route.json"))?;
+        let bridge_route_media_h264 =
+            read_model(repo_root.join("fixtures/bridge-route/media-h264-data-plane-route.json"))?;
+        let bridge_route_evidence = read_model(
+            repo_root.join("fixtures/bridge-route/command-websocket-applied-evidence.json"),
+        )?;
         let shell_handoff =
             read_model(repo_root.join("fixtures/shell-handoff/synthetic-loopback-shell.json"))?;
         let shell_handoff_review = read_model(
@@ -1194,6 +1212,9 @@ impl FixtureSet {
             read_model(repo_root.join("fixtures/damaged/unknown-graph-node-link.json"))?;
         let damaged_unavailable_deployment =
             read_model(repo_root.join("fixtures/damaged/unavailable-deployment-backend.json"))?;
+        let damaged_bridge_route_evidence = read_model(
+            repo_root.join("fixtures/damaged/bridge-route-command-transport-only-evidence.json"),
+        )?;
         let damaged_shell_handoff =
             read_model(repo_root.join("fixtures/damaged/shell-handoff-missing-stream.json"))?;
         let damaged_shell_handoff_review = read_model(
@@ -1465,8 +1486,17 @@ impl FixtureSet {
             host_run_bundle,
             host_run_command,
             host_run_evidence,
+            bridge_route_descriptors: vec![
+                bridge_route_command_websocket,
+                bridge_route_marker_lsl,
+                bridge_route_telemetry_udp,
+                bridge_route_device_adb,
+                bridge_route_media_h264,
+            ],
+            bridge_route_evidence,
             shell_handoff,
             shell_handoff_review,
+            damaged_bridge_route_evidence,
             damaged_shell_handoff,
             damaged_shell_handoff_review,
         })

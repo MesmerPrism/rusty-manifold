@@ -1,5 +1,6 @@
 use super::*;
 
+mod bridge_route;
 mod clock;
 mod command_dispatch;
 mod coordination;
