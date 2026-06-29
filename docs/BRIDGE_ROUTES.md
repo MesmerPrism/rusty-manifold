@@ -105,6 +105,25 @@ Downstream products may wrap that report as QCL-084 evidence; they must not
 reinterpret Goofi, public Rusty-XR compatibility, or host-loopback dependency
 checks as broker-owned promotion evidence.
 
+## LSL Adapter Evidence
+
+`tools/qcl081_lsl_clocked_samples.py` is an optional adapter probe, not a core
+runtime dependency. When `pylsl/liblsl` is available it publishes a bounded LSL
+float32 stream, resolves the unique source id, consumes the requested sample
+window, and emits a Hostess-consumable JSON report:
+
+```powershell
+python tools\qcl081_lsl_clocked_samples.py --json --source manifold-lsl-broker --sample-count 16
+```
+
+That JSON report records `evidence_tier=broker_owned`,
+`authority.owner=rusty.manifold.transport`, the LSL clock route id, sample
+counts, discovery latency, received sequences, and a
+`rusty.manifold.bridge.route_evidence.v1` object with the required `sent`,
+`transport_ok`, and `observed` stages. Downstream products may wrap that report
+as QCL-081 broker-owned evidence; Quest-runtime promotion still requires a
+Quest-side LSL producer or an explicit product broker route.
+
 ## LSL Profiles
 
 LSL routes carry a dedicated profile instead of app-specific names in generic
