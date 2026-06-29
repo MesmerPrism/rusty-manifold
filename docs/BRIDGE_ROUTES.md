@@ -59,6 +59,7 @@ settings that must take effect.
 | LSL stream bridge or clock echo | `stream_bridge` + telemetry/data + LSL + ordered | Describes stream name/type/source id, endpoint role, channel shape, discovery policy, warmup, sample thresholds, and clock policy. |
 | WebSocket stream bridge | `stream_bridge` + data + WebSocket + ordered | Requires host port, firewall, subscriber, and transport echo RTT metrics. |
 | UDP or OSC streams | `stream_bridge`/`telemetry` + UDP/OSC + best effort | Requires LAN/firewall/runtime checks; use parallel LSL clock echo when native RTT is not available. |
+| ZeroMQ stream bridge | `stream_bridge` + data + ZeroMQ + best effort | The optional `rusty-manifold-zmq` adapter consumes the route descriptor and can emit a JSON QCL-084 report with broker-owned evidence for downstream Hostess/WPF protocol-matrix validation. |
 | Bluetooth RFCOMM stream | `stream_bridge` + data + Bluetooth RFCOMM + ordered | Requires adapter enabled, pairing, channel, Android permission, and native round-trip metrics when an echo service exists. |
 | BLE GATT notify stream | `stream_bridge` + telemetry + Bluetooth GATT + best effort | Requires adapter, pairing, GATT service/characteristic, permissions, and parallel LSL timing when notifications are one-way. |
 | Volatile low-rate values | `telemetry` + UDP/OSC + best effort | Staleness and packet loss are expected adapter concerns. |
@@ -83,6 +84,26 @@ round-trip echo, or a parallel LSL clock echo. When the protocol path cannot
 produce clean timing by itself, the descriptor should point to
 `bridge_route.clock.lsl.roundtrip_echo` so tests still report comparable RTT,
 clock offset, jitter, sample loss, and queue delay where applicable.
+
+## ZeroMQ Adapter Evidence
+
+`rusty-manifold-zmq` is an optional adapter crate, not a core daemon. Default
+builds are socket-free; the `runtime` feature enables pure-Rust ZeroMQ helper
+examples. The PUB/SUB loopback example preserves human-readable output by
+default and emits a Hostess-consumable JSON report when called with
+`--json --source native-rust-broker`.
+
+```powershell
+cargo run -q -p rusty-manifold-zmq --example zmq_pub_sub_loopback --features runtime -- --json --source native-rust-broker --message-count 5
+```
+
+That JSON report records `evidence_tier=broker_owned`,
+`authority.owner=rusty.manifold.transport`, the route id, bounded queue
+counters, received sequences, and a `rusty.manifold.bridge.route_evidence.v1`
+object with the required `sent`, `transport_ok`, and `observed` stages.
+Downstream products may wrap that report as QCL-084 evidence; they must not
+reinterpret Goofi, public Rusty-XR compatibility, or host-loopback dependency
+checks as broker-owned promotion evidence.
 
 ## LSL Profiles
 
