@@ -857,6 +857,7 @@ fn bridge_route_entries() -> Vec<SchemaEntry> {
             "ManifoldBridgeRouteEvidence",
             &[
                 "fixtures/bridge-route/command-websocket-applied-evidence.json",
+                "fixtures/bridge-route/stream-websocket-ordered-evidence.json",
                 "fixtures/bridge-route/stream-lsl-clock-roundtrip-evidence.json",
                 "fixtures/bridge-route/stream-zeromq-pubsub-evidence.json",
                 "fixtures/damaged/bridge-route-command-transport-only-evidence.json",

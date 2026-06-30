@@ -326,6 +326,7 @@ pub(super) struct FixtureSet {
     pub(super) host_run_evidence: ManifoldHostRunEvidence,
     pub(super) bridge_route_descriptors: Vec<ManifoldBridgeRouteDescriptor>,
     pub(super) bridge_route_evidence: ManifoldBridgeRouteEvidence,
+    pub(super) bridge_route_websocket_stream_evidence: ManifoldBridgeRouteEvidence,
     pub(super) bridge_route_zeromq_evidence: ManifoldBridgeRouteEvidence,
     pub(super) bridge_route_lsl_clock_evidence: ManifoldBridgeRouteEvidence,
     pub(super) shell_handoff: ManifoldShellHandoffManifest,
@@ -1211,6 +1212,9 @@ impl FixtureSet {
         let bridge_route_evidence = read_model(
             repo_root.join("fixtures/bridge-route/command-websocket-applied-evidence.json"),
         )?;
+        let bridge_route_websocket_stream_evidence = read_model(
+            repo_root.join("fixtures/bridge-route/stream-websocket-ordered-evidence.json"),
+        )?;
         let bridge_route_zeromq_evidence =
             read_model(repo_root.join("fixtures/bridge-route/stream-zeromq-pubsub-evidence.json"))?;
         let bridge_route_lsl_clock_evidence = read_model(
@@ -1535,6 +1539,7 @@ impl FixtureSet {
                 bridge_route_lsl_clock,
             ],
             bridge_route_evidence,
+            bridge_route_websocket_stream_evidence,
             bridge_route_zeromq_evidence,
             bridge_route_lsl_clock_evidence,
             shell_handoff,

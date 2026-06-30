@@ -152,6 +152,7 @@ Current valid fixtures:
 - `fixtures/bridge-route/stream-lsl-clock-roundtrip-evidence.json`
 - `fixtures/bridge-route/telemetry-udp-best-effort-route.json`
 - `fixtures/bridge-route/stream-websocket-ordered-route.json`
+- `fixtures/bridge-route/stream-websocket-ordered-evidence.json`
 - `fixtures/bridge-route/stream-osc-udp-route.json`
 - `fixtures/bridge-route/stream-bluetooth-rfcomm-route.json`
 - `fixtures/bridge-route/stream-bluetooth-gatt-notify-route.json`

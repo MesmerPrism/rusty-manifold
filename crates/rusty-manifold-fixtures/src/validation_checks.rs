@@ -182,6 +182,28 @@ fn push_valid_checks(
         "bridge-route descriptors validate and applied WebSocket command evidence satisfies required runtime stages",
     );
 
+    let bridge_route_websocket_stream_result = fixtures
+        .bridge_route_descriptors
+        .iter()
+        .find(|route| route.route_id == fixtures.bridge_route_websocket_stream_evidence.route_id)
+        .ok_or_else(|| {
+            format!(
+                "bridge route {} missing from descriptor fixtures",
+                fixtures.bridge_route_websocket_stream_evidence.route_id
+            )
+        })
+        .and_then(|route| {
+            route
+                .validate_evidence_summary(&fixtures.bridge_route_websocket_stream_evidence)
+                .map_err(|error| error.to_string())
+        });
+    push_result(
+        checks,
+        "validation.check.bridge_route_websocket_stream_evidence",
+        bridge_route_websocket_stream_result,
+        "generic WebSocket stream bridge route evidence satisfies sent, transport_ok, and observed data-plane stages",
+    );
+
     let bridge_route_zeromq_result = fixtures
         .bridge_route_descriptors
         .iter()

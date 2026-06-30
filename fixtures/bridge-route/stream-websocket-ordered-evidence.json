@@ -1,0 +1,43 @@
+{
+  "$schema": "rusty.manifold.bridge.route_evidence.v1",
+  "evidence_id": "evidence.bridge_route.stream.websocket.ordered.loopback",
+  "route_id": "bridge_route.stream.websocket.ordered",
+  "status": "pass",
+  "started_at_ms": 1765000003000,
+  "ended_at_ms": 1765000003280,
+  "stage_reports": [
+    {
+      "stage": "sent",
+      "status": "pass",
+      "observed_at_ms": 1765000003010,
+      "evidence_refs": [
+        "evidence.websocket.stream.producer.sent"
+      ],
+      "issue_codes": []
+    },
+    {
+      "stage": "transport_ok",
+      "status": "pass",
+      "observed_at_ms": 1765000003050,
+      "evidence_refs": [
+        "evidence.websocket.http_upgrade.accepted",
+        "evidence.websocket.sec_websocket_accept.valid"
+      ],
+      "issue_codes": []
+    },
+    {
+      "stage": "observed",
+      "status": "pass",
+      "observed_at_ms": 1765000003270,
+      "evidence_refs": [
+        "evidence.websocket.stream.consumer.received",
+        "evidence.websocket.echo.round_trips"
+      ],
+      "issue_codes": []
+    }
+  ],
+  "artifact_refs": [
+    "artifact.websocket.stream.loopback.report"
+  ],
+  "issues": []
+}
