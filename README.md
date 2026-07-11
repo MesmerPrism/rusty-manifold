@@ -19,6 +19,11 @@ placements to that exact lock and route every command through the same Runtime
 Host review/application implementation. Their receipts preserve the host
 decision and identify the process layer as an adapter, not authority.
 
+[Cross-app admission](docs/ADMISSION.md) binds platform-verified client
+identity to explicit capability grants and Manifold-owned short-lived opaque
+tokens. Replay, expiry, revocation, capability escalation, and identity
+substitution fail closed with revisioned receipts and audit.
+
 Rusty Manifold is the typed contract layer for graph, stream, command, lease,
 module, host, clock, session, and audit surfaces across the Rusty stack.
 

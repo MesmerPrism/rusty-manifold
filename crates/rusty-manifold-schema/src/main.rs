@@ -113,11 +113,61 @@ fn schema_entries() -> Vec<SchemaEntry> {
     entries.extend(runtime_host_entries());
     entries.extend(broker_product_entries());
     entries.extend(broker_adapter_entries());
+    entries.extend(admission_entries());
     entries.extend(authority_entries());
     entries.extend(bridge_route_entries());
     entries.extend(host_and_deployment_entries());
     entries.extend(verification_entries());
     entries
+}
+
+fn admission_entries() -> Vec<SchemaEntry> {
+    vec![
+        entry(
+            "rusty.manifold.admission.snapshot.v1",
+            "ManifoldAdmissionSnapshot",
+            &[
+                "fixtures/admission/initial-snapshot.json",
+                "fixtures/admission/final-snapshot.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.admission.request.v1",
+            "ManifoldAdmissionRequest",
+            &[
+                "fixtures/admission/issue-request.json",
+                "fixtures/admission/wrong-identity-request.damaged.json",
+                "fixtures/admission/capability-escalation-request.damaged.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.admission.use_request.v1",
+            "ManifoldAdmissionUseRequest",
+            &[
+                "fixtures/admission/use-request.json",
+                "fixtures/admission/replay-use-request.damaged.json",
+                "fixtures/admission/after-revoke-use-request.damaged.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.admission.revocation_request.v1",
+            "ManifoldAdmissionRevocationRequest",
+            &["fixtures/admission/revoke-request.json"],
+        ),
+        entry(
+            "rusty.manifold.admission.receipt.v1",
+            "ManifoldAdmissionReceipt",
+            &[
+                "fixtures/admission/issue-receipt.json",
+                "fixtures/admission/use-receipt.json",
+                "fixtures/admission/replay-use-receipt.json",
+                "fixtures/admission/revoke-receipt.json",
+                "fixtures/admission/after-revoke-use-receipt.json",
+                "fixtures/admission/wrong-identity-receipt.json",
+                "fixtures/admission/capability-escalation-receipt.json",
+            ],
+        ),
+    ]
 }
 
 fn broker_adapter_entries() -> Vec<SchemaEntry> {

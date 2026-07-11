@@ -6,6 +6,7 @@ members = [
     "crates/rusty-manifold-runtime-host",
     "crates/rusty-manifold-broker-product",
     "crates/rusty-manifold-broker-adapter",
+    "crates/rusty-manifold-admission",
     "crates/rusty-manifold-schema",
     "crates/rusty-manifold-zmq",
 ]

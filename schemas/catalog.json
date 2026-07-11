@@ -507,6 +507,52 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.admission.snapshot.v1",
+      "rust_type": "ManifoldAdmissionSnapshot",
+      "fixture_paths": [
+        "fixtures/admission/initial-snapshot.json",
+        "fixtures/admission/final-snapshot.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.admission.request.v1",
+      "rust_type": "ManifoldAdmissionRequest",
+      "fixture_paths": [
+        "fixtures/admission/issue-request.json",
+        "fixtures/admission/wrong-identity-request.damaged.json",
+        "fixtures/admission/capability-escalation-request.damaged.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.admission.use_request.v1",
+      "rust_type": "ManifoldAdmissionUseRequest",
+      "fixture_paths": [
+        "fixtures/admission/use-request.json",
+        "fixtures/admission/replay-use-request.damaged.json",
+        "fixtures/admission/after-revoke-use-request.damaged.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.admission.revocation_request.v1",
+      "rust_type": "ManifoldAdmissionRevocationRequest",
+      "fixture_paths": [
+        "fixtures/admission/revoke-request.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.admission.receipt.v1",
+      "rust_type": "ManifoldAdmissionReceipt",
+      "fixture_paths": [
+        "fixtures/admission/issue-receipt.json",
+        "fixtures/admission/use-receipt.json",
+        "fixtures/admission/replay-use-receipt.json",
+        "fixtures/admission/revoke-receipt.json",
+        "fixtures/admission/after-revoke-use-receipt.json",
+        "fixtures/admission/wrong-identity-receipt.json",
+        "fixtures/admission/capability-escalation-receipt.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.authority.snapshot.v1",
       "rust_type": "ManifoldAuthoritySnapshot",
       "fixture_paths": [

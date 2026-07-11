@@ -1,0 +1,13 @@
+{
+  "$schema": "rusty.manifold.admission.receipt.v1",
+  "operation": "revoke_token",
+  "request_id": "request.admission.revoke",
+  "applied": true,
+  "prior_authority_revision": 3,
+  "resulting_authority_revision": 4,
+  "token": null,
+  "removed_token_ids": [
+    "token.session.0707070707070707070707070707070707070707070707070707070707070707"
+  ],
+  "rejection_reason": null
+}

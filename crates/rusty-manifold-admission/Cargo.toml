@@ -1,0 +1,16 @@
+[package]
+name = "rusty-manifold-admission"
+description = "Revisioned cross-app client grants and short-lived token authority for Manifold."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rusty-manifold-model = { path = "../rusty-manifold-model", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints]
+workspace = true

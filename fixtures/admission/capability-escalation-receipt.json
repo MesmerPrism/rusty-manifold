@@ -1,0 +1,11 @@
+{
+  "$schema": "rusty.manifold.admission.receipt.v1",
+  "operation": "issue_token",
+  "request_id": "request.admission.escalation",
+  "applied": false,
+  "prior_authority_revision": 1,
+  "resulting_authority_revision": 1,
+  "token": null,
+  "removed_token_ids": [],
+  "rejection_reason": "capability_escalation"
+}

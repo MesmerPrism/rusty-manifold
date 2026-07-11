@@ -1,0 +1,11 @@
+{
+  "$schema": "rusty.manifold.admission.receipt.v1",
+  "operation": "authorize_use",
+  "request_id": "request.admission.after-revoke",
+  "applied": false,
+  "prior_authority_revision": 4,
+  "resulting_authority_revision": 4,
+  "token": null,
+  "removed_token_ids": [],
+  "rejection_reason": "token_revoked"
+}

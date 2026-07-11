@@ -1,0 +1,12 @@
+{
+  "$schema": "rusty.manifold.admission.revocation_request.v1",
+  "request_id": "request.admission.revoke",
+  "expected_authority_revision": 3,
+  "token_id": "token.session.0707070707070707070707070707070707070707070707070707070707070707",
+  "identity": {
+    "client_id": "client.quest.authorized",
+    "platform_subject": "io.github.mesmerprism.rustymanifold.admission.client",
+    "signing_fingerprint": "sha256:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+  },
+  "reason": "reason.client.completed"
+}

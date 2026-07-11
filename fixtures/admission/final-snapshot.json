@@ -1,0 +1,84 @@
+{
+  "$schema": "rusty.manifold.admission.snapshot.v1",
+  "authority_id": "authority.admission.quest",
+  "authority_revision": 4,
+  "grants": [
+    {
+      "grant_id": "grant.quest.authorized",
+      "identity": {
+        "client_id": "client.quest.authorized",
+        "platform_subject": "io.github.mesmerprism.rustymanifold.admission.client",
+        "signing_fingerprint": "sha256:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+      },
+      "capabilities": [
+        "capability.command.session.list"
+      ],
+      "expires_at_ms": 100000,
+      "revoked": false
+    }
+  ],
+  "active_tokens": [],
+  "revoked_token_ids": [
+    "token.session.0707070707070707070707070707070707070707070707070707070707070707"
+  ],
+  "consumed_request_ids": [
+    "request.admission.issue",
+    "request.admission.revoke"
+  ],
+  "consumed_use_request_ids": [
+    "request.admission.use"
+  ],
+  "audit_events": [
+    {
+      "$schema": "rusty.manifold.admission.audit_event.v1",
+      "event_id": "audit.admission.1.request.admission.issue",
+      "operation": "issue_token",
+      "request_id": "request.admission.issue",
+      "applied": true,
+      "prior_authority_revision": 1,
+      "resulting_authority_revision": 2,
+      "rejection_reason": null
+    },
+    {
+      "$schema": "rusty.manifold.admission.audit_event.v1",
+      "event_id": "audit.admission.2.request.admission.use",
+      "operation": "authorize_use",
+      "request_id": "request.admission.use",
+      "applied": true,
+      "prior_authority_revision": 2,
+      "resulting_authority_revision": 3,
+      "rejection_reason": null
+    },
+    {
+      "$schema": "rusty.manifold.admission.audit_event.v1",
+      "event_id": "audit.admission.3.request.admission.use",
+      "operation": "authorize_use",
+      "request_id": "request.admission.use",
+      "applied": false,
+      "prior_authority_revision": 3,
+      "resulting_authority_revision": 3,
+      "rejection_reason": "replayed_request"
+    },
+    {
+      "$schema": "rusty.manifold.admission.audit_event.v1",
+      "event_id": "audit.admission.4.request.admission.revoke",
+      "operation": "revoke_token",
+      "request_id": "request.admission.revoke",
+      "applied": true,
+      "prior_authority_revision": 3,
+      "resulting_authority_revision": 4,
+      "rejection_reason": null
+    },
+    {
+      "$schema": "rusty.manifold.admission.audit_event.v1",
+      "event_id": "audit.admission.5.request.admission.after-revoke",
+      "operation": "authorize_use",
+      "request_id": "request.admission.after-revoke",
+      "applied": false,
+      "prior_authority_revision": 4,
+      "resulting_authority_revision": 4,
+      "rejection_reason": "token_revoked"
+    }
+  ],
+  "max_token_ttl_ms": 30000
+}

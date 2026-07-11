@@ -60,6 +60,10 @@ and safe to use in tests, generated schemas, documentation, and clients.
   and applied/unknown/unleased receipts. Paired receipts deliberately differ in
   placement and lock fingerprint while preserving byte-equivalent Runtime Host
   dispatch/application decisions and `module.runtime.host` authority ownership.
+- `admission/`: deterministic grant/token lifecycle from issue through one-time
+  use, replay rejection, explicit revocation, and post-revocation rejection,
+  plus damaged signing-fingerprint and capability-escalation requests. The
+  signing hashes are synthetic fixture values, never production identities.
 - `shell-handoff/`: contract-backed shell handoff and Manifold review receipt examples for downstream operator or render shells.
 - `simulator/`: deterministic source-only simulator snapshots.
 - `damaged/`: intentionally invalid examples.

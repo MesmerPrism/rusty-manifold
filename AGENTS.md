@@ -44,10 +44,11 @@ it must not define Lattice relation semantics or default to legacy
 7. `docs/RUNTIME_HOST.md`
 8. `docs/BROKER_PRODUCTS.md`
 9. `docs/BROKER_ADAPTERS.md`
-10. `docs/IMPLEMENTATION_PLAN.md`
-11. `docs/MODULE_PACKAGE_STRATEGY.md`
-12. `docs/SCHEMA_EVOLUTION.md`
-13. `fixtures/README.md`
+10. `docs/ADMISSION.md`
+11. `docs/IMPLEMENTATION_PLAN.md`
+12. `docs/MODULE_PACKAGE_STRATEGY.md`
+13. `docs/SCHEMA_EVOLUTION.md`
+14. `fixtures/README.md`
 
 ## Architecture Rules
 
@@ -69,6 +70,11 @@ it must not define Lattice relation semantics or default to legacy
   both modes bind the exact product lock, derive the same Runtime Host command
   registry and lease policy, preserve host receipts, and name
   `module.runtime.host` as authority. Java/JNI/process layers remain adapters.
+- `rusty-manifold-admission` owns trusted client grants, opaque 256-bit
+  short-lived tokens, one-time capability-use request ids, explicit revocation
+  and expiry, accepted revisions, and audit. Platform adapters may prove UID,
+  package, and signing certificate, but they must pass the exact projected
+  identity to Manifold and may not widen capabilities or mint tokens locally.
 - When CLI, API, GUI, bridge, or platform helpers can request the same state
   change, they must all map into one Manifold command/schema/review path.
   Helper-local readback or UI state is observation evidence only until the

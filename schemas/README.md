@@ -16,6 +16,10 @@ Broker adapter config and receipt entries bind standalone/embedded placement to
 one exact product lock while preserving the Runtime Host decision and truthful
 adapter/authority labels.
 
+Admission entries bind platform-projected identity, capability grants,
+short-lived opaque tokens, one-time use, revocation, expiry, receipts, and
+audit to `rusty-manifold-admission`.
+
 Generated schema catalogs live here. Full JSON Schema export can be added after
 the catalog and fixtures stabilize.
 
