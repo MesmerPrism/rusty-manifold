@@ -1,0 +1,8 @@
+{"schema":"rusty.manifold.peer.mesh_damage_matrix.v1","base_fixture":"fixtures/peer-mesh/three-peer.pass.json","cases":[
+  {"case_id":"damage.replay","mutation":"reuse_applied_proposal_id","expected_rejection":"replayed_proposal"},
+  {"case_id":"damage.split-brain","mutation":"same_epoch_different_current_coordinator","expected_rejection":"split_brain"},
+  {"case_id":"damage.disconnected","mutation":"remove_all_direct_routes_to_gamma","expected_rejection":"mesh_disconnected"},
+  {"case_id":"damage.media-gossip","mutation":"advisory_route_uses_direct_p2p_contract","expected_rejection":"media_gossip_forbidden"},
+  {"case_id":"damage.revoked-resurrection","mutation":"include_revoked_gamma","expected_rejection":"revoked_member"},
+  {"case_id":"damage.stale-member","mutation":"expire_gamma_before_review","expected_rejection":"stale_member"}
+]}

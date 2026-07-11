@@ -12,6 +12,11 @@ short-lived topology authorization. BLE and platform adapters remain evidence
 producers; replay, expiry, revocation, peer substitution, and media capability
 requests fail closed before state or topology can advance.
 
+[N-peer mesh authority](docs/PEER_MESH_AUTHORITY.md) accepts bounded
+three-to-32-peer membership, elects a canonical coordinator, ranks
+authenticated direct routes, rejects split brain, and owns expiry/revocation
+and audit. Advisory gossip remains status-only and cannot schedule media.
+
 [Media-session authority](docs/MEDIA_SESSION_AUTHORITY.md) binds accepted
 source, processor, route, sink, stream, and platform-runtime references while
 keeping all high-rate bytes on the binary media plane. Quest lifecycle state

@@ -42,15 +42,16 @@ it must not define Lattice relation semantics or default to legacy
 5. `docs/COMMANDS_LEASES_AND_AUTHORITY.md`
 6. `docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md`
 7. `docs/PEER_SESSION_AUTHORITY.md`
-8. `docs/MEDIA_SESSION_AUTHORITY.md`
-9. `docs/RUNTIME_HOST.md`
-10. `docs/BROKER_PRODUCTS.md`
-11. `docs/BROKER_ADAPTERS.md`
-12. `docs/ADMISSION.md`
-13. `docs/IMPLEMENTATION_PLAN.md`
-14. `docs/MODULE_PACKAGE_STRATEGY.md`
-15. `docs/SCHEMA_EVOLUTION.md`
-16. `fixtures/README.md`
+8. `docs/PEER_MESH_AUTHORITY.md`
+9. `docs/MEDIA_SESSION_AUTHORITY.md`
+10. `docs/RUNTIME_HOST.md`
+11. `docs/BROKER_PRODUCTS.md`
+12. `docs/BROKER_ADAPTERS.md`
+13. `docs/ADMISSION.md`
+14. `docs/IMPLEMENTATION_PLAN.md`
+15. `docs/MODULE_PACKAGE_STRATEGY.md`
+16. `docs/SCHEMA_EVOLUTION.md`
+17. `fixtures/README.md`
 
 ## Architecture Rules
 
@@ -65,6 +66,10 @@ it must not define Lattice relation semantics or default to legacy
   Manifold alone accepts/rejects them, advances the session revision, revokes
   them, and emits revision-scoped topology authorization. Platform topology
   must not start from adapter evidence alone.
+- N-peer adapters may propose unique sorted membership and bounded routes, but
+  Manifold owns mesh revision, deterministic coordinator, route ranking,
+  split-brain rejection, expiry, revocation, direct-lane eligibility, and
+  audit. Advisory gossip is never direct-route or media authority.
 - Generic media-session descriptors bind accepted Manifold session/stream
   state to source, processor, route, sink, and platform runtime references.
   They carry no media bytes or app-specific capture/codec/socket policy;

@@ -1,7 +1,9 @@
 //! Manifold-owned peer identity and accepted low-rate peer-status authority.
 
+mod peer_mesh;
 mod peer_session;
 
+pub use peer_mesh::*;
 pub use peer_session::*;
 
 use rusty_manifold_model::{DottedId, Revision, SchemaId};
