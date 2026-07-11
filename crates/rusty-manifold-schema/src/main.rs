@@ -111,11 +111,39 @@ fn schema_entries() -> Vec<SchemaEntry> {
     entries.extend(coordination_entries());
     entries.extend(peer_entries());
     entries.extend(runtime_host_entries());
+    entries.extend(broker_product_entries());
     entries.extend(authority_entries());
     entries.extend(bridge_route_entries());
     entries.extend(host_and_deployment_entries());
     entries.extend(verification_entries());
     entries
+}
+
+fn broker_product_entries() -> Vec<SchemaEntry> {
+    vec![
+        entry(
+            "rusty.manifold.broker.product_spec.v1",
+            "ManifoldBrokerProductSpec",
+            &[
+                "fixtures/broker-product/base-standalone.json",
+                "fixtures/broker-product/camera-embedded.json",
+                "fixtures/broker-product/direct-p2p-standalone.json",
+                "fixtures/broker-product/ble-embedded.json",
+                "fixtures/broker-product/invalid-both-modes.json",
+                "fixtures/broker-product/invalid-no-mode.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.broker.product_lock.v1",
+            "ManifoldBrokerProductLock",
+            &[
+                "fixtures/broker-product/base-standalone.lock.json",
+                "fixtures/broker-product/camera-embedded.lock.json",
+                "fixtures/broker-product/direct-p2p-standalone.lock.json",
+                "fixtures/broker-product/ble-embedded.lock.json",
+            ],
+        ),
+    ]
 }
 
 fn runtime_host_entries() -> Vec<SchemaEntry> {

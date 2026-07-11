@@ -42,10 +42,11 @@ it must not define Lattice relation semantics or default to legacy
 5. `docs/COMMANDS_LEASES_AND_AUTHORITY.md`
 6. `docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md`
 7. `docs/RUNTIME_HOST.md`
-8. `docs/IMPLEMENTATION_PLAN.md`
-9. `docs/MODULE_PACKAGE_STRATEGY.md`
-10. `docs/SCHEMA_EVOLUTION.md`
-11. `fixtures/README.md`
+8. `docs/BROKER_PRODUCTS.md`
+9. `docs/IMPLEMENTATION_PLAN.md`
+10. `docs/MODULE_PACKAGE_STRATEGY.md`
+11. `docs/SCHEMA_EVOLUTION.md`
+12. `fixtures/README.md`
 
 ## Architecture Rules
 
@@ -59,6 +60,9 @@ it must not define Lattice relation semantics or default to legacy
 - Standalone and embedded products must use `rusty-manifold-runtime-host` for
   revisioned review/application, lease expiry, restart, replay, and audit. The
   host is source-only; product adapters and policy stay outside it.
+- Broker product features resolve through `rusty-manifold-broker-product` into
+  exact commands, streams, modules, permissions, and fingerprint. Downstream
+  manifests project the lock and must not expand it.
 - When CLI, API, GUI, bridge, or platform helpers can request the same state
   change, they must all map into one Manifold command/schema/review path.
   Helper-local readback or UI state is observation evidence only until the

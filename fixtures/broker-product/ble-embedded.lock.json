@@ -1,0 +1,31 @@
+{
+  "$schema": "rusty.manifold.broker.product_lock.v1",
+  "lock_id": "lock.broker.ble.embedded",
+  "product_id": "broker.ble.embedded",
+  "standalone_enabled": false,
+  "embedded_enabled": true,
+  "features": [
+    "ble_rendezvous"
+  ],
+  "command_ids": [
+    "command.peer.status.get",
+    "command.rendezvous.ble.start",
+    "command.rendezvous.ble.stop",
+    "command.session.list"
+  ],
+  "stream_ids": [
+    "stream.peer.status",
+    "stream.rendezvous.status"
+  ],
+  "module_ids": [
+    "module.rendezvous.ble",
+    "module.runtime.host"
+  ],
+  "permissions": [
+    "internet",
+    "bluetooth_scan",
+    "bluetooth_connect",
+    "bluetooth_advertise"
+  ],
+  "spec_fingerprint": "fnv1a64-056f2e2f13964180"
+}

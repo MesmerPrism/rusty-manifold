@@ -1,0 +1,31 @@
+{
+  "$schema": "rusty.manifold.broker.product_lock.v1",
+  "lock_id": "lock.broker.direct_p2p.standalone",
+  "product_id": "broker.direct_p2p.standalone",
+  "standalone_enabled": true,
+  "embedded_enabled": false,
+  "features": [
+    "direct_p2p"
+  ],
+  "command_ids": [
+    "command.peer.status.get",
+    "command.session.list",
+    "command.topology.p2p.close",
+    "command.topology.p2p.open"
+  ],
+  "stream_ids": [
+    "stream.peer.status",
+    "stream.topology.status"
+  ],
+  "module_ids": [
+    "module.runtime.host",
+    "module.transport.direct_p2p"
+  ],
+  "permissions": [
+    "internet",
+    "nearby_wifi_devices",
+    "change_wifi_state",
+    "access_wifi_state"
+  ],
+  "spec_fingerprint": "fnv1a64-636434a4c22725b9"
+}

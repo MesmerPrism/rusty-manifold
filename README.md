@@ -10,6 +10,10 @@ The source-only [Manifold Runtime Host](docs/RUNTIME_HOST.md) provides the
 durable revision, command review/application, lease-expiry, replay, restart,
 and audit engine that later standalone and embedded broker products consume.
 
+[Broker product specs and locks](docs/BROKER_PRODUCTS.md) select exactly one
+runtime mode and resolve explicit camera, direct-P2P, and BLE features into a
+permission-minimal immutable closure.
+
 Rusty Manifold is the typed contract layer for graph, stream, command, lease,
 module, host, clock, session, and audit surfaces across the Rusty stack.
 

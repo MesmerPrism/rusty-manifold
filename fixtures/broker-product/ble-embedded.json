@@ -1,0 +1,9 @@
+{
+  "$schema": "rusty.manifold.broker.product_spec.v1",
+  "product_id": "broker.ble.embedded",
+  "standalone_enabled": false,
+  "embedded_enabled": true,
+  "requested_features": [
+    "ble_rendezvous"
+  ]
+}

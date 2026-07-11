@@ -465,6 +465,28 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.broker.product_spec.v1",
+      "rust_type": "ManifoldBrokerProductSpec",
+      "fixture_paths": [
+        "fixtures/broker-product/base-standalone.json",
+        "fixtures/broker-product/camera-embedded.json",
+        "fixtures/broker-product/direct-p2p-standalone.json",
+        "fixtures/broker-product/ble-embedded.json",
+        "fixtures/broker-product/invalid-both-modes.json",
+        "fixtures/broker-product/invalid-no-mode.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.product_lock.v1",
+      "rust_type": "ManifoldBrokerProductLock",
+      "fixture_paths": [
+        "fixtures/broker-product/base-standalone.lock.json",
+        "fixtures/broker-product/camera-embedded.lock.json",
+        "fixtures/broker-product/direct-p2p-standalone.lock.json",
+        "fixtures/broker-product/ble-embedded.lock.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.authority.snapshot.v1",
       "rust_type": "ManifoldAuthoritySnapshot",
       "fixture_paths": [

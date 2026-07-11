@@ -10,6 +10,10 @@ The `runtime-host/` fixtures prove snapshot/restart parity, command dispatch
 and application receipts, explicit lease expiry, and audit persistence. Damaged
 runtime-host requests cover unknown commands and missing/expired leases.
 
+The `broker-product/` matrix covers the camera-free base, independent camera,
+direct-P2P, and BLE profiles, exactly-one standalone/embedded mode, committed
+lock parity, stale specs, and union-permission rejection.
+
 Fixtures are committed contract examples. They should be small, deterministic,
 and safe to use in tests, generated schemas, documentation, and clients.
 

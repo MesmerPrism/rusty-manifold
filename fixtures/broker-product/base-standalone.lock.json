@@ -1,0 +1,22 @@
+{
+  "$schema": "rusty.manifold.broker.product_lock.v1",
+  "lock_id": "lock.broker.base.standalone",
+  "product_id": "broker.base.standalone",
+  "standalone_enabled": true,
+  "embedded_enabled": false,
+  "features": [],
+  "command_ids": [
+    "command.peer.status.get",
+    "command.session.list"
+  ],
+  "stream_ids": [
+    "stream.peer.status"
+  ],
+  "module_ids": [
+    "module.runtime.host"
+  ],
+  "permissions": [
+    "internet"
+  ],
+  "spec_fingerprint": "fnv1a64-a2551b282c2d99ec"
+}
