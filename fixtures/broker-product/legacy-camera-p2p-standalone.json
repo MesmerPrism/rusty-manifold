@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.broker.product_spec.v1",
+  "product_id": "broker.legacy_camera_p2p.standalone",
+  "standalone_enabled": true,
+  "embedded_enabled": false,
+  "requested_features": [
+    "camera_media",
+    "direct_p2p"
+  ]
+}

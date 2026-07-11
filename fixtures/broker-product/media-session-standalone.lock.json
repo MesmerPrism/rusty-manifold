@@ -1,12 +1,11 @@
 {
   "$schema": "rusty.manifold.broker.product_lock.v1",
-  "lock_id": "lock.broker.camera.embedded",
-  "product_id": "broker.camera.embedded",
-  "standalone_enabled": false,
-  "embedded_enabled": true,
+  "lock_id": "lock.broker.media_session.standalone",
+  "product_id": "broker.media_session.standalone",
+  "standalone_enabled": true,
+  "embedded_enabled": false,
   "features": [
-    "media_session",
-    "camera_media"
+    "media_session"
   ],
   "command_ids": [
     "command.media.session.start",
@@ -19,13 +18,14 @@
     "stream.peer.status"
   ],
   "module_ids": [
-    "module.media.camera",
     "module.media.session",
     "module.runtime.host"
   ],
   "permissions": [
     "internet",
-    "camera"
+    "user_notifications",
+    "background_service",
+    "background_data_sync"
   ],
-  "spec_fingerprint": "fnv1a64-2c8bade54915a255"
+  "spec_fingerprint": "fnv1a64-006d1c87d57a0438"
 }

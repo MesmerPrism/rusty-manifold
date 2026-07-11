@@ -6,11 +6,16 @@ explicit optional feature families. Resolution produces the exact sorted
 command, stream, module, and platform-neutral permission closure plus a stable
 spec fingerprint.
 
-The base product contains only the Runtime Host, peer-status observation,
-session listing, and generic network permission. It has no camera, direct-P2P,
-or BLE capability. Camera/media, direct-P2P, and BLE rendezvous descriptors add
-only their own closures. A product may explicitly compose them, but no consumer
-may substitute a union lock for a smaller spec.
+The base standalone product contains only the Runtime Host, peer-status
+observation, session listing, generic network access, and the notification plus
+background data-sync permissions required by its service lifecycle. It has no
+camera, direct-P2P, or BLE capability. `media_session` adds generic media
+session/stream/module references without camera permission. `camera_media`
+layers the camera module and capture permissions over that generic feature;
+direct-P2P and BLE rendezvous add only their own closures. A product may
+explicitly compose them, but no consumer may substitute a union lock for a
+smaller spec. The broad camera-plus-P2P product is named as legacy validation
+compatibility and must be selected explicitly.
 
 Locks are immutable evidence. `validate_broker_product_lock` recomputes the
 complete closure and rejects stale, expanded, or otherwise different locks.

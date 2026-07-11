@@ -1,5 +1,9 @@
 //! Standalone and embedded broker adapters over one Manifold Runtime Host.
 
+mod runtime;
+
+pub use runtime::*;
+
 use rusty_manifold_broker_product::{ManifoldBrokerProductLock, BROKER_PRODUCT_LOCK_SCHEMA};
 use rusty_manifold_model::{DottedId, Revision, SchemaId};
 use rusty_manifold_runtime_host::{
@@ -376,6 +380,7 @@ mod tests {
             requester_id: id("client.parity"),
             command_id: id(command_id),
             lease_id: lease_id.map(id),
+            params_digest: None,
             issued_at_ms: 1_000,
             expires_at_ms: 10_000,
         }

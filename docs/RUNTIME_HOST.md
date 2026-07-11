@@ -19,8 +19,25 @@ is deliberately split:
 5. snapshot JSON round-trips preserve revision, replay guards, leases, and
    audit history across restart.
 
+When a command has typed low-rate effect parameters, its request includes
+`rusty.manifold.runtime_host.typed_params_digest.v1`: the exact parameter type,
+canonical SHA-256, and canonical byte count. Review rejects malformed hashes,
+size disagreement, and canonical payloads over 4096 bytes. The dispatch and
+application receipts preserve the digest byte-for-byte, and `apply_dispatch`
+rejects a substituted or omitted binding without advancing the host revision.
+The host deliberately does not own or decode platform-specific parameter
+values; the typed adapter proves the canonical binding before it calls review.
+
 Broker products select policy and adapters in later units. They must call this
 host rather than create parallel accepted state.
+
+The product-facing `ManifoldBrokerRuntime` does not replace this host. It
+consumes one accepted admission use, then calls the adapter's single
+`review_command`/`apply_dispatch` sequence. Admission rejection never reaches
+the host; admitted but unknown, product-unselected, stale, replayed, or
+unleased work still produces the normal host receipt. The host remains the
+sole command decision and accepted-state owner in standalone and embedded
+placement.
 
 ```powershell
 cargo test -p rusty-manifold-runtime-host

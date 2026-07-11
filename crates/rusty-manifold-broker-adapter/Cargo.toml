@@ -8,6 +8,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+rusty-manifold-admission = { path = "../rusty-manifold-admission" }
 rusty-manifold-broker-product = { path = "../rusty-manifold-broker-product" }
 rusty-manifold-model = { path = "../rusty-manifold-model", features = ["serde"] }
 rusty-manifold-runtime-host = { path = "../rusty-manifold-runtime-host" }

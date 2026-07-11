@@ -9,10 +9,14 @@ command rejection.
 The `runtime-host/` fixtures prove snapshot/restart parity, command dispatch
 and application receipts, explicit lease expiry, and audit persistence. Damaged
 runtime-host requests cover unknown commands and missing/expired leases.
+Typed-parameter digest compatibility remains optional in the baseline fixture
+documents, while focused Runtime Host tests prove canonical digest propagation,
+tamper rejection, and the bounded canonical-size rule.
 
-The `broker-product/` matrix covers the camera-free base, independent camera,
-direct-P2P, and BLE profiles, exactly-one standalone/embedded mode, committed
-lock parity, stale specs, and union-permission rejection.
+The `broker-product/` matrix covers the camera-free base, generic camera-free
+media session, independent camera, direct-P2P, and BLE profiles, the explicit
+legacy camera-plus-P2P compatibility product, exactly-one standalone/embedded
+mode, committed lock parity, stale specs, and union-permission rejection.
 
 Fixtures are committed contract examples. They should be small, deterministic,
 and safe to use in tests, generated schemas, documentation, and clients.
@@ -60,6 +64,11 @@ and safe to use in tests, generated schemas, documentation, and clients.
   and applied/unknown/unleased receipts. Paired receipts deliberately differ in
   placement and lock fingerprint while preserving byte-equivalent Runtime Host
   dispatch/application decisions and `module.runtime.host` authority ownership.
+  The crate's integrated-runtime tests extend this matrix with bounded-use
+  admission, product-unselected and stale work, cross-client/capability damage,
+  replay, independent-use survival across unrelated revision advances,
+  token-scoped revocation/expiry invalidation, rebind continuity, and
+  provider-epoch restart rejection.
 - `admission/`: deterministic grant/token lifecycle from issue through one-time
   use, replay rejection, explicit revocation, and post-revocation rejection,
   plus damaged signing-fingerprint and capability-escalation requests. The

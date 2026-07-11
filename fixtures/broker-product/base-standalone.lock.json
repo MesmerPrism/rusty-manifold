@@ -16,7 +16,10 @@
     "module.runtime.host"
   ],
   "permissions": [
-    "internet"
+    "internet",
+    "user_notifications",
+    "background_service",
+    "background_data_sync"
   ],
-  "spec_fingerprint": "fnv1a64-a2551b282c2d99ec"
+  "spec_fingerprint": "fnv1a64-cafaa41fe6e653c5"
 }

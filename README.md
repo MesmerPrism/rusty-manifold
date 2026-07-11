@@ -25,15 +25,24 @@ is downstream adoption evidence, not a second Manifold session authority.
 The source-only [Manifold Runtime Host](docs/RUNTIME_HOST.md) provides the
 durable revision, command review/application, lease-expiry, replay, restart,
 and audit engine that later standalone and embedded broker products consume.
+Typed low-rate parameter payloads are canonicalized by their adapter and bound
+to review, dispatch, and application through an exact digest receipt; Java or
+platform code may consume only the receipt-bound payload after application.
 
 [Broker product specs and locks](docs/BROKER_PRODUCTS.md) select exactly one
-runtime mode and resolve explicit camera, direct-P2P, and BLE features into a
-permission-minimal immutable closure.
+runtime mode and resolve generic media sessions separately from explicit
+camera, direct-P2P, and BLE features into a permission-minimal immutable
+closure.
 
 [Broker adapters](docs/BROKER_ADAPTERS.md) bind standalone and embedded
 placements to that exact lock and route every command through the same Runtime
 Host review/application implementation. Their receipts preserve the host
 decision and identify the process layer as an adapter, not authority.
+The integrated broker runtime additionally requires a current, client-bound,
+capability-scoped one-use admission before any product mutation can reach that
+host path. Each bounded use retains the revision that created that use, so an
+unrelated client's admission mutation does not invalidate it; exact-token
+revocation and expiry remove only derived pending uses.
 
 [Cross-app admission](docs/ADMISSION.md) binds platform-verified client
 identity to explicit capability grants and Manifold-owned short-lived opaque

@@ -192,6 +192,26 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
                 "fixtures/broker-adapter/embedded-unleased-rejected.json",
             ],
         ),
+        entry(
+            "rusty.manifold.broker.bounded_use.v1",
+            "ManifoldBrokerBoundedUse",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.mutation_request.v1",
+            "ManifoldBrokerMutationRequest",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.mutation_receipt.v1",
+            "ManifoldBrokerMutationReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.runtime_evidence.v1",
+            "ManifoldBrokerRuntimeEvidence",
+            &[],
+        ),
     ]
 }
 
@@ -202,9 +222,11 @@ fn broker_product_entries() -> Vec<SchemaEntry> {
             "ManifoldBrokerProductSpec",
             &[
                 "fixtures/broker-product/base-standalone.json",
+                "fixtures/broker-product/media-session-standalone.json",
                 "fixtures/broker-product/camera-embedded.json",
                 "fixtures/broker-product/direct-p2p-standalone.json",
                 "fixtures/broker-product/ble-embedded.json",
+                "fixtures/broker-product/legacy-camera-p2p-standalone.json",
                 "fixtures/broker-product/invalid-both-modes.json",
                 "fixtures/broker-product/invalid-no-mode.json",
             ],
@@ -214,9 +236,11 @@ fn broker_product_entries() -> Vec<SchemaEntry> {
             "ManifoldBrokerProductLock",
             &[
                 "fixtures/broker-product/base-standalone.lock.json",
+                "fixtures/broker-product/media-session-standalone.lock.json",
                 "fixtures/broker-product/camera-embedded.lock.json",
                 "fixtures/broker-product/direct-p2p-standalone.lock.json",
                 "fixtures/broker-product/ble-embedded.lock.json",
+                "fixtures/broker-product/legacy-camera-p2p-standalone.lock.json",
             ],
         ),
     ]
@@ -241,6 +265,11 @@ fn runtime_host_entries() -> Vec<SchemaEntry> {
                 "fixtures/damaged/runtime-host-missing-lease.json",
                 "fixtures/damaged/runtime-host-expired-lease.json",
             ],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.typed_params_digest.v1",
+            "ManifoldRuntimeTypedParamsDigest",
+            &[],
         ),
         entry(
             "rusty.manifold.runtime_host.dispatch_receipt.v1",

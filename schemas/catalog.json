@@ -437,6 +437,11 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.runtime_host.typed_params_digest.v1",
+      "rust_type": "ManifoldRuntimeTypedParamsDigest",
+      "fixture_paths": []
+    },
+    {
       "schema_id": "rusty.manifold.runtime_host.dispatch_receipt.v1",
       "rust_type": "ManifoldRuntimeDispatchReceipt",
       "fixture_paths": [
@@ -469,9 +474,11 @@
       "rust_type": "ManifoldBrokerProductSpec",
       "fixture_paths": [
         "fixtures/broker-product/base-standalone.json",
+        "fixtures/broker-product/media-session-standalone.json",
         "fixtures/broker-product/camera-embedded.json",
         "fixtures/broker-product/direct-p2p-standalone.json",
         "fixtures/broker-product/ble-embedded.json",
+        "fixtures/broker-product/legacy-camera-p2p-standalone.json",
         "fixtures/broker-product/invalid-both-modes.json",
         "fixtures/broker-product/invalid-no-mode.json"
       ]
@@ -481,9 +488,11 @@
       "rust_type": "ManifoldBrokerProductLock",
       "fixture_paths": [
         "fixtures/broker-product/base-standalone.lock.json",
+        "fixtures/broker-product/media-session-standalone.lock.json",
         "fixtures/broker-product/camera-embedded.lock.json",
         "fixtures/broker-product/direct-p2p-standalone.lock.json",
-        "fixtures/broker-product/ble-embedded.lock.json"
+        "fixtures/broker-product/ble-embedded.lock.json",
+        "fixtures/broker-product/legacy-camera-p2p-standalone.lock.json"
       ]
     },
     {
@@ -505,6 +514,26 @@
         "fixtures/broker-adapter/standalone-unleased-rejected.json",
         "fixtures/broker-adapter/embedded-unleased-rejected.json"
       ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.bounded_use.v1",
+      "rust_type": "ManifoldBrokerBoundedUse",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.mutation_request.v1",
+      "rust_type": "ManifoldBrokerMutationRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.mutation_receipt.v1",
+      "rust_type": "ManifoldBrokerMutationReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence.v1",
+      "rust_type": "ManifoldBrokerRuntimeEvidence",
+      "fixture_paths": []
     },
     {
       "schema_id": "rusty.manifold.admission.snapshot.v1",

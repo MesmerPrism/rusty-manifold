@@ -1,23 +1,30 @@
 {
   "$schema": "rusty.manifold.broker.product_lock.v1",
-  "lock_id": "lock.broker.direct_p2p.standalone",
-  "product_id": "broker.direct_p2p.standalone",
+  "lock_id": "lock.broker.legacy_camera_p2p.standalone",
+  "product_id": "broker.legacy_camera_p2p.standalone",
   "standalone_enabled": true,
   "embedded_enabled": false,
   "features": [
+    "media_session",
+    "camera_media",
     "direct_p2p"
   ],
   "command_ids": [
+    "command.media.session.start",
+    "command.media.session.stop",
     "command.peer.status.get",
     "command.session.list",
     "command.topology.p2p.close",
     "command.topology.p2p.open"
   ],
   "stream_ids": [
+    "stream.media.video",
     "stream.peer.status",
     "stream.topology.status"
   ],
   "module_ids": [
+    "module.media.camera",
+    "module.media.session",
     "module.runtime.host",
     "module.transport.direct_p2p"
   ],
@@ -26,10 +33,12 @@
     "user_notifications",
     "background_service",
     "background_data_sync",
+    "background_camera",
+    "camera",
     "network_state_observation",
     "nearby_wifi_devices",
     "change_wifi_state",
     "access_wifi_state"
   ],
-  "spec_fingerprint": "fnv1a64-fd363d299bc83339"
+  "spec_fingerprint": "fnv1a64-f7f04d252038e792"
 }

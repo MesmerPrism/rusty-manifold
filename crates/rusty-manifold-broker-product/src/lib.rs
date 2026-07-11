@@ -13,7 +13,9 @@ pub const BROKER_PRODUCT_LOCK_SCHEMA: &str = "rusty.manifold.broker.product_lock
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ManifoldBrokerFeature {
-    /// Camera/media session descriptors.
+    /// Generic media-session descriptors without capture-device authority.
+    MediaSession,
+    /// Camera capture adapter layered over generic media sessions.
     CameraMedia,
     /// Direct peer-to-peer topology descriptors.
     DirectP2p,
@@ -27,8 +29,18 @@ pub enum ManifoldBrokerFeature {
 pub enum ManifoldBrokerPermission {
     /// Network client/server access.
     Internet,
+    /// User-visible background-service notification surface.
+    UserNotifications,
+    /// Long-lived background execution surface.
+    BackgroundService,
+    /// Background data synchronization surface.
+    BackgroundDataSync,
+    /// Background camera capture surface.
+    BackgroundCamera,
     /// Camera capture.
     Camera,
+    /// Network-state observation.
+    NetworkStateObservation,
     /// Nearby Wi-Fi discovery/group operations.
     NearbyWifiDevices,
     /// Wi-Fi state mutation.
@@ -103,6 +115,16 @@ pub enum ManifoldBrokerProductError {
 }
 
 /// Resolves one product spec into an exact deterministic lock.
+///
+/// # Errors
+///
+/// Rejects an unsupported schema, a zero-or-two runtime-mode selection, or a
+/// duplicate requested feature.
+///
+/// # Panics
+///
+/// Panics only if this crate's static schema or derived lock-id literals stop
+/// satisfying their own identifier grammar.
 pub fn resolve_broker_product(
     spec: &ManifoldBrokerProductSpec,
 ) -> Result<ManifoldBrokerProductLock, ManifoldBrokerProductError> {
@@ -112,59 +134,20 @@ pub fn resolve_broker_product(
     if spec.standalone_enabled == spec.embedded_enabled {
         return Err(ManifoldBrokerProductError::InvalidRuntimeMode);
     }
-    let feature_set = spec
+    let requested_feature_set = spec
         .requested_features
         .iter()
         .cloned()
         .collect::<BTreeSet<_>>();
-    if feature_set.len() != spec.requested_features.len() {
+    if requested_feature_set.len() != spec.requested_features.len() {
         return Err(ManifoldBrokerProductError::DuplicateFeature);
     }
-
-    let mut commands = ids(["command.peer.status.get", "command.session.list"]);
-    let mut streams = ids(["stream.peer.status"]);
-    let mut modules = ids(["module.runtime.host"]);
-    let mut permissions = BTreeSet::from([ManifoldBrokerPermission::Internet]);
-
-    for feature in &feature_set {
-        match feature {
-            ManifoldBrokerFeature::CameraMedia => {
-                commands.extend(ids([
-                    "command.media.session.start",
-                    "command.media.session.stop",
-                ]));
-                streams.extend(ids(["stream.media.video"]));
-                modules.extend(ids(["module.media.camera"]));
-                permissions.insert(ManifoldBrokerPermission::Camera);
-            }
-            ManifoldBrokerFeature::DirectP2p => {
-                commands.extend(ids([
-                    "command.topology.p2p.open",
-                    "command.topology.p2p.close",
-                ]));
-                streams.extend(ids(["stream.topology.status"]));
-                modules.extend(ids(["module.transport.direct_p2p"]));
-                permissions.extend([
-                    ManifoldBrokerPermission::NearbyWifiDevices,
-                    ManifoldBrokerPermission::ChangeWifiState,
-                    ManifoldBrokerPermission::AccessWifiState,
-                ]);
-            }
-            ManifoldBrokerFeature::BleRendezvous => {
-                commands.extend(ids([
-                    "command.rendezvous.ble.start",
-                    "command.rendezvous.ble.stop",
-                ]));
-                streams.extend(ids(["stream.rendezvous.status"]));
-                modules.extend(ids(["module.rendezvous.ble"]));
-                permissions.extend([
-                    ManifoldBrokerPermission::BluetoothScan,
-                    ManifoldBrokerPermission::BluetoothConnect,
-                    ManifoldBrokerPermission::BluetoothAdvertise,
-                ]);
-            }
-        }
+    let mut feature_set = requested_feature_set;
+    if feature_set.contains(&ManifoldBrokerFeature::CameraMedia) {
+        feature_set.insert(ManifoldBrokerFeature::MediaSession);
     }
+
+    let (commands, streams, modules, permissions) = resolve_feature_closure(spec, &feature_set);
 
     let features = feature_set.into_iter().collect::<Vec<_>>();
     let command_ids = commands.into_iter().collect::<Vec<_>>();
@@ -195,6 +178,12 @@ pub fn resolve_broker_product(
 }
 
 /// Rejects stale, expanded, or otherwise non-exact locks.
+///
+/// # Errors
+///
+/// Returns the underlying specification error or
+/// [`ManifoldBrokerProductError::StaleOrExpandedLock`] when any lock field
+/// differs from a fresh exact resolution.
 pub fn validate_broker_product_lock(
     spec: &ManifoldBrokerProductSpec,
     lock: &ManifoldBrokerProductLock,
@@ -205,6 +194,75 @@ pub fn validate_broker_product_lock(
     } else {
         Err(ManifoldBrokerProductError::StaleOrExpandedLock)
     }
+}
+
+fn resolve_feature_closure(
+    spec: &ManifoldBrokerProductSpec,
+    feature_set: &BTreeSet<ManifoldBrokerFeature>,
+) -> (
+    BTreeSet<DottedId>,
+    BTreeSet<DottedId>,
+    BTreeSet<DottedId>,
+    BTreeSet<ManifoldBrokerPermission>,
+) {
+    let mut commands = ids(["command.peer.status.get", "command.session.list"]);
+    let mut streams = ids(["stream.peer.status"]);
+    let mut modules = ids(["module.runtime.host"]);
+    let mut permissions = BTreeSet::from([ManifoldBrokerPermission::Internet]);
+    if spec.standalone_enabled {
+        permissions.extend([
+            ManifoldBrokerPermission::UserNotifications,
+            ManifoldBrokerPermission::BackgroundService,
+            ManifoldBrokerPermission::BackgroundDataSync,
+        ]);
+    }
+    for feature in feature_set {
+        match feature {
+            ManifoldBrokerFeature::MediaSession => {
+                commands.extend(ids([
+                    "command.media.session.start",
+                    "command.media.session.stop",
+                ]));
+                streams.extend(ids(["stream.media.video"]));
+                modules.extend(ids(["module.media.session"]));
+            }
+            ManifoldBrokerFeature::CameraMedia => {
+                modules.extend(ids(["module.media.camera"]));
+                permissions.insert(ManifoldBrokerPermission::Camera);
+                if spec.standalone_enabled {
+                    permissions.insert(ManifoldBrokerPermission::BackgroundCamera);
+                }
+            }
+            ManifoldBrokerFeature::DirectP2p => {
+                commands.extend(ids([
+                    "command.topology.p2p.open",
+                    "command.topology.p2p.close",
+                ]));
+                streams.extend(ids(["stream.topology.status"]));
+                modules.extend(ids(["module.transport.direct_p2p"]));
+                permissions.extend([
+                    ManifoldBrokerPermission::NetworkStateObservation,
+                    ManifoldBrokerPermission::NearbyWifiDevices,
+                    ManifoldBrokerPermission::ChangeWifiState,
+                    ManifoldBrokerPermission::AccessWifiState,
+                ]);
+            }
+            ManifoldBrokerFeature::BleRendezvous => {
+                commands.extend(ids([
+                    "command.rendezvous.ble.start",
+                    "command.rendezvous.ble.stop",
+                ]));
+                streams.extend(ids(["stream.rendezvous.status"]));
+                modules.extend(ids(["module.rendezvous.ble"]));
+                permissions.extend([
+                    ManifoldBrokerPermission::BluetoothScan,
+                    ManifoldBrokerPermission::BluetoothConnect,
+                    ManifoldBrokerPermission::BluetoothAdvertise,
+                ]);
+            }
+        }
+    }
+    (commands, streams, modules, permissions)
 }
 
 fn ids<const N: usize>(values: [&str; N]) -> BTreeSet<DottedId> {
@@ -255,7 +313,15 @@ mod tests {
     #[test]
     fn base_is_camera_p2p_and_ble_free() {
         let lock = resolve_broker_product(&spec("base-standalone")).expect("lock");
-        assert_eq!(lock.permissions, vec![ManifoldBrokerPermission::Internet]);
+        assert_eq!(
+            lock.permissions,
+            vec![
+                ManifoldBrokerPermission::Internet,
+                ManifoldBrokerPermission::UserNotifications,
+                ManifoldBrokerPermission::BackgroundService,
+                ManifoldBrokerPermission::BackgroundDataSync,
+            ]
+        );
         assert_eq!(
             lock.module_ids,
             ids(["module.runtime.host"]).into_iter().collect::<Vec<_>>()
@@ -263,8 +329,35 @@ mod tests {
     }
 
     #[test]
+    fn generic_media_session_has_no_camera_or_peer_transport_permissions() {
+        let media = resolve_broker_product(&spec("media-session-standalone")).expect("media");
+        assert!(media
+            .features
+            .contains(&ManifoldBrokerFeature::MediaSession));
+        assert!(!media.features.contains(&ManifoldBrokerFeature::CameraMedia));
+        assert!(media
+            .module_ids
+            .contains(&DottedId::new("module.media.session").expect("id")));
+        assert!(!media
+            .permissions
+            .contains(&ManifoldBrokerPermission::Camera));
+        assert!(!media
+            .permissions
+            .contains(&ManifoldBrokerPermission::NearbyWifiDevices));
+        assert!(!media
+            .permissions
+            .contains(&ManifoldBrokerPermission::BluetoothScan));
+    }
+
+    #[test]
     fn optional_profiles_resolve_independently_and_exactly() {
         let camera = resolve_broker_product(&spec("camera-embedded")).expect("camera");
+        assert!(camera
+            .features
+            .contains(&ManifoldBrokerFeature::MediaSession));
+        assert!(camera
+            .features
+            .contains(&ManifoldBrokerFeature::CameraMedia));
         assert!(camera
             .permissions
             .contains(&ManifoldBrokerPermission::Camera));
@@ -310,15 +403,26 @@ mod tests {
             validate_broker_product_lock(&changed, &original),
             Err(ManifoldBrokerProductError::StaleOrExpandedLock)
         );
+        let mut duplicate = base;
+        duplicate.requested_features = vec![
+            ManifoldBrokerFeature::MediaSession,
+            ManifoldBrokerFeature::MediaSession,
+        ];
+        assert_eq!(
+            resolve_broker_product(&duplicate),
+            Err(ManifoldBrokerProductError::DuplicateFeature)
+        );
     }
 
     #[test]
     fn committed_locks_match_fresh_resolution() {
         for name in [
             "base-standalone",
+            "media-session-standalone",
             "camera-embedded",
             "direct-p2p-standalone",
             "ble-embedded",
+            "legacy-camera-p2p-standalone",
         ] {
             let product = spec(name);
             let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))

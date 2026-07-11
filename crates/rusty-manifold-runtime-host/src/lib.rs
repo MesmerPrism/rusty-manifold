@@ -9,6 +9,9 @@ use std::fmt;
 pub const HOST_SNAPSHOT_SCHEMA: &str = "rusty.manifold.runtime_host.snapshot.v1";
 /// Runtime host command request schema.
 pub const HOST_COMMAND_REQUEST_SCHEMA: &str = "rusty.manifold.runtime_host.command_request.v1";
+/// Runtime host typed-parameter digest schema.
+pub const HOST_TYPED_PARAMS_DIGEST_SCHEMA: &str =
+    "rusty.manifold.runtime_host.typed_params_digest.v1";
 /// Runtime host dispatch receipt schema.
 pub const HOST_DISPATCH_RECEIPT_SCHEMA: &str = "rusty.manifold.runtime_host.dispatch_receipt.v1";
 /// Runtime host application receipt schema.
@@ -19,6 +22,8 @@ pub const HOST_LEASE_EXPIRY_RECEIPT_SCHEMA: &str =
     "rusty.manifold.runtime_host.lease_expiry_receipt.v1";
 /// Runtime host audit-event schema.
 pub const HOST_AUDIT_EVENT_SCHEMA: &str = "rusty.manifold.runtime_host.audit_event.v1";
+/// Maximum canonical low-rate parameter document accepted by Runtime Host.
+pub const MAX_TYPED_PARAMS_CANONICAL_BYTES: u32 = 4_096;
 
 /// Registered low-rate command descriptor.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -42,6 +47,21 @@ pub struct ManifoldRuntimeLease {
     pub holder_id: DottedId,
     /// Absolute expiry in the review time domain.
     pub expires_at_ms: u64,
+}
+
+/// Canonical typed-parameter identity bound through review and application.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldRuntimeTypedParamsDigest {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Exact parameter contract/type identifier.
+    pub params_type_id: DottedId,
+    /// SHA-256 of canonical UTF-8 JSON, formatted as `sha256:<lowercase-hex>`.
+    pub canonical_sha256: String,
+    /// Canonical UTF-8 byte length.
+    pub canonical_size_bytes: u32,
 }
 
 /// Durable accepted runtime-host snapshot.
@@ -82,6 +102,9 @@ pub struct ManifoldRuntimeCommandRequest {
     pub command_id: DottedId,
     /// Lease identity when required.
     pub lease_id: Option<DottedId>,
+    /// Canonical typed parameters when the command carries platform effects.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params_digest: Option<ManifoldRuntimeTypedParamsDigest>,
     /// Issued time.
     pub issued_at_ms: u64,
     /// Request expiry time.
@@ -122,6 +145,10 @@ pub enum ManifoldRuntimeRejectionReason {
     LeaseHolderMismatch,
     /// Lease scope differs from command scope.
     LeaseScopeMismatch,
+    /// Typed-parameter digest schema, hash, or length is malformed.
+    InvalidTypedParamsDigest,
+    /// Canonical typed parameters exceed the low-rate command bound.
+    TypedParamsTooLarge,
     /// Dispatch receipt and request do not match.
     DispatchMismatch,
     /// Dispatch was reviewed against an older snapshot.
@@ -143,6 +170,9 @@ pub struct ManifoldRuntimeDispatchReceipt {
     pub request_id: DottedId,
     /// Reviewed command identity.
     pub command_id: DottedId,
+    /// Exact typed-parameter digest reviewed with the request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params_digest: Option<ManifoldRuntimeTypedParamsDigest>,
     /// Reviewed authority revision.
     pub reviewed_authority_revision: Revision,
     /// Outcome.
@@ -164,6 +194,9 @@ pub struct ManifoldRuntimeApplicationReceipt {
     pub dispatch_id: DottedId,
     /// Request identity.
     pub request_id: DottedId,
+    /// Exact typed-parameter digest applied with the dispatch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub params_digest: Option<ManifoldRuntimeTypedParamsDigest>,
     /// Whether the command was applied.
     pub applied: bool,
     /// Prior authority revision.
@@ -273,6 +306,7 @@ impl ManifoldRuntimeHost {
             dispatch_id: derived_id("dispatch.runtime", &request.request_id),
             request_id: request.request_id.clone(),
             command_id: request.command_id.clone(),
+            params_digest: request.params_digest.clone(),
             reviewed_authority_revision: self.snapshot.authority_revision,
             outcome: if rejection.is_none() {
                 ManifoldRuntimeDispatchOutcome::Ready
@@ -293,7 +327,8 @@ impl ManifoldRuntimeHost {
         let mismatch = dispatch.schema_id.as_str() != HOST_DISPATCH_RECEIPT_SCHEMA
             || dispatch.dispatch_id != derived_id("dispatch.runtime", &request.request_id)
             || dispatch.request_id != request.request_id
-            || dispatch.command_id != request.command_id;
+            || dispatch.command_id != request.command_id
+            || dispatch.params_digest != request.params_digest;
         let stale_dispatch = dispatch.reviewed_authority_revision != prior;
         let rejection = if mismatch {
             Some(ManifoldRuntimeRejectionReason::DispatchMismatch)
@@ -327,6 +362,7 @@ impl ManifoldRuntimeHost {
             receipt_id: derived_id("receipt.runtime", &request.request_id),
             dispatch_id: dispatch.dispatch_id.clone(),
             request_id: request.request_id.clone(),
+            params_digest: request.params_digest.clone(),
             applied,
             prior_authority_revision: prior,
             resulting_authority_revision: resulting,
@@ -451,6 +487,17 @@ fn validate_request(
     if request.schema_id.as_str() != HOST_COMMAND_REQUEST_SCHEMA {
         return Err(ManifoldRuntimeRejectionReason::SchemaMismatch);
     }
+    if let Some(params) = &request.params_digest {
+        if params.schema_id.as_str() != HOST_TYPED_PARAMS_DIGEST_SCHEMA
+            || params.canonical_size_bytes == 0
+            || !valid_sha256_digest(&params.canonical_sha256)
+        {
+            return Err(ManifoldRuntimeRejectionReason::InvalidTypedParamsDigest);
+        }
+        if params.canonical_size_bytes > MAX_TYPED_PARAMS_CANONICAL_BYTES {
+            return Err(ManifoldRuntimeRejectionReason::TypedParamsTooLarge);
+        }
+    }
     if request.expected_authority_revision != snapshot.authority_revision {
         return Err(ManifoldRuntimeRejectionReason::StaleAuthorityRevision);
     }
@@ -486,6 +533,15 @@ fn validate_request(
         }
     }
     Ok(())
+}
+
+fn valid_sha256_digest(value: &str) -> bool {
+    value.len() == 71
+        && value.starts_with("sha256:")
+        && value[7..]
+            .as_bytes()
+            .iter()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(byte))
 }
 
 fn audit_event(
@@ -555,6 +611,16 @@ mod tests {
             .join(path);
         serde_json::from_str(&std::fs::read_to_string(root).expect("fixture must load"))
             .expect("fixture must deserialize")
+    }
+
+    fn typed_params_digest(size: u32) -> ManifoldRuntimeTypedParamsDigest {
+        ManifoldRuntimeTypedParamsDigest {
+            schema_id: schema_id(HOST_TYPED_PARAMS_DIGEST_SCHEMA),
+            params_type_id: DottedId::new("rusty.quest.broker.effect_params.v1")
+                .expect("params type"),
+            canonical_sha256: format!("sha256:{}", "ab".repeat(32)),
+            canonical_size_bytes: size,
+        }
     }
 
     #[test]
@@ -656,5 +722,67 @@ mod tests {
             Some(ManifoldRuntimeRejectionReason::DispatchMismatch)
         );
         assert_eq!(host.snapshot().authority_revision.get(), 1);
+    }
+
+    #[test]
+    fn typed_params_digest_is_bound_through_dispatch_and_application() {
+        let snapshot = fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        let mut request: ManifoldRuntimeCommandRequest =
+            fixture("fixtures/runtime-host/synthetic-runtime-command-request.json");
+        request.params_digest = Some(typed_params_digest(128));
+        let mut host = ManifoldRuntimeHost::from_snapshot(snapshot).expect("snapshot");
+        let dispatch = host.review_command(&request, 2_000);
+        assert_eq!(dispatch.params_digest, request.params_digest);
+        assert_eq!(dispatch.outcome, ManifoldRuntimeDispatchOutcome::Ready);
+        let application = host.apply_dispatch(&request, &dispatch);
+        assert!(application.applied);
+        assert_eq!(application.params_digest, request.params_digest);
+    }
+
+    #[test]
+    fn typed_params_tamper_and_oversize_reject_without_state_advance() {
+        let snapshot: ManifoldRuntimeHostSnapshot =
+            fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        let mut request: ManifoldRuntimeCommandRequest =
+            fixture("fixtures/runtime-host/synthetic-runtime-command-request.json");
+        request.params_digest = Some(typed_params_digest(128));
+        let mut host = ManifoldRuntimeHost::from_snapshot(snapshot.clone()).expect("snapshot");
+        let dispatch = host.review_command(&request, 2_000);
+        request
+            .params_digest
+            .as_mut()
+            .expect("digest")
+            .canonical_sha256 = format!("sha256:{}", "cd".repeat(32));
+        let tampered = host.apply_dispatch(&request, &dispatch);
+        assert_eq!(
+            tampered.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::DispatchMismatch)
+        );
+        assert_eq!(host.snapshot().authority_revision.get(), 1);
+
+        let mut oversize: ManifoldRuntimeCommandRequest =
+            fixture("fixtures/runtime-host/synthetic-runtime-command-request.json");
+        oversize.params_digest = Some(typed_params_digest(MAX_TYPED_PARAMS_CANONICAL_BYTES + 1));
+        let oversize_host = ManifoldRuntimeHost::from_snapshot(snapshot.clone()).expect("snapshot");
+        let oversize_dispatch = oversize_host.review_command(&oversize, 2_000);
+        assert_eq!(
+            oversize_dispatch.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::TypedParamsTooLarge)
+        );
+
+        let mut malformed: ManifoldRuntimeCommandRequest =
+            fixture("fixtures/runtime-host/synthetic-runtime-command-request.json");
+        malformed.params_digest = Some(typed_params_digest(128));
+        malformed
+            .params_digest
+            .as_mut()
+            .expect("digest")
+            .canonical_sha256 = "sha256:NOT-CANONICAL".to_owned();
+        let malformed_host = ManifoldRuntimeHost::from_snapshot(snapshot).expect("snapshot");
+        let malformed_dispatch = malformed_host.review_command(&malformed, 2_000);
+        assert_eq!(
+            malformed_dispatch.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::InvalidTypedParamsDigest)
+        );
     }
 }

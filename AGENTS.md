@@ -78,13 +78,29 @@ it must not define Lattice relation semantics or default to legacy
   revisioned review/application, lease expiry, restart, replay, and audit. The
   host is source-only; product adapters and policy stay outside it.
 - Broker product features resolve through `rusty-manifold-broker-product` into
-  exact commands, streams, modules, permissions, and fingerprint. Downstream
-  manifests project the lock and must not expand it.
+  exact commands, streams, modules, permissions, and fingerprint. Generic
+  `media_session` is camera-free; `camera_media` explicitly layers capture
+  authority over it. Downstream manifests project the lock and must not expand
+  it.
 - `rusty-manifold-broker-adapter` is the only standalone/embedded command
   adoption path. Placement changes adapter role labels, never acceptance rules:
   both modes bind the exact product lock, derive the same Runtime Host command
   registry and lease policy, preserve host receipts, and name
   `module.runtime.host` as authority. Java/JNI/process layers remain adapters.
+- `ManifoldBrokerRuntime` is the only product mutation gate. It co-locates the
+  exact broker adapter with Manifold admission, retains one-use permits bound
+  to their opaque token, signature-projected client, exact command capability,
+  use-creation admission revision, expiry, and provider epoch, consumes a permit before one
+  Runtime Host review/apply attempt, and emits the combined receipt. Rebinds to
+  the same live provider preserve state; a provider restart creates a fresh
+  explicit epoch. An unrelated grant/token mutation may advance the global
+  admission revision without invalidating another client's bounded use;
+  revocation or expiry invalidates only uses derived from the affected token.
+- Runtime Host requests that carry low-rate effect parameters must bind the
+  canonical typed payload through
+  `rusty.manifold.runtime_host.typed_params_digest.v1`. Review, dispatch, and
+  application receipts preserve that exact digest; mismatched, malformed, or
+  over-4096-byte canonical payload bindings reject before accepted state moves.
 - `rusty-manifold-admission` owns trusted client grants, opaque 256-bit
   short-lived tokens, one-time capability-use request ids, explicit revocation
   and expiry, accepted revisions, and audit. Platform adapters may prove UID,
