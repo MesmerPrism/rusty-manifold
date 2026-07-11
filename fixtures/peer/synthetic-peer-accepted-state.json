@@ -1,0 +1,33 @@
+{
+  "$schema": "rusty.manifold.peer.accepted_state.v1",
+  "authority_revision": 2,
+  "peers": [
+    {
+      "identity": {
+        "$schema": "rusty.manifold.peer.identity.v1",
+        "peer_id": "peer.alpha",
+        "key_fingerprint": "fingerprint.peer.alpha",
+        "trust_domain": "trust.morphospace.peer",
+        "roles": [
+          "observer",
+          "rendezvous"
+        ]
+      },
+      "status": {
+        "$schema": "rusty.manifold.peer.status.v1",
+        "peer_id": "peer.alpha",
+        "status_revision": 1,
+        "observed_at_ms": 1000,
+        "expires_at_ms": 61000,
+        "availability": "ready",
+        "capability_ids": [
+          "capability.peer.status",
+          "capability.rendezvous.ble"
+        ]
+      }
+    }
+  ],
+  "applied_proposal_ids": [
+    "proposal.peer.alpha.001"
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "$schema": "rusty.manifold.peer.review_case.v1",
+  "case_id": "peer.review.stale_observation.001",
+  "current_state": {
+    "$schema": "rusty.manifold.peer.accepted_state.v1",
+    "authority_revision": 1,
+    "peers": [],
+    "applied_proposal_ids": []
+  },
+  "proposal": {
+    "$schema": "rusty.manifold.peer.status_proposal.v1",
+    "proposal_id": "proposal.peer.alpha.001",
+    "expected_authority_revision": 1,
+    "proposer_id": "adapter.sidecar.public",
+    "identity": {
+      "$schema": "rusty.manifold.peer.identity.v1",
+      "peer_id": "peer.alpha",
+      "key_fingerprint": "fingerprint.peer.alpha",
+      "trust_domain": "trust.morphospace.peer",
+      "roles": [
+        "observer",
+        "rendezvous"
+      ]
+    },
+    "status": {
+      "$schema": "rusty.manifold.peer.status.v1",
+      "peer_id": "peer.alpha",
+      "status_revision": 1,
+      "observed_at_ms": 500,
+      "expires_at_ms": 1500,
+      "availability": "ready",
+      "capability_ids": [
+        "capability.peer.status",
+        "capability.rendezvous.ble"
+      ]
+    },
+    "payload_class": "low_rate_descriptor"
+  },
+  "trusted_key_fingerprints": [
+    "fingerprint.peer.alpha"
+  ],
+  "now_ms": 2000,
+  "expected_outcome": "rejected"
+}

@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.peer.audit_event.v1",
+  "event_id": "audit.peer.proposal.peer.alpha.001",
+  "proposal_id": "proposal.peer.alpha.001",
+  "peer_id": "peer.alpha",
+  "prior_authority_revision": 1,
+  "resulting_authority_revision": 2,
+  "outcome": "accepted",
+  "rejection_reason": null
+}

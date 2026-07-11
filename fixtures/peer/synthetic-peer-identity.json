@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.peer.identity.v1",
+  "peer_id": "peer.alpha",
+  "key_fingerprint": "fingerprint.peer.alpha",
+  "trust_domain": "trust.morphospace.peer",
+  "roles": [
+    "observer",
+    "rendezvous"
+  ]
+}

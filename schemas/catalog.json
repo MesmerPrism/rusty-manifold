@@ -348,6 +348,77 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.peer.identity.v1",
+      "rust_type": "ManifoldPeerIdentity",
+      "fixture_paths": [
+        "fixtures/peer/synthetic-peer-identity.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.peer.status.v1",
+      "rust_type": "ManifoldPeerStatus",
+      "fixture_paths": [
+        "fixtures/peer/synthetic-peer-status.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.peer.status_proposal.v1",
+      "rust_type": "ManifoldPeerStatusProposal",
+      "fixture_paths": [
+        "fixtures/peer/synthetic-peer-proposal.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.peer.accepted_state.v1",
+      "rust_type": "ManifoldAcceptedPeerState",
+      "fixture_paths": [
+        "fixtures/peer/synthetic-peer-accepted-state.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.peer.review_case.v1",
+      "rust_type": "ManifoldPeerReviewCase",
+      "fixture_paths": [
+        "fixtures/peer-review/synthetic-peer-accepted-review.json",
+        "fixtures/damaged/peer-status-stale-authority.json",
+        "fixtures/damaged/peer-status-replayed-proposal.json",
+        "fixtures/damaged/peer-status-untrusted-identity.json",
+        "fixtures/damaged/peer-status-stale-observation.json",
+        "fixtures/damaged/peer-status-high-rate-payload.json",
+        "fixtures/damaged/peer-status-advisory-command.json",
+        "fixtures/damaged/peer-status-role-escalation.json",
+        "fixtures/damaged/peer-status-stale-status-revision.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.peer.decision.v1",
+      "rust_type": "ManifoldPeerDecision",
+      "fixture_paths": [
+        "fixtures/peer/synthetic-peer-decision.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.peer.rejection.v1",
+      "rust_type": "ManifoldPeerRejection",
+      "fixture_paths": [
+        "fixtures/peer/synthetic-peer-rejection.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.peer.audit_event.v1",
+      "rust_type": "ManifoldPeerAuditEvent",
+      "fixture_paths": [
+        "fixtures/peer/synthetic-peer-audit-event.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.peer.application_receipt.v1",
+      "rust_type": "ManifoldPeerApplicationReceipt",
+      "fixture_paths": [
+        "fixtures/peer/synthetic-peer-application-receipt.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.authority.snapshot.v1",
       "rust_type": "ManifoldAuthoritySnapshot",
       "fixture_paths": [

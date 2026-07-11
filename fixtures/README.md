@@ -1,5 +1,11 @@
 # Fixtures
 
+The `peer/` and `peer-review/` fixtures cover Manifold-owned peer identity,
+status proposals, accepted state, decisions, rejections, audit events, and
+application receipts. Matching damaged fixtures prove stale authority/status,
+replay, untrusted identity, role escalation, high-rate payload, and advisory
+command rejection.
+
 Fixtures are committed contract examples. They should be small, deterministic,
 and safe to use in tests, generated schemas, documentation, and clients.
 

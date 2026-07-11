@@ -1,0 +1,12 @@
+{
+  "$schema": "rusty.manifold.peer.status.v1",
+  "peer_id": "peer.alpha",
+  "status_revision": 1,
+  "observed_at_ms": 1000,
+  "expires_at_ms": 61000,
+  "availability": "ready",
+  "capability_ids": [
+    "capability.peer.status",
+    "capability.rendezvous.ble"
+  ]
+}

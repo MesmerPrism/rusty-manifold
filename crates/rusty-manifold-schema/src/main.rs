@@ -109,11 +109,72 @@ fn schema_entries() -> Vec<SchemaEntry> {
     entries.extend(module_and_stream_entries());
     entries.extend(command_entries());
     entries.extend(coordination_entries());
+    entries.extend(peer_entries());
     entries.extend(authority_entries());
     entries.extend(bridge_route_entries());
     entries.extend(host_and_deployment_entries());
     entries.extend(verification_entries());
     entries
+}
+
+fn peer_entries() -> Vec<SchemaEntry> {
+    vec![
+        entry(
+            "rusty.manifold.peer.identity.v1",
+            "ManifoldPeerIdentity",
+            &["fixtures/peer/synthetic-peer-identity.json"],
+        ),
+        entry(
+            "rusty.manifold.peer.status.v1",
+            "ManifoldPeerStatus",
+            &["fixtures/peer/synthetic-peer-status.json"],
+        ),
+        entry(
+            "rusty.manifold.peer.status_proposal.v1",
+            "ManifoldPeerStatusProposal",
+            &["fixtures/peer/synthetic-peer-proposal.json"],
+        ),
+        entry(
+            "rusty.manifold.peer.accepted_state.v1",
+            "ManifoldAcceptedPeerState",
+            &["fixtures/peer/synthetic-peer-accepted-state.json"],
+        ),
+        entry(
+            "rusty.manifold.peer.review_case.v1",
+            "ManifoldPeerReviewCase",
+            &[
+                "fixtures/peer-review/synthetic-peer-accepted-review.json",
+                "fixtures/damaged/peer-status-stale-authority.json",
+                "fixtures/damaged/peer-status-replayed-proposal.json",
+                "fixtures/damaged/peer-status-untrusted-identity.json",
+                "fixtures/damaged/peer-status-stale-observation.json",
+                "fixtures/damaged/peer-status-high-rate-payload.json",
+                "fixtures/damaged/peer-status-advisory-command.json",
+                "fixtures/damaged/peer-status-role-escalation.json",
+                "fixtures/damaged/peer-status-stale-status-revision.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.peer.decision.v1",
+            "ManifoldPeerDecision",
+            &["fixtures/peer/synthetic-peer-decision.json"],
+        ),
+        entry(
+            "rusty.manifold.peer.rejection.v1",
+            "ManifoldPeerRejection",
+            &["fixtures/peer/synthetic-peer-rejection.json"],
+        ),
+        entry(
+            "rusty.manifold.peer.audit_event.v1",
+            "ManifoldPeerAuditEvent",
+            &["fixtures/peer/synthetic-peer-audit-event.json"],
+        ),
+        entry(
+            "rusty.manifold.peer.application_receipt.v1",
+            "ManifoldPeerApplicationReceipt",
+            &["fixtures/peer/synthetic-peer-application-receipt.json"],
+        ),
+    ]
 }
 
 fn package_and_graph_entries() -> Vec<SchemaEntry> {

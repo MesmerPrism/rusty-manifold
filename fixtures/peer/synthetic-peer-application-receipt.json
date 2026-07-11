@@ -1,0 +1,9 @@
+{
+  "$schema": "rusty.manifold.peer.application_receipt.v1",
+  "receipt_id": "receipt.peer.proposal.peer.alpha.001",
+  "decision_id": "decision.peer.proposal.peer.alpha.001",
+  "proposal_id": "proposal.peer.alpha.001",
+  "applied": true,
+  "prior_authority_revision": 1,
+  "resulting_authority_revision": 2
+}

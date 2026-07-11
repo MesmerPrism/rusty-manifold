@@ -1,0 +1,7 @@
+{
+  "$schema": "rusty.manifold.peer.rejection.v1",
+  "proposal_id": "proposal.peer.alpha.001",
+  "peer_id": "peer.alpha",
+  "authority_revision": 1,
+  "reason": "stale_authority_revision"
+}

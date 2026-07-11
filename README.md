@@ -1,5 +1,11 @@
 # Rusty Manifold
 
+Manifold includes a source-only peer identity and accepted low-rate status
+authority slice. Sidecars and apps remain proposers; review and application
+reject replay, stale revisions/status, untrusted identity, role escalation,
+high-rate/media planes, and advisory command fields. See
+[docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md](docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md).
+
 Rusty Manifold is the typed contract layer for graph, stream, command, lease,
 module, host, clock, session, and audit surfaces across the Rusty stack.
 
