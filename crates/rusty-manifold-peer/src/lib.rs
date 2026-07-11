@@ -1,5 +1,9 @@
 //! Manifold-owned peer identity and accepted low-rate peer-status authority.
 
+mod peer_session;
+
+pub use peer_session::*;
+
 use rusty_manifold_model::{DottedId, Revision, SchemaId};
 use serde::{Deserialize, Serialize};
 

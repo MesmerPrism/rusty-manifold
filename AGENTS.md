@@ -41,14 +41,15 @@ it must not define Lattice relation semantics or default to legacy
 4. `docs/PORTS_AND_ADAPTERS.md`
 5. `docs/COMMANDS_LEASES_AND_AUTHORITY.md`
 6. `docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md`
-7. `docs/RUNTIME_HOST.md`
-8. `docs/BROKER_PRODUCTS.md`
-9. `docs/BROKER_ADAPTERS.md`
-10. `docs/ADMISSION.md`
-11. `docs/IMPLEMENTATION_PLAN.md`
-12. `docs/MODULE_PACKAGE_STRATEGY.md`
-13. `docs/SCHEMA_EVOLUTION.md`
-14. `fixtures/README.md`
+7. `docs/PEER_SESSION_AUTHORITY.md`
+8. `docs/RUNTIME_HOST.md`
+9. `docs/BROKER_PRODUCTS.md`
+10. `docs/BROKER_ADAPTERS.md`
+11. `docs/ADMISSION.md`
+12. `docs/IMPLEMENTATION_PLAN.md`
+13. `docs/MODULE_PACKAGE_STRATEGY.md`
+14. `docs/SCHEMA_EVOLUTION.md`
+15. `fixtures/README.md`
 
 ## Architecture Rules
 
@@ -59,6 +60,10 @@ it must not define Lattice relation semantics or default to legacy
 - Peer adapters propose stable identity and bounded low-rate status through
   `rusty-manifold-peer`; only Manifold review/application advances accepted
   peer state or emits the authoritative audit/application receipt.
+- Authenticated rendezvous adapters may propose expiring peer sessions, but
+  Manifold alone accepts/rejects them, advances the session revision, revokes
+  them, and emits revision-scoped topology authorization. Platform topology
+  must not start from adapter evidence alone.
 - Standalone and embedded products must use `rusty-manifold-runtime-host` for
   revisioned review/application, lease expiry, restart, replay, and audit. The
   host is source-only; product adapters and policy stay outside it.

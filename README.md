@@ -6,6 +6,12 @@ reject replay, stale revisions/status, untrusted identity, role escalation,
 high-rate/media planes, and advisory command fields. See
 [docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md](docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md).
 
+[Peer-session authority](docs/PEER_SESSION_AUTHORITY.md) turns authenticated,
+expiring rendezvous evidence into revisioned accept/reject decisions and
+short-lived topology authorization. BLE and platform adapters remain evidence
+producers; replay, expiry, revocation, peer substitution, and media capability
+requests fail closed before state or topology can advance.
+
 The source-only [Manifold Runtime Host](docs/RUNTIME_HOST.md) provides the
 durable revision, command review/application, lease-expiry, replay, restart,
 and audit engine that later standalone and embedded broker products consume.
