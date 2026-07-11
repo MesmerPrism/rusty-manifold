@@ -112,11 +112,37 @@ fn schema_entries() -> Vec<SchemaEntry> {
     entries.extend(peer_entries());
     entries.extend(runtime_host_entries());
     entries.extend(broker_product_entries());
+    entries.extend(broker_adapter_entries());
     entries.extend(authority_entries());
     entries.extend(bridge_route_entries());
     entries.extend(host_and_deployment_entries());
     entries.extend(verification_entries());
     entries
+}
+
+fn broker_adapter_entries() -> Vec<SchemaEntry> {
+    vec![
+        entry(
+            "rusty.manifold.broker.adapter_config.v1",
+            "ManifoldBrokerAdapterConfig",
+            &[
+                "fixtures/broker-adapter/standalone-config.json",
+                "fixtures/broker-adapter/embedded-config.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.broker.adapter_receipt.v1",
+            "ManifoldBrokerAdapterReceipt",
+            &[
+                "fixtures/broker-adapter/standalone-applied.json",
+                "fixtures/broker-adapter/embedded-applied.json",
+                "fixtures/broker-adapter/standalone-unknown-rejected.json",
+                "fixtures/broker-adapter/embedded-unknown-rejected.json",
+                "fixtures/broker-adapter/standalone-unleased-rejected.json",
+                "fixtures/broker-adapter/embedded-unleased-rejected.json",
+            ],
+        ),
+    ]
 }
 
 fn broker_product_entries() -> Vec<SchemaEntry> {

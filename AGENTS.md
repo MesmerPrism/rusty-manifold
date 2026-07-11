@@ -43,10 +43,11 @@ it must not define Lattice relation semantics or default to legacy
 6. `docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md`
 7. `docs/RUNTIME_HOST.md`
 8. `docs/BROKER_PRODUCTS.md`
-9. `docs/IMPLEMENTATION_PLAN.md`
-10. `docs/MODULE_PACKAGE_STRATEGY.md`
-11. `docs/SCHEMA_EVOLUTION.md`
-12. `fixtures/README.md`
+9. `docs/BROKER_ADAPTERS.md`
+10. `docs/IMPLEMENTATION_PLAN.md`
+11. `docs/MODULE_PACKAGE_STRATEGY.md`
+12. `docs/SCHEMA_EVOLUTION.md`
+13. `fixtures/README.md`
 
 ## Architecture Rules
 
@@ -63,6 +64,11 @@ it must not define Lattice relation semantics or default to legacy
 - Broker product features resolve through `rusty-manifold-broker-product` into
   exact commands, streams, modules, permissions, and fingerprint. Downstream
   manifests project the lock and must not expand it.
+- `rusty-manifold-broker-adapter` is the only standalone/embedded command
+  adoption path. Placement changes adapter role labels, never acceptance rules:
+  both modes bind the exact product lock, derive the same Runtime Host command
+  registry and lease policy, preserve host receipts, and name
+  `module.runtime.host` as authority. Java/JNI/process layers remain adapters.
 - When CLI, API, GUI, bridge, or platform helpers can request the same state
   change, they must all map into one Manifold command/schema/review path.
   Helper-local readback or UI state is observation evidence only until the

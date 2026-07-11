@@ -12,6 +12,10 @@ source-only `rusty-manifold-runtime-host` crate.
 Broker product spec and lock entries bind exact feature closure and immutable
 fingerprints to `rusty-manifold-broker-product`.
 
+Broker adapter config and receipt entries bind standalone/embedded placement to
+one exact product lock while preserving the Runtime Host decision and truthful
+adapter/authority labels.
+
 Generated schema catalogs live here. Full JSON Schema export can be added after
 the catalog and fixtures stabilize.
 

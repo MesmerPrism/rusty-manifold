@@ -56,6 +56,10 @@ and safe to use in tests, generated schemas, documentation, and clients.
 - `bridge-route/`: transport-neutral bridge route descriptors and evidence
   summaries for command, marker, telemetry, device-management, and media
   data-plane routes.
+- `broker-adapter/`: deterministic standalone/embedded configs, product locks,
+  and applied/unknown/unleased receipts. Paired receipts deliberately differ in
+  placement and lock fingerprint while preserving byte-equivalent Runtime Host
+  dispatch/application decisions and `module.runtime.host` authority ownership.
 - `shell-handoff/`: contract-backed shell handoff and Manifold review receipt examples for downstream operator or render shells.
 - `simulator/`: deterministic source-only simulator snapshots.
 - `damaged/`: intentionally invalid examples.

@@ -14,6 +14,11 @@ and audit engine that later standalone and embedded broker products consume.
 runtime mode and resolve explicit camera, direct-P2P, and BLE features into a
 permission-minimal immutable closure.
 
+[Broker adapters](docs/BROKER_ADAPTERS.md) bind standalone and embedded
+placements to that exact lock and route every command through the same Runtime
+Host review/application implementation. Their receipts preserve the host
+decision and identify the process layer as an adapter, not authority.
+
 Rusty Manifold is the typed contract layer for graph, stream, command, lease,
 module, host, clock, session, and audit surfaces across the Rusty stack.
 

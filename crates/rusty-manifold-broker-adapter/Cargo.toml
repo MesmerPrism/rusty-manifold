@@ -1,0 +1,18 @@
+[package]
+name = "rusty-manifold-broker-adapter"
+description = "Standalone and embedded broker adapters over the Manifold Runtime Host."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rusty-manifold-broker-product = { path = "../rusty-manifold-broker-product" }
+rusty-manifold-model = { path = "../rusty-manifold-model", features = ["serde"] }
+rusty-manifold-runtime-host = { path = "../rusty-manifold-runtime-host" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints]
+workspace = true

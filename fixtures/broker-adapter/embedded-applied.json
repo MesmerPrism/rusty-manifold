@@ -1,0 +1,29 @@
+{
+  "$schema": "rusty.manifold.broker.adapter_receipt.v1",
+  "adapter_id": "adapter.broker.embedded",
+  "mode": "embedded",
+  "adapter_role": "in_process_adapter",
+  "product_lock_id": "lock.broker.camera.parity",
+  "product_lock_fingerprint": "fnv1a64-5c87754f12db8112",
+  "authority_host_id": "host.broker.parity",
+  "authority_owner_id": "module.runtime.host",
+  "dispatch": {
+    "$schema": "rusty.manifold.runtime_host.dispatch_receipt.v1",
+    "dispatch_id": "dispatch.runtime.request.broker.applied",
+    "request_id": "request.broker.applied",
+    "command_id": "command.media.session.start",
+    "reviewed_authority_revision": 1,
+    "outcome": "ready",
+    "rejection_reason": null
+  },
+  "application": {
+    "$schema": "rusty.manifold.runtime_host.application_receipt.v1",
+    "receipt_id": "receipt.runtime.request.broker.applied",
+    "dispatch_id": "dispatch.runtime.request.broker.applied",
+    "request_id": "request.broker.applied",
+    "applied": true,
+    "prior_authority_revision": 1,
+    "resulting_authority_revision": 2,
+    "rejection_reason": null
+  }
+}

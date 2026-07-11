@@ -1,0 +1,9 @@
+{
+  "$schema": "rusty.manifold.broker.adapter_config.v1",
+  "adapter_id": "adapter.broker.embedded",
+  "mode": "embedded",
+  "product_lock_id": "lock.broker.camera.parity",
+  "product_lock_fingerprint": "fnv1a64-5c87754f12db8112",
+  "authority_host_id": "host.broker.parity",
+  "authority_owner_id": "module.runtime.host"
+}

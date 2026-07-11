@@ -487,6 +487,26 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.broker.adapter_config.v1",
+      "rust_type": "ManifoldBrokerAdapterConfig",
+      "fixture_paths": [
+        "fixtures/broker-adapter/standalone-config.json",
+        "fixtures/broker-adapter/embedded-config.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.adapter_receipt.v1",
+      "rust_type": "ManifoldBrokerAdapterReceipt",
+      "fixture_paths": [
+        "fixtures/broker-adapter/standalone-applied.json",
+        "fixtures/broker-adapter/embedded-applied.json",
+        "fixtures/broker-adapter/standalone-unknown-rejected.json",
+        "fixtures/broker-adapter/embedded-unknown-rejected.json",
+        "fixtures/broker-adapter/standalone-unleased-rejected.json",
+        "fixtures/broker-adapter/embedded-unleased-rejected.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.authority.snapshot.v1",
       "rust_type": "ManifoldAuthoritySnapshot",
       "fixture_paths": [
