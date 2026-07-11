@@ -1,0 +1,14 @@
+{
+  "$schema": "rusty.manifold.media.session_descriptor.v1",
+  "session_id": "session.media.damaged",
+  "authority_revision": 4,
+  "platform_runtime_spec_id": "runtime.media.damaged",
+  "source_ids": ["source.camera.left", "source.camera.left"],
+  "processor_ids": ["processor.dual-lane"],
+  "route_ids": ["route.direct-p2p.left"],
+  "sink_ids": ["sink.native-openxr"],
+  "stream_ids": ["stream.media.left"],
+  "payload_plane": "control-json",
+  "inline_media_payloads_allowed": true,
+  "remote_camera_compatibility": false
+}

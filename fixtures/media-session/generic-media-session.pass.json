@@ -1,0 +1,14 @@
+{
+  "$schema": "rusty.manifold.media.session_descriptor.v1",
+  "session_id": "session.media.generic-example",
+  "authority_revision": 4,
+  "platform_runtime_spec_id": "runtime.media.generic-example",
+  "source_ids": ["source.camera.left", "source.camera.right"],
+  "processor_ids": ["processor.dual-lane"],
+  "route_ids": ["route.direct-p2p.left", "route.direct-p2p.right"],
+  "sink_ids": ["sink.native-openxr"],
+  "stream_ids": ["stream.media.left", "stream.media.right"],
+  "payload_plane": "binary-media",
+  "inline_media_payloads_allowed": false,
+  "remote_camera_compatibility": false
+}

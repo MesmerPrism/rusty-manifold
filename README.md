@@ -12,6 +12,11 @@ short-lived topology authorization. BLE and platform adapters remain evidence
 producers; replay, expiry, revocation, peer substitution, and media capability
 requests fail closed before state or topology can advance.
 
+[Media-session authority](docs/MEDIA_SESSION_AUTHORITY.md) binds accepted
+source, processor, route, sink, stream, and platform-runtime references while
+keeping all high-rate bytes on the binary media plane. Quest lifecycle state
+is downstream adoption evidence, not a second Manifold session authority.
+
 The source-only [Manifold Runtime Host](docs/RUNTIME_HOST.md) provides the
 durable revision, command review/application, lease-expiry, replay, restart,
 and audit engine that later standalone and embedded broker products consume.

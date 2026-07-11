@@ -42,14 +42,15 @@ it must not define Lattice relation semantics or default to legacy
 5. `docs/COMMANDS_LEASES_AND_AUTHORITY.md`
 6. `docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md`
 7. `docs/PEER_SESSION_AUTHORITY.md`
-8. `docs/RUNTIME_HOST.md`
-9. `docs/BROKER_PRODUCTS.md`
-10. `docs/BROKER_ADAPTERS.md`
-11. `docs/ADMISSION.md`
-12. `docs/IMPLEMENTATION_PLAN.md`
-13. `docs/MODULE_PACKAGE_STRATEGY.md`
-14. `docs/SCHEMA_EVOLUTION.md`
-15. `fixtures/README.md`
+8. `docs/MEDIA_SESSION_AUTHORITY.md`
+9. `docs/RUNTIME_HOST.md`
+10. `docs/BROKER_PRODUCTS.md`
+11. `docs/BROKER_ADAPTERS.md`
+12. `docs/ADMISSION.md`
+13. `docs/IMPLEMENTATION_PLAN.md`
+14. `docs/MODULE_PACKAGE_STRATEGY.md`
+15. `docs/SCHEMA_EVOLUTION.md`
+16. `fixtures/README.md`
 
 ## Architecture Rules
 
@@ -64,6 +65,10 @@ it must not define Lattice relation semantics or default to legacy
   Manifold alone accepts/rejects them, advances the session revision, revokes
   them, and emits revision-scoped topology authorization. Platform topology
   must not start from adapter evidence alone.
+- Generic media-session descriptors bind accepted Manifold session/stream
+  state to source, processor, route, sink, and platform runtime references.
+  They carry no media bytes or app-specific capture/codec/socket policy;
+  platform lifecycle receipts remain downstream adoption evidence.
 - Standalone and embedded products must use `rusty-manifold-runtime-host` for
   revisioned review/application, lease expiry, restart, replay, and audit. The
   host is source-only; product adapters and policy stay outside it.

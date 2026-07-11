@@ -1755,3 +1755,32 @@ fn damaged_shell_handoff_review_fixture_rejects_runtime_started() {
 
     assert_eq!(error.rejection_code(), "runtime_started");
 }
+
+#[test]
+fn generic_media_session_fixture_validates_without_inline_payloads() {
+    let descriptor = fixture::<ManifoldMediaSessionDescriptor>(include_str!(
+        "../../../../fixtures/media-session/generic-media-session.pass.json"
+    ));
+    descriptor
+        .validate()
+        .expect("media-session fixture validates");
+}
+
+#[test]
+fn damaged_media_session_fixture_rejects_plane_and_duplicate_refs() {
+    let descriptor = fixture::<ManifoldMediaSessionDescriptor>(include_str!(
+        "../../../../fixtures/damaged/media-session-inline-payload.json"
+    ));
+    let errors = descriptor
+        .validate()
+        .expect_err("damaged media session rejects");
+    assert!(errors
+        .iter()
+        .any(|error| error.message.contains("binary-media")));
+    assert!(errors
+        .iter()
+        .any(|error| error.message.contains("inline media")));
+    assert!(errors
+        .iter()
+        .any(|error| error.message.contains("duplicates")));
+}
