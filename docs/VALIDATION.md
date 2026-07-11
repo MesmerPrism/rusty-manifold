@@ -24,7 +24,23 @@ For narrow model or contract edits, run the focused Rust tests first:
 ```powershell
 cargo test -p rusty-manifold-model
 cargo test -p rusty-manifold-fixtures
+cargo test -p rusty-manifold-broker-adapter
+cargo test -p rusty-manifold-peer
 ```
+
+The broker-adapter suite includes the integrated authority/admission gate:
+bounded one-use admission, token/client/capability/revision/epoch binding,
+unknown/unselected/unleased/stale/replay damage, revocation invalidation, and
+fresh-provider epoch behavior. It also proves unrelated admission revision
+advances preserve independent clients' pending uses while exact-token
+revocation/expiry removes only derived uses. The Runtime Host suite covers
+canonical typed-parameter digest binding through request, dispatch, and
+application plus tamper and 4096-byte limit damage.
+
+The peer suite covers operator-enrolled Ed25519 credentials, strict reciprocal
+signature review, retained rendezvous provenance, signed peer-session role and
+current-revision binding, exact mesh membership, advisory-route rejection,
+accepted media-session closure, and current direct-lane lease validation.
 
 For schema or fixture work, rerun the fixture and schema commands directly so
 the checked-in generated artifacts stay deterministic:

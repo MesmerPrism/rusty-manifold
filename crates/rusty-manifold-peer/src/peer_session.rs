@@ -3,7 +3,11 @@
 use rusty_manifold_model::{DottedId, Revision, SchemaId};
 use serde::{Deserialize, Serialize};
 
-use crate::{ManifoldAcceptedPeerState, ManifoldPeerRole};
+use crate::{
+    validate_current_rendezvous_receipt, ManifoldAcceptedPeerState, ManifoldPeerEnrollmentState,
+    ManifoldPeerRole, ManifoldRendezvousAuthorityState, ManifoldRendezvousReceipt,
+    ManifoldRendezvousReceiptValidationError,
+};
 
 /// Peer-session proposal schema.
 pub const PEER_SESSION_PROPOSAL_SCHEMA: &str = "rusty.manifold.peer.session_proposal.v1";
@@ -18,6 +22,11 @@ pub const PEER_TOPOLOGY_AUTHORIZATION_SCHEMA: &str =
     "rusty.manifold.peer.topology_authorization.v1";
 /// Peer-session revocation request schema.
 pub const PEER_SESSION_REVOCATION_SCHEMA: &str = "rusty.manifold.peer.session_revocation.v1";
+/// Signed-rendezvous peer-session review schema.
+pub const SIGNED_PEER_SESSION_REVIEW_SCHEMA: &str = "rusty.manifold.peer.signed_session_review.v1";
+/// Signed-rendezvous topology authorization schema.
+pub const SIGNED_PEER_TOPOLOGY_AUTHORIZATION_SCHEMA: &str =
+    "rusty.manifold.peer.signed_topology_authorization.v1";
 /// Product Wi-Fi Direct topology contract id.
 pub const PRODUCT_WIFI_DIRECT_TOPOLOGY_CONTRACT: &str =
     "rusty.quest.product_wifi_direct_topology.v1";
@@ -110,6 +119,10 @@ pub struct ManifoldAcceptedPeerSession {
     pub decision_id: DottedId,
     /// Whether explicit revocation ended the session.
     pub revoked: bool,
+    /// Signed rendezvous receipt that authorized this session. `None` is the
+    /// legacy adapter-attestation compatibility path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rendezvous_receipt_id: Option<DottedId>,
 }
 
 /// Manifold-owned peer-session snapshot.
@@ -146,6 +159,24 @@ pub struct ManifoldPeerSessionReviewCase {
     pub trusted_adapter_ids: Vec<DottedId>,
     /// Review time.
     pub now_ms: u64,
+}
+
+/// Peer-session review that requires a current Manifold-signed-rendezvous
+/// receipt instead of trusting an adapter Boolean as topology authority.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldSignedPeerSessionReviewCase {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Existing peer/session review inputs.
+    pub session_review: ManifoldPeerSessionReviewCase,
+    /// Accepted reciprocal-signature receipt.
+    pub rendezvous_receipt: ManifoldRendezvousReceipt,
+    /// Current enrollment authority whose active keys must match the receipt.
+    pub current_enrollment: ManifoldPeerEnrollmentState,
+    /// Current rendezvous authority that must retain the exact receipt.
+    pub current_rendezvous_state: ManifoldRendezvousAuthorityState,
 }
 
 /// Peer-session decision outcome.
@@ -196,6 +227,12 @@ pub enum ManifoldPeerSessionRejectionReason {
     UnsupportedTopologyContract,
     /// Subject attempted to replace an active peer without revocation.
     PeerChangedWithoutRevocation,
+    /// The clean product path did not carry an accepted signed-rendezvous receipt.
+    SignedRendezvousRequired,
+    /// Signed receipt pair, roles, contract, keys, or validity did not match.
+    SignedRendezvousMismatch,
+    /// Signed receipt was not issued by the current rendezvous authority revision.
+    StaleRendezvousAuthority,
 }
 
 /// Audit-bearing peer-session decision.
@@ -252,6 +289,25 @@ pub struct ManifoldPeerTopologyAuthorization {
     pub expires_at_ms: u64,
     /// Denial reason on a non-authorizing receipt.
     pub denial_reason: Option<ManifoldPeerSessionRejectionReason>,
+}
+
+/// Topology authorization bound to the signed-rendezvous authority revision.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldSignedPeerTopologyAuthorization {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Existing session authority receipt.
+    pub topology_authorization: ManifoldPeerTopologyAuthorization,
+    /// Signed rendezvous receipt reviewed by Manifold.
+    pub rendezvous_receipt_id: DottedId,
+    /// Rendezvous authority revision that accepted the pair.
+    pub rendezvous_authority_revision: Revision,
+    /// Enrollment authority revision whose keys signed the pair receipt.
+    pub enrollment_authority_revision: Revision,
+    /// Enrolled key ids used by the pair.
+    pub signer_key_ids: Vec<DottedId>,
 }
 
 /// Explicit peer-session revocation request.
@@ -311,6 +367,115 @@ pub fn review_and_apply_peer_session(
         rejection,
     );
     (decision, authorization)
+}
+
+/// Review and apply a peer session only when it is bound to a fresh accepted
+/// reciprocal-signature receipt. This is the clean product path; the older
+/// adapter-attestation function remains a compatibility surface.
+#[must_use]
+pub fn review_and_apply_signed_peer_session(
+    case: &ManifoldSignedPeerSessionReviewCase,
+) -> (
+    ManifoldPeerSessionDecision,
+    ManifoldSignedPeerTopologyAuthorization,
+) {
+    let signed_rejection = validate_signed_session_receipt(case).err();
+    let base = &case.session_review;
+    if let Some(reason) = signed_rejection {
+        let prior = base.current_state.authority_revision;
+        let decision_id = derived("decision.peer-session", &base.proposal.proposal_id);
+        let decision = ManifoldPeerSessionDecision {
+            schema_id: schema(PEER_SESSION_DECISION_SCHEMA),
+            decision_id: decision_id.clone(),
+            proposal_id: base.proposal.proposal_id.clone(),
+            outcome: ManifoldPeerSessionOutcome::Rejected,
+            rejection_reason: Some(reason.clone()),
+            prior_authority_revision: prior,
+            resulting_authority_revision: prior,
+            applied: false,
+            accepted_state: None,
+        };
+        return (
+            decision,
+            ManifoldSignedPeerTopologyAuthorization {
+                schema_id: schema(SIGNED_PEER_TOPOLOGY_AUTHORIZATION_SCHEMA),
+                topology_authorization: authorization(
+                    &base.proposal,
+                    decision_id,
+                    prior,
+                    base.now_ms,
+                    false,
+                    Some(reason),
+                ),
+                rendezvous_receipt_id: case.rendezvous_receipt.receipt_id.clone(),
+                rendezvous_authority_revision: case.current_rendezvous_state.authority_revision,
+                enrollment_authority_revision: case.current_enrollment.authority_revision,
+                signer_key_ids: case.rendezvous_receipt.signer_key_ids.clone(),
+            },
+        );
+    }
+
+    let (mut decision, authorization) = review_and_apply_peer_session(base);
+    if let Some(state) = &mut decision.accepted_state {
+        if let Some(session) = state
+            .sessions
+            .iter_mut()
+            .find(|session| session.proposal.session_id == base.proposal.session_id)
+        {
+            session.rendezvous_receipt_id = Some(case.rendezvous_receipt.receipt_id.clone());
+        }
+    }
+    (
+        decision,
+        ManifoldSignedPeerTopologyAuthorization {
+            schema_id: schema(SIGNED_PEER_TOPOLOGY_AUTHORIZATION_SCHEMA),
+            topology_authorization: authorization,
+            rendezvous_receipt_id: case.rendezvous_receipt.receipt_id.clone(),
+            rendezvous_authority_revision: case.current_rendezvous_state.authority_revision,
+            enrollment_authority_revision: case.current_enrollment.authority_revision,
+            signer_key_ids: case.rendezvous_receipt.signer_key_ids.clone(),
+        },
+    )
+}
+
+fn validate_signed_session_receipt(
+    case: &ManifoldSignedPeerSessionReviewCase,
+) -> Result<(), ManifoldPeerSessionRejectionReason> {
+    if case.schema_id.as_str() != SIGNED_PEER_SESSION_REVIEW_SCHEMA {
+        return Err(ManifoldPeerSessionRejectionReason::SchemaMismatch);
+    }
+    let receipt = &case.rendezvous_receipt;
+    let proposal = &case.session_review.proposal;
+    if !receipt.accepted || receipt.rejection_reason.is_some() {
+        return Err(ManifoldPeerSessionRejectionReason::SignedRendezvousRequired);
+    }
+    validate_current_rendezvous_receipt(
+        &case.current_rendezvous_state,
+        &case.current_enrollment,
+        receipt,
+        &proposal.group_owner_peer_id,
+        &proposal.client_peer_id,
+        case.session_review.now_ms,
+    )
+    .map_err(|error| match error {
+        ManifoldRendezvousReceiptValidationError::SchemaMismatch => {
+            ManifoldPeerSessionRejectionReason::SchemaMismatch
+        }
+        ManifoldRendezvousReceiptValidationError::StaleAuthorityRevision => {
+            ManifoldPeerSessionRejectionReason::StaleRendezvousAuthority
+        }
+        ManifoldRendezvousReceiptValidationError::ReceiptNotRetained
+        | ManifoldRendezvousReceiptValidationError::InvalidReceipt
+        | ManifoldRendezvousReceiptValidationError::CredentialNotCurrent => {
+            ManifoldPeerSessionRejectionReason::SignedRendezvousMismatch
+        }
+    })?;
+    if receipt.topology_contract_id != proposal.topology_contract_id
+        || receipt.expires_at_ms < proposal.expires_at_ms
+    {
+        return Err(ManifoldPeerSessionRejectionReason::SignedRendezvousMismatch);
+    }
+    Ok(())
 }
 
 /// Explicitly revoke a current peer session and emit a non-authorizing receipt.
@@ -481,6 +646,7 @@ fn apply(case: &ManifoldPeerSessionReviewCase, decision_id: DottedId) -> Manifol
         proposal: case.proposal.clone(),
         decision_id,
         revoked: false,
+        rendezvous_receipt_id: None,
     };
     if let Some(existing) = state
         .sessions
@@ -532,12 +698,113 @@ fn derived(prefix: &str, suffix: &DottedId) -> DottedId {
 
 #[cfg(test)]
 mod tests {
+    use ed25519_dalek::SigningKey;
+    use sha2::{Digest, Sha256};
+
     use super::*;
+    use crate::{
+        ManifoldPeerCredentialAlgorithm, ManifoldPeerCredentialRecord,
+        ManifoldPeerCredentialStatus, ManifoldRendezvousReceipt, PEER_CREDENTIAL_SCHEMA,
+        PEER_ENROLLMENT_STATE_SCHEMA, RENDEZVOUS_AUTHORITY_STATE_SCHEMA, RENDEZVOUS_RECEIPT_SCHEMA,
+    };
 
     fn case(path: &str) -> ManifoldPeerSessionReviewCase {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let text = std::fs::read_to_string(root.join(path)).expect("fixture");
         serde_json::from_str(&text).expect("review case")
+    }
+
+    fn signed_case() -> ManifoldSignedPeerSessionReviewCase {
+        let session_review = case("fixtures/peer-session/authenticated-ble.pass.json");
+        let mut peer_ids = vec![
+            session_review.proposal.subject_peer_id.clone(),
+            session_review.proposal.candidate_peer_id.clone(),
+        ];
+        peer_ids.sort();
+        let enrollment_revision = Revision::new(3).expect("revision");
+        let credentials = [
+            ("peer.alpha", "key.peer.alpha.001", 7_u8),
+            ("peer.beta", "key.peer.beta.001", 11_u8),
+        ]
+        .into_iter()
+        .map(|(peer_id, key_id, seed)| {
+            let public_key = SigningKey::from_bytes(&[seed; 32])
+                .verifying_key()
+                .to_bytes();
+            let public_key_hex = hex(&public_key);
+            ManifoldPeerCredentialRecord {
+                schema_id: schema(PEER_CREDENTIAL_SCHEMA),
+                credential_id: DottedId::new(format!("credential.{peer_id}.1")).expect("id"),
+                peer_id: DottedId::new(peer_id).expect("id"),
+                trust_domain: DottedId::new("trust.morphospace.peer").expect("id"),
+                key_id: DottedId::new(key_id).expect("id"),
+                key_generation: 1,
+                algorithm: ManifoldPeerCredentialAlgorithm::Ed25519,
+                public_key_hex,
+                public_key_sha256: format!("sha256:{}", hex(&Sha256::digest(public_key))),
+                valid_from_ms: 1,
+                expires_at_ms: 100_000,
+                status: ManifoldPeerCredentialStatus::Active,
+                replaced_by_key_id: None,
+            }
+        })
+        .collect();
+        let current_enrollment = ManifoldPeerEnrollmentState {
+            schema_id: schema(PEER_ENROLLMENT_STATE_SCHEMA),
+            authority_revision: enrollment_revision,
+            credentials,
+            applied_request_ids: Vec::new(),
+        };
+        let receipt = ManifoldRendezvousReceipt {
+            schema_id: schema(RENDEZVOUS_RECEIPT_SCHEMA),
+            receipt_id: DottedId::new("receipt.peer.rendezvous.alpha-beta.001").expect("id"),
+            request_id: DottedId::new("request.peer.rendezvous.alpha-beta.001").expect("id"),
+            accepted: true,
+            rejection_reason: None,
+            peer_ids,
+            group_owner_peer_id: Some(session_review.proposal.group_owner_peer_id.clone()),
+            client_peer_id: Some(session_review.proposal.client_peer_id.clone()),
+            signer_key_ids: vec![
+                DottedId::new("key.peer.alpha.001").expect("id"),
+                DottedId::new("key.peer.beta.001").expect("id"),
+            ],
+            evidence_ids: vec![
+                DottedId::new("evidence.peer.alpha.001").expect("id"),
+                DottedId::new("evidence.peer.beta.001").expect("id"),
+            ],
+            nonce_sha256: format!("sha256:{}", "a1".repeat(32)),
+            coordinator_epoch: 7,
+            topology_contract_id: session_review.proposal.topology_contract_id.clone(),
+            enrollment_authority_revision: enrollment_revision,
+            prior_authority_revision: Revision::INITIAL,
+            resulting_authority_revision: Revision::new(2).expect("revision"),
+            expires_at_ms: session_review.proposal.expires_at_ms,
+        };
+        let current_rendezvous_state = ManifoldRendezvousAuthorityState {
+            schema_id: schema(RENDEZVOUS_AUTHORITY_STATE_SCHEMA),
+            authority_revision: Revision::new(2).expect("revision"),
+            applied_request_ids: vec![receipt.request_id.clone()],
+            consumed_evidence_ids: receipt.evidence_ids.clone(),
+            consumed_nonce_sha256: vec![receipt.nonce_sha256.clone()],
+            accepted_receipts: vec![receipt.clone()],
+        };
+        ManifoldSignedPeerSessionReviewCase {
+            schema_id: schema(SIGNED_PEER_SESSION_REVIEW_SCHEMA),
+            rendezvous_receipt: receipt,
+            session_review,
+            current_enrollment,
+            current_rendezvous_state,
+        }
+    }
+
+    fn hex(bytes: &[u8]) -> String {
+        const HEX: &[u8; 16] = b"0123456789abcdef";
+        let mut output = String::with_capacity(bytes.len() * 2);
+        for byte in bytes {
+            output.push(char::from(HEX[usize::from(byte >> 4)]));
+            output.push(char::from(HEX[usize::from(byte & 0x0f)]));
+        }
+        output
     }
 
     #[test]
@@ -548,6 +815,75 @@ mod tests {
         assert!(decision.applied);
         assert!(authorization.authorized);
         assert_eq!(authorization.authority_revision.get(), 2);
+        assert!(decision.accepted_state.as_ref().expect("state").sessions[0]
+            .rendezvous_receipt_id
+            .is_none());
+    }
+
+    #[test]
+    fn clean_product_session_requires_and_persists_signed_rendezvous_receipt() {
+        let case = signed_case();
+        let receipt_id = case.rendezvous_receipt.receipt_id.clone();
+        let (decision, authorization) = review_and_apply_signed_peer_session(&case);
+        assert!(decision.applied);
+        assert!(authorization.topology_authorization.authorized);
+        assert_eq!(authorization.rendezvous_receipt_id, receipt_id);
+        assert_eq!(
+            decision.accepted_state.expect("state").sessions[0].rendezvous_receipt_id,
+            Some(receipt_id)
+        );
+    }
+
+    #[test]
+    fn stale_rejected_or_pair_mismatched_signed_receipt_never_authorizes() {
+        let cases = [
+            {
+                let mut value = signed_case();
+                value.current_rendezvous_state.authority_revision =
+                    Revision::new(3).expect("revision");
+                (
+                    value,
+                    ManifoldPeerSessionRejectionReason::StaleRendezvousAuthority,
+                )
+            },
+            {
+                let mut value = signed_case();
+                value.rendezvous_receipt.accepted = false;
+                (
+                    value,
+                    ManifoldPeerSessionRejectionReason::SignedRendezvousRequired,
+                )
+            },
+            {
+                let mut value = signed_case();
+                value.rendezvous_receipt.peer_ids[1] = DottedId::new("peer.gamma").expect("id");
+                (
+                    value,
+                    ManifoldPeerSessionRejectionReason::SignedRendezvousMismatch,
+                )
+            },
+            {
+                let mut value = signed_case();
+                std::mem::swap(
+                    &mut value.session_review.proposal.group_owner_peer_id,
+                    &mut value.session_review.proposal.client_peer_id,
+                );
+                (
+                    value,
+                    ManifoldPeerSessionRejectionReason::SignedRendezvousMismatch,
+                )
+            },
+        ];
+        for (case, expected) in cases {
+            let (decision, authorization) = review_and_apply_signed_peer_session(&case);
+            assert_eq!(decision.rejection_reason, Some(expected));
+            assert!(!decision.applied);
+            assert!(!authorization.topology_authorization.authorized);
+            assert_eq!(
+                decision.prior_authority_revision,
+                decision.resulting_authority_revision
+            );
+        }
     }
 
     #[test]

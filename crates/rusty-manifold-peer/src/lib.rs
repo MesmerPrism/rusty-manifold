@@ -1,8 +1,12 @@
 //! Manifold-owned peer identity and accepted low-rate peer-status authority.
 
+mod direct_lane_lease;
+mod enrollment;
 mod peer_mesh;
 mod peer_session;
 
+pub use direct_lane_lease::*;
+pub use enrollment::*;
 pub use peer_mesh::*;
 pub use peer_session::*;
 

@@ -21,6 +21,11 @@ High-rate telemetry, media, command fields, endpoint values, credentials,
 pairing material, Android APIs, sockets, and device behavior are outside this
 contract slice. Broker admission and topology providers remain later gates.
 
+Public-key credential enrollment is a separate authority from advisory peer
+status. See `PEER_ENROLLMENT_AND_DIRECT_LEASE_AUTHORITY.md`; a status
+fingerprint or configured-peer record cannot substitute for an enrolled key
+and verified reciprocal signature.
+
 Validate with:
 
 ```powershell
