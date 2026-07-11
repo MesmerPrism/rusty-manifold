@@ -419,6 +419,52 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.runtime_host.snapshot.v1",
+      "rust_type": "ManifoldRuntimeHostSnapshot",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-runtime-host-snapshot.json",
+        "fixtures/runtime-host/synthetic-runtime-host-restarted-snapshot.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.command_request.v1",
+      "rust_type": "ManifoldRuntimeCommandRequest",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-runtime-command-request.json",
+        "fixtures/damaged/runtime-host-unknown-command.json",
+        "fixtures/damaged/runtime-host-missing-lease.json",
+        "fixtures/damaged/runtime-host-expired-lease.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.dispatch_receipt.v1",
+      "rust_type": "ManifoldRuntimeDispatchReceipt",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-runtime-dispatch-receipt.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.application_receipt.v1",
+      "rust_type": "ManifoldRuntimeApplicationReceipt",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-runtime-application-receipt.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.lease_expiry_receipt.v1",
+      "rust_type": "ManifoldRuntimeLeaseExpiryReceipt",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-runtime-lease-expiry-receipt.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.audit_event.v1",
+      "rust_type": "ManifoldRuntimeAuditEvent",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-runtime-audit-event.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.authority.snapshot.v1",
       "rust_type": "ManifoldAuthoritySnapshot",
       "fixture_paths": [

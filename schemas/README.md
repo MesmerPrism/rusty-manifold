@@ -5,6 +5,10 @@ Peer identity/status authority schemas are exported from the
 fixtures. The catalog records contracts only; it does not enable discovery,
 sockets, broker admission, or platform behavior.
 
+Runtime-host schema entries bind durable snapshots, command requests, dispatch
+and application receipts, explicit expiry receipts, and audit events to the
+source-only `rusty-manifold-runtime-host` crate.
+
 Generated schema catalogs live here. Full JSON Schema export can be added after
 the catalog and fixtures stabilize.
 

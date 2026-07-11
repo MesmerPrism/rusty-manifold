@@ -521,6 +521,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusty-manifold-runtime-host"
+version = "0.1.0"
+dependencies = [
+ "rusty-manifold-model",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "rusty-manifold-schema"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.runtime_host.command_request.v1",
+  "request_id": "request.unknown.001",
+  "expected_authority_revision": 1,
+  "requester_id": "client.operator",
+  "command_id": "command.unknown",
+  "lease_id": null,
+  "issued_at_ms": 1000,
+  "expires_at_ms": 100000
+}

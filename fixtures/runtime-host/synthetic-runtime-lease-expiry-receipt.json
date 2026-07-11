@@ -1,0 +1,11 @@
+{
+  "$schema": "rusty.manifold.runtime_host.lease_expiry_receipt.v1",
+  "sweep_id": "sweep.runtime.001",
+  "applied": true,
+  "removed_lease_ids": [
+    "lease.peer.alpha"
+  ],
+  "prior_authority_revision": 1,
+  "resulting_authority_revision": 2,
+  "rejection_reason": null
+}

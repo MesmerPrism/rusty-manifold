@@ -1,0 +1,9 @@
+{
+  "$schema": "rusty.manifold.runtime_host.dispatch_receipt.v1",
+  "dispatch_id": "dispatch.runtime.request.status.001",
+  "request_id": "request.status.001",
+  "command_id": "command.status.get",
+  "reviewed_authority_revision": 1,
+  "outcome": "ready",
+  "rejection_reason": null
+}

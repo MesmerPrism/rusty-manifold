@@ -6,6 +6,10 @@ application receipts. Matching damaged fixtures prove stale authority/status,
 replay, untrusted identity, role escalation, high-rate payload, and advisory
 command rejection.
 
+The `runtime-host/` fixtures prove snapshot/restart parity, command dispatch
+and application receipts, explicit lease expiry, and audit persistence. Damaged
+runtime-host requests cover unknown commands and missing/expired leases.
+
 Fixtures are committed contract examples. They should be small, deterministic,
 and safe to use in tests, generated schemas, documentation, and clients.
 

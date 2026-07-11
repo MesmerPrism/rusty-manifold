@@ -1,0 +1,38 @@
+{
+  "$schema": "rusty.manifold.runtime_host.snapshot.v1",
+  "host_id": "runtime.host.default",
+  "authority_revision": 2,
+  "commands": [
+    {
+      "command_id": "command.peer.apply",
+      "required_lease_scope": "manifold.peer"
+    },
+    {
+      "command_id": "command.status.get",
+      "required_lease_scope": null
+    }
+  ],
+  "leases": [
+    {
+      "lease_id": "lease.peer.alpha",
+      "scope": "manifold.peer",
+      "holder_id": "client.operator",
+      "expires_at_ms": 60000
+    }
+  ],
+  "applied_request_ids": [
+    "request.status.001"
+  ],
+  "audit_events": [
+    {
+      "$schema": "rusty.manifold.runtime_host.audit_event.v1",
+      "event_id": "audit.runtime.request.status.001",
+      "event_kind": "command_application",
+      "source_id": "request.status.001",
+      "prior_authority_revision": 1,
+      "resulting_authority_revision": 2,
+      "applied": true,
+      "rejection_reason": null
+    }
+  ]
+}

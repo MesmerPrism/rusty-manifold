@@ -41,10 +41,11 @@ it must not define Lattice relation semantics or default to legacy
 4. `docs/PORTS_AND_ADAPTERS.md`
 5. `docs/COMMANDS_LEASES_AND_AUTHORITY.md`
 6. `docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md`
-7. `docs/IMPLEMENTATION_PLAN.md`
-8. `docs/MODULE_PACKAGE_STRATEGY.md`
-9. `docs/SCHEMA_EVOLUTION.md`
-10. `fixtures/README.md`
+7. `docs/RUNTIME_HOST.md`
+8. `docs/IMPLEMENTATION_PLAN.md`
+9. `docs/MODULE_PACKAGE_STRATEGY.md`
+10. `docs/SCHEMA_EVOLUTION.md`
+11. `fixtures/README.md`
 
 ## Architecture Rules
 
@@ -55,6 +56,9 @@ it must not define Lattice relation semantics or default to legacy
 - Peer adapters propose stable identity and bounded low-rate status through
   `rusty-manifold-peer`; only Manifold review/application advances accepted
   peer state or emits the authoritative audit/application receipt.
+- Standalone and embedded products must use `rusty-manifold-runtime-host` for
+  revisioned review/application, lease expiry, restart, replay, and audit. The
+  host is source-only; product adapters and policy stay outside it.
 - When CLI, API, GUI, bridge, or platform helpers can request the same state
   change, they must all map into one Manifold command/schema/review path.
   Helper-local readback or UI state is observation evidence only until the

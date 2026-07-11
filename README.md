@@ -6,6 +6,10 @@ reject replay, stale revisions/status, untrusted identity, role escalation,
 high-rate/media planes, and advisory command fields. See
 [docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md](docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md).
 
+The source-only [Manifold Runtime Host](docs/RUNTIME_HOST.md) provides the
+durable revision, command review/application, lease-expiry, replay, restart,
+and audit engine that later standalone and embedded broker products consume.
+
 Rusty Manifold is the typed contract layer for graph, stream, command, lease,
 module, host, clock, session, and audit surfaces across the Rusty stack.
 

@@ -110,11 +110,55 @@ fn schema_entries() -> Vec<SchemaEntry> {
     entries.extend(command_entries());
     entries.extend(coordination_entries());
     entries.extend(peer_entries());
+    entries.extend(runtime_host_entries());
     entries.extend(authority_entries());
     entries.extend(bridge_route_entries());
     entries.extend(host_and_deployment_entries());
     entries.extend(verification_entries());
     entries
+}
+
+fn runtime_host_entries() -> Vec<SchemaEntry> {
+    vec![
+        entry(
+            "rusty.manifold.runtime_host.snapshot.v1",
+            "ManifoldRuntimeHostSnapshot",
+            &[
+                "fixtures/runtime-host/synthetic-runtime-host-snapshot.json",
+                "fixtures/runtime-host/synthetic-runtime-host-restarted-snapshot.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.command_request.v1",
+            "ManifoldRuntimeCommandRequest",
+            &[
+                "fixtures/runtime-host/synthetic-runtime-command-request.json",
+                "fixtures/damaged/runtime-host-unknown-command.json",
+                "fixtures/damaged/runtime-host-missing-lease.json",
+                "fixtures/damaged/runtime-host-expired-lease.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.dispatch_receipt.v1",
+            "ManifoldRuntimeDispatchReceipt",
+            &["fixtures/runtime-host/synthetic-runtime-dispatch-receipt.json"],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.application_receipt.v1",
+            "ManifoldRuntimeApplicationReceipt",
+            &["fixtures/runtime-host/synthetic-runtime-application-receipt.json"],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.lease_expiry_receipt.v1",
+            "ManifoldRuntimeLeaseExpiryReceipt",
+            &["fixtures/runtime-host/synthetic-runtime-lease-expiry-receipt.json"],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.audit_event.v1",
+            "ManifoldRuntimeAuditEvent",
+            &["fixtures/runtime-host/synthetic-runtime-audit-event.json"],
+        ),
+    ]
 }
 
 fn peer_entries() -> Vec<SchemaEntry> {

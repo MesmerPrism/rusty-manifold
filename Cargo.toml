@@ -3,6 +3,7 @@ members = [
     "crates/rusty-manifold-fixtures",
     "crates/rusty-manifold-model",
     "crates/rusty-manifold-peer",
+    "crates/rusty-manifold-runtime-host",
     "crates/rusty-manifold-schema",
     "crates/rusty-manifold-zmq",
 ]
