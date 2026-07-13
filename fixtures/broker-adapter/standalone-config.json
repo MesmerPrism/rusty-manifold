@@ -1,9 +1,10 @@
 {
-  "$schema": "rusty.manifold.broker.adapter_config.v1",
+  "$schema": "rusty.manifold.broker.adapter_config.v2",
   "adapter_id": "adapter.broker.standalone",
   "mode": "standalone",
   "product_lock_id": "lock.broker.camera.parity",
-  "product_lock_fingerprint": "fnv1a64-ad70739bf6657364",
+  "product_lock_fingerprint": "fnv1a64-07ea86443038fb22",
+  "product_lock_sha256": "sha256:2a89431f0fdd3375dd303ae03774bab0ea9a09d0e79d28c7b88c3c14b462a758",
   "authority_host_id": "host.broker.parity",
   "authority_owner_id": "module.runtime.host"
 }

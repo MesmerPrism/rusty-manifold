@@ -4,11 +4,13 @@ mod direct_lane_lease;
 mod enrollment;
 mod peer_mesh;
 mod peer_session;
+mod reciprocal_ed25519;
 
 pub use direct_lane_lease::*;
 pub use enrollment::*;
 pub use peer_mesh::*;
 pub use peer_session::*;
+pub use reciprocal_ed25519::*;
 
 use rusty_manifold_model::{DottedId, Revision, SchemaId};
 use serde::{Deserialize, Serialize};

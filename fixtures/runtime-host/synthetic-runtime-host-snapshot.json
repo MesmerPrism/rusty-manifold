@@ -1,5 +1,5 @@
 {
-  "$schema": "rusty.manifold.runtime_host.snapshot.v1",
+  "$schema": "rusty.manifold.runtime_host.snapshot.v2",
   "host_id": "runtime.host.default",
   "authority_revision": 1,
   "commands": [

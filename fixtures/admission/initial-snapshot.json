@@ -1,10 +1,12 @@
 {
-  "$schema": "rusty.manifold.admission.snapshot.v1",
+  "$schema": "rusty.manifold.admission.snapshot.v2",
   "authority_id": "authority.admission.quest",
   "authority_revision": 1,
   "grants": [
     {
       "grant_id": "grant.quest.authorized",
+      "client_lock_id": "lock.client.quest.authorized",
+      "client_lock_fingerprint": "sha256:c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
       "identity": {
         "client_id": "client.quest.authorized",
         "platform_subject": "io.github.mesmerprism.rustymanifold.admission.client",
@@ -21,6 +23,7 @@
   "revoked_token_ids": [],
   "consumed_request_ids": [],
   "consumed_use_request_ids": [],
+  "reviewed_sweep_ids": [],
   "audit_events": [],
   "max_token_ttl_ms": 30000
 }

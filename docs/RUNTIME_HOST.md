@@ -39,6 +39,20 @@ unleased work still produces the normal host receipt. The host remains the
 sole command decision and accepted-state owner in standalone and embedded
 placement.
 
+For product media admission, the composing peer host calls the owning live
+`ManifoldBrokerRuntime` rather than accepting a serialized mutation receipt.
+The atomic bridge joins exact packaged product-lock SHA, semantic product
+fingerprint, packaged client-lock SHA, platform client identity, command/outer
+lease, capability/grant, and Runtime Host receipts before minting an inner
+media lease.
+
+Peer enrollment, signed rendezvous, peer session/mesh, and direct-lane lease
+state are not compiled into this generic command host. Products that need that
+authority select the source-only
+[`rusty-manifold-peer-runtime-host`](PEER_RUNTIME_HOST.md) extension at compile
+time. The extension reuses the pure peer decisions, owns their combined
+restart/audit state, and adds no platform or payload dependency.
+
 ```powershell
 cargo test -p rusty-manifold-runtime-host
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\check_all.ps1

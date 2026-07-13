@@ -874,12 +874,6 @@ pub fn validate_current_rendezvous_receipt(
     {
         return Err(ManifoldRendezvousReceiptValidationError::ReceiptNotRetained);
     }
-    if receipt.resulting_authority_revision != state.authority_revision
-        || receipt.enrollment_authority_revision != enrollment.authority_revision
-    {
-        return Err(ManifoldRendezvousReceiptValidationError::StaleAuthorityRevision);
-    }
-
     let mut expected_peer_ids = vec![group_owner_peer_id.clone(), client_peer_id.clone()];
     expected_peer_ids.sort();
     let canonical_signer_keys = is_strictly_sorted_pair(&receipt.signer_key_ids);
@@ -1014,7 +1008,10 @@ fn nonce_digest(nonce_hex: &str) -> Option<String> {
     ))
 }
 
-fn enrollment_state_is_well_formed(state: &ManifoldPeerEnrollmentState) -> bool {
+/// Validates the complete enrollment snapshot, including strict Ed25519 key,
+/// fingerprint, generation, replacement-chain, and active-key invariants.
+#[must_use]
+pub fn enrollment_state_is_well_formed(state: &ManifoldPeerEnrollmentState) -> bool {
     let mut credential_ids = BTreeSet::new();
     let mut key_ids = BTreeSet::new();
     let mut fingerprints = BTreeSet::new();
@@ -1047,17 +1044,29 @@ fn enrollment_state_is_well_formed(state: &ManifoldPeerEnrollmentState) -> bool 
                     || !active_peers.insert(&credential.peer_id)))
             || (credential.status == ManifoldPeerCredentialStatus::Rotated
                 && credential.replaced_by_key_id.is_none())
+            || (credential.status == ManifoldPeerCredentialStatus::Revoked
+                && credential.replaced_by_key_id.is_some())
         {
             return false;
         }
     }
-    state
-        .credentials
-        .iter()
-        .all(|credential| match credential.replaced_by_key_id.as_ref() {
-            Some(replacement) => key_ids.contains(replacement),
-            None => true,
-        })
+    state.credentials.iter().all(|credential| {
+        let Some(replacement_id) = credential.replaced_by_key_id.as_ref() else {
+            return true;
+        };
+        let Some(replacement) = state
+            .credentials
+            .iter()
+            .find(|candidate| &candidate.key_id == replacement_id)
+        else {
+            return false;
+        };
+        credential.status == ManifoldPeerCredentialStatus::Rotated
+            && replacement.peer_id == credential.peer_id
+            && replacement.trust_domain == credential.trust_domain
+            && credential.key_generation.checked_add(1) == Some(replacement.key_generation)
+            && replacement.valid_from_ms >= credential.valid_from_ms
+    })
 }
 
 fn rendezvous_state_is_well_formed(state: &ManifoldRendezvousAuthorityState) -> bool {
@@ -1678,7 +1687,7 @@ mod tests {
                 &id("peer.beta"),
                 3_100,
             ),
-            Err(ManifoldRendezvousReceiptValidationError::StaleAuthorityRevision)
+            Err(ManifoldRendezvousReceiptValidationError::CredentialNotCurrent)
         );
     }
 

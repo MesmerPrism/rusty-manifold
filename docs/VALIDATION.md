@@ -25,6 +25,7 @@ For narrow model or contract edits, run the focused Rust tests first:
 cargo test -p rusty-manifold-model
 cargo test -p rusty-manifold-fixtures
 cargo test -p rusty-manifold-broker-adapter
+cargo test -p rusty-manifold-media-session
 cargo test -p rusty-manifold-peer
 ```
 
@@ -41,6 +42,9 @@ The peer suite covers operator-enrolled Ed25519 credentials, strict reciprocal
 signature review, retained rendezvous provenance, signed peer-session role and
 current-revision binding, exact mesh membership, advisory-route rejection,
 accepted media-session closure, and current direct-lane lease validation.
+The peer Runtime Host suite additionally covers atomic live-broker media lease
+minting, stop/release/start generation reuse, exact product/client/app lock
+provenance, restart, and damaged receipt rejection.
 
 For schema or fixture work, rerun the fixture and schema commands directly so
 the checked-in generated artifacts stay deterministic:

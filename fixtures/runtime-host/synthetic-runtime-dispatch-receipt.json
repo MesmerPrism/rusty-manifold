@@ -1,5 +1,6 @@
 {
-  "$schema": "rusty.manifold.runtime_host.dispatch_receipt.v1",
+  "$schema": "rusty.manifold.runtime_host.dispatch_receipt.v2",
+  "authority_host_id": "runtime.host.default",
   "dispatch_id": "dispatch.runtime.request.status.001",
   "request_id": "request.status.001",
   "command_id": "command.status.get",

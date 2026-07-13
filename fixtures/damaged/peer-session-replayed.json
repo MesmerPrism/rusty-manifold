@@ -25,7 +25,7 @@
     "candidate_peer_id": "peer.beta",
     "group_owner_peer_id": "peer.alpha",
     "client_peer_id": "peer.beta",
-    "requested_capability_ids": ["capability.rendezvous.ble","capability.topology.wifi-direct","capability.route.rust-direct-p2p"],
+    "requested_capability_ids": ["capability.rendezvous.ble","capability.route.rust-direct-p2p","capability.topology.wifi-direct"],
     "topology_contract_id": "rusty.quest.product_wifi_direct_topology.v1",
     "expires_at_ms": 60000,
     "authentication": {

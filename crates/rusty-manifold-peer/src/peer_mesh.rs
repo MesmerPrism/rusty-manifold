@@ -1,6 +1,7 @@
 //! Manifold-owned bounded N-peer membership and route scheduling authority.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
 use rusty_manifold_model::{DottedId, Revision, SchemaId};
 use serde::{Deserialize, Serialize};
@@ -9,25 +10,32 @@ use crate::{
     ManifoldAcceptedPeerState, ManifoldPeerAvailability, ManifoldPeerRole, PEER_SNAPSHOT_SCHEMA,
 };
 
-/// N-peer mesh proposal schema.
-pub const PEER_MESH_PROPOSAL_SCHEMA: &str = "rusty.manifold.peer.mesh_proposal.v1";
-/// N-peer mesh state schema.
-pub const PEER_MESH_STATE_SCHEMA: &str = "rusty.manifold.peer.mesh_state.v1";
-/// N-peer mesh review schema.
-pub const PEER_MESH_REVIEW_SCHEMA: &str = "rusty.manifold.peer.mesh_review.v1";
-/// N-peer mesh decision schema.
-pub const PEER_MESH_DECISION_SCHEMA: &str = "rusty.manifold.peer.mesh_decision.v1";
-/// N-peer mesh audit schema.
-pub const PEER_MESH_AUDIT_SCHEMA: &str = "rusty.manifold.peer.mesh_audit_event.v1";
-/// N-peer mesh mutation receipt schema.
-pub const PEER_MESH_MUTATION_SCHEMA: &str = "rusty.manifold.peer.mesh_mutation_receipt.v1";
+/// N-peer mesh proposal schema with host-resolved reciprocal pair evidence.
+pub const PEER_MESH_PROPOSAL_SCHEMA: &str = "rusty.manifold.peer.mesh_proposal.v2";
+/// Legacy N-peer mesh state accepted only by fail-closed migration.
+pub const LEGACY_PEER_MESH_STATE_V1_SCHEMA: &str = "rusty.manifold.peer.mesh_state.v1";
+/// N-peer mesh state schema with exact reciprocal route provenance.
+pub const PEER_MESH_STATE_SCHEMA: &str = "rusty.manifold.peer.mesh_state.v2";
+/// N-peer mesh review schema with host-resolved pair evidence.
+pub const PEER_MESH_REVIEW_SCHEMA: &str = "rusty.manifold.peer.mesh_review.v2";
+/// N-peer mesh decision schema with coordinator/epoch transition evidence.
+pub const PEER_MESH_DECISION_SCHEMA: &str = "rusty.manifold.peer.mesh_decision.v2";
+/// N-peer mesh audit schema with coordinator/epoch transition evidence.
+pub const PEER_MESH_AUDIT_SCHEMA: &str = "rusty.manifold.peer.mesh_audit_event.v2";
+/// N-peer mesh mutation receipt schema with topology transition evidence.
+pub const PEER_MESH_MUTATION_SCHEMA: &str = "rusty.manifold.peer.mesh_mutation_receipt.v2";
+/// Fail-closed v1 mesh-state migration receipt schema.
+pub const PEER_MESH_MIGRATION_RECEIPT_SCHEMA: &str =
+    "rusty.manifold.peer.mesh_state_migration_receipt.v1";
 /// Direct pairwise data-plane route contract.
 pub const DIRECT_P2P_ROUTE_CONTRACT: &str = "rusty.quest.direct_p2p_socket_route.v1";
 /// Advisory status-only route contract.
 pub const ADVISORY_STATUS_ROUTE_CONTRACT: &str = "rusty.quest.advisory_status_route.v1";
 
-const MIN_MESH_PEERS: usize = 3;
-const MAX_MESH_PEERS: usize = 32;
+/// Minimum accepted active mesh membership.
+pub const MIN_MESH_PEERS: usize = 3;
+/// Maximum accepted active mesh membership.
+pub const MAX_MESH_PEERS: usize = 32;
 const MAX_ROUTE_CANDIDATES: usize = 256;
 
 /// Route class proposed to the mesh authority.
@@ -54,14 +62,39 @@ pub struct ManifoldPeerMeshRouteCandidate {
     pub route_class: ManifoldPeerMeshRouteClass,
     /// Versioned route contract reference.
     pub route_contract_id: DottedId,
-    /// Whether independent authentication evidence admitted this route.
-    pub authenticated: bool,
+    /// Exact host-retained reciprocal pair receipt referenced by a direct
+    /// candidate. Advisory candidates must leave this absent.
+    pub pair_evidence_receipt_id: Option<DottedId>,
     /// Bounded observed latency used only for deterministic ranking.
     pub observed_latency_ms: u32,
     /// Bounded hop count used after latency.
     pub hop_count: u8,
     /// Expiry of the route observation.
     pub evidence_expires_at_ms: u64,
+}
+
+/// Host-resolved current reciprocal pair evidence available to mesh review.
+/// A proposer may reference the receipt id but cannot author these fields in
+/// the Runtime Host composition.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldPeerMeshPairEvidence {
+    /// Host-retained rendezvous/reciprocal receipt identity.
+    pub receipt_id: DottedId,
+    /// Canonical peer pair.
+    pub peer_ids: Vec<DottedId>,
+    /// Current signer key identities.
+    pub signer_key_ids: Vec<DottedId>,
+    /// Canonical reciprocal evidence/context digest.
+    pub evidence_sha256: String,
+    /// Subject receipt revision retained for provenance.
+    pub pair_authority_revision: Revision,
+    /// Pair/topology epoch signed by both peers.
+    pub pair_authority_epoch: u64,
+    /// Exact topology contract signed by the pair.
+    pub topology_contract_id: DottedId,
+    /// Pair evidence expiry.
+    pub expires_at_ms: u64,
 }
 
 /// Proposed bounded N-peer membership and route-candidate view.
@@ -117,6 +150,18 @@ pub struct ManifoldPeerMeshSelectedRoute {
     pub observed_latency_ms: u32,
     /// Rank hop count.
     pub hop_count: u8,
+    /// Exact host-retained reciprocal pair receipt.
+    pub pair_evidence_receipt_id: DottedId,
+    /// Exact reciprocal evidence/context digest.
+    pub pair_evidence_sha256: String,
+    /// Subject pair receipt revision retained for provenance.
+    pub pair_authority_revision: Revision,
+    /// Signed pair/topology epoch, separate from the global mesh epoch.
+    pub pair_authority_epoch: u64,
+    /// Current signer key identities.
+    pub signer_key_ids: Vec<DottedId>,
+    /// Expiry of the exact route evidence retained from the winning candidate.
+    pub evidence_expires_at_ms: u64,
     /// Pairwise direct media lane is allowed after separate session/media admission.
     pub direct_media_lane_eligible: bool,
 }
@@ -146,6 +191,208 @@ pub struct ManifoldPeerMeshState {
     pub revoked_peer_ids: Vec<DottedId>,
 }
 
+/// Receipt proving that a legacy mesh was closed instead of promoting routes
+/// that lacked exact reciprocal pair evidence.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldPeerMeshMigrationReceipt {
+    /// Receipt schema.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Legacy source schema.
+    pub source_schema_id: SchemaId,
+    /// Resulting fail-closed state schema.
+    pub resulting_schema_id: SchemaId,
+    /// Preserved authority revision.
+    pub authority_revision: Revision,
+    /// Mesh identity invalidated during migration.
+    pub invalidated_mesh_id: Option<DottedId>,
+    /// Member identities removed from active authority.
+    pub invalidated_member_ids: Vec<DottedId>,
+    /// Direct route identities removed for missing reciprocal evidence.
+    pub invalidated_route_ids: Vec<DottedId>,
+    /// Replay-protected proposal ids preserved verbatim.
+    pub preserved_applied_proposal_ids: Vec<DottedId>,
+    /// Explicit peer revocations preserved verbatim.
+    pub preserved_revoked_peer_ids: Vec<DottedId>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct LegacyPeerMeshSelectedRouteV1 {
+    candidate_id: DottedId,
+    first_peer_id: DottedId,
+    second_peer_id: DottedId,
+    route_contract_id: DottedId,
+    observed_latency_ms: u32,
+    hop_count: u8,
+    direct_media_lane_eligible: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct LegacyPeerMeshStateV1 {
+    #[serde(rename = "$schema")]
+    schema_id: SchemaId,
+    authority_revision: Revision,
+    mesh_id: Option<DottedId>,
+    authority_epoch: u64,
+    coordinator_peer_id: Option<DottedId>,
+    members: Vec<ManifoldAcceptedMeshMember>,
+    selected_routes: Vec<LegacyPeerMeshSelectedRouteV1>,
+    applied_proposal_ids: Vec<DottedId>,
+    revoked_peer_ids: Vec<DottedId>,
+}
+
+/// Safely migrates v1 mesh state by preserving replay/revocation history while
+/// closing all membership and routes that lack exact reciprocal pair evidence.
+///
+/// # Errors
+///
+/// Returns an error when legacy JSON or structural identity invariants fail.
+pub fn migrate_legacy_peer_mesh_state_json(
+    json: &str,
+) -> Result<(ManifoldPeerMeshState, ManifoldPeerMeshMigrationReceipt), ManifoldPeerMeshMigrationError>
+{
+    let legacy: LegacyPeerMeshStateV1 =
+        serde_json::from_str(json).map_err(ManifoldPeerMeshMigrationError::Deserialize)?;
+    validate_legacy_peer_mesh_state(&legacy)?;
+    let mut invalidated_member_ids = legacy
+        .members
+        .iter()
+        .map(|member| member.peer_id.clone())
+        .collect::<Vec<_>>();
+    invalidated_member_ids.sort();
+    let mut invalidated_route_ids = legacy
+        .selected_routes
+        .iter()
+        .map(|route| route.candidate_id.clone())
+        .collect::<Vec<_>>();
+    invalidated_route_ids.sort();
+    let mut applied_proposal_ids = legacy.applied_proposal_ids;
+    applied_proposal_ids.sort();
+    let mut revoked_peer_ids = legacy.revoked_peer_ids;
+    revoked_peer_ids.sort();
+    let state = ManifoldPeerMeshState {
+        schema_id: schema(PEER_MESH_STATE_SCHEMA),
+        authority_revision: legacy.authority_revision,
+        mesh_id: None,
+        authority_epoch: 0,
+        coordinator_peer_id: None,
+        members: Vec::new(),
+        selected_routes: Vec::new(),
+        applied_proposal_ids: applied_proposal_ids.clone(),
+        revoked_peer_ids: revoked_peer_ids.clone(),
+    };
+    let receipt = ManifoldPeerMeshMigrationReceipt {
+        schema_id: schema(PEER_MESH_MIGRATION_RECEIPT_SCHEMA),
+        source_schema_id: legacy.schema_id,
+        resulting_schema_id: state.schema_id.clone(),
+        authority_revision: state.authority_revision,
+        invalidated_mesh_id: legacy.mesh_id,
+        invalidated_member_ids,
+        invalidated_route_ids,
+        preserved_applied_proposal_ids: applied_proposal_ids,
+        preserved_revoked_peer_ids: revoked_peer_ids,
+    };
+    Ok((state, receipt))
+}
+
+fn validate_legacy_peer_mesh_state(
+    state: &LegacyPeerMeshStateV1,
+) -> Result<(), ManifoldPeerMeshMigrationError> {
+    if state.schema_id.as_str() != LEGACY_PEER_MESH_STATE_V1_SCHEMA
+        || state.members.len() > MAX_MESH_PEERS
+        || state.selected_routes.len() > MAX_ROUTE_CANDIDATES
+        || state
+            .members
+            .windows(2)
+            .any(|pair| pair[0].peer_id >= pair[1].peer_id)
+        || state
+            .selected_routes
+            .iter()
+            .map(|route| &route.candidate_id)
+            .collect::<BTreeSet<_>>()
+            .len()
+            != state.selected_routes.len()
+        || state
+            .applied_proposal_ids
+            .iter()
+            .collect::<BTreeSet<_>>()
+            .len()
+            != state.applied_proposal_ids.len()
+        || state.revoked_peer_ids.iter().collect::<BTreeSet<_>>().len()
+            != state.revoked_peer_ids.len()
+    {
+        return Err(ManifoldPeerMeshMigrationError::Invalid(
+            "schema_capacity_or_identity",
+        ));
+    }
+    let empty = state.mesh_id.is_none()
+        && state.authority_epoch == 0
+        && state.coordinator_peer_id.is_none()
+        && state.members.is_empty()
+        && state.selected_routes.is_empty();
+    let active = state.mesh_id.is_some()
+        && state.authority_epoch > 0
+        && state.coordinator_peer_id.as_ref()
+            == state.members.first().map(|member| &member.peer_id)
+        && !state.members.is_empty();
+    if !empty && !active {
+        return Err(ManifoldPeerMeshMigrationError::Invalid(
+            "legacy_mesh_activation",
+        ));
+    }
+    let member_ids = state
+        .members
+        .iter()
+        .map(|member| &member.peer_id)
+        .collect::<BTreeSet<_>>();
+    if state.selected_routes.iter().any(|route| {
+        route.first_peer_id >= route.second_peer_id
+            || route.route_contract_id.as_str() != DIRECT_P2P_ROUTE_CONTRACT
+            || !route.direct_media_lane_eligible
+            || route.observed_latency_ms == 0
+            || route.hop_count == 0
+            || !member_ids.contains(&route.first_peer_id)
+            || !member_ids.contains(&route.second_peer_id)
+    }) {
+        return Err(ManifoldPeerMeshMigrationError::Invalid(
+            "legacy_direct_route",
+        ));
+    }
+    Ok(())
+}
+
+/// Legacy mesh migration failure.
+#[derive(Debug)]
+pub enum ManifoldPeerMeshMigrationError {
+    /// Legacy JSON could not be decoded.
+    Deserialize(serde_json::Error),
+    /// Legacy state failed structural validation.
+    Invalid(&'static str),
+}
+
+impl fmt::Display for ManifoldPeerMeshMigrationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Deserialize(error) => {
+                write!(formatter, "legacy peer mesh decode failed: {error}")
+            }
+            Self::Invalid(reason) => write!(formatter, "legacy peer mesh invalid: {reason}"),
+        }
+    }
+}
+
+impl std::error::Error for ManifoldPeerMeshMigrationError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Deserialize(error) => Some(error),
+            Self::Invalid(_) => None,
+        }
+    }
+}
+
 /// Review input binding accepted peer state to mesh state.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -155,6 +402,8 @@ pub struct ManifoldPeerMeshReviewCase {
     pub schema_id: SchemaId,
     /// Manifold accepted peer identities/status.
     pub accepted_peers: ManifoldAcceptedPeerState,
+    /// Current host-resolved reciprocal pair evidence.
+    pub accepted_pair_evidence: Vec<ManifoldPeerMeshPairEvidence>,
     /// Current mesh state.
     pub current_state: ManifoldPeerMeshState,
     /// Candidate mesh view.
@@ -232,6 +481,16 @@ pub struct ManifoldPeerMeshAuditEvent {
     pub prior_authority_revision: Revision,
     /// Resulting revision.
     pub resulting_authority_revision: Revision,
+    /// Global coordinator epoch before mutation.
+    pub prior_authority_epoch: u64,
+    /// Global coordinator epoch after election/closure.
+    pub resulting_authority_epoch: u64,
+    /// Coordinator before mutation.
+    pub prior_coordinator_peer_id: Option<DottedId>,
+    /// Coordinator after mutation.
+    pub resulting_coordinator_peer_id: Option<DottedId>,
+    /// Whether a valid two-or-more-member mesh remains active.
+    pub mesh_active: bool,
     /// Outcome.
     pub outcome: ManifoldPeerMeshOutcome,
     /// Rejection reason.
@@ -292,6 +551,16 @@ pub struct ManifoldPeerMeshMutationReceipt {
     pub prior_authority_revision: Revision,
     /// Resulting revision.
     pub resulting_authority_revision: Revision,
+    /// Global coordinator epoch before mutation.
+    pub prior_authority_epoch: u64,
+    /// Global coordinator epoch after election or closure.
+    pub resulting_authority_epoch: u64,
+    /// Coordinator before mutation.
+    pub prior_coordinator_peer_id: Option<DottedId>,
+    /// Coordinator after mutation.
+    pub resulting_coordinator_peer_id: Option<DottedId>,
+    /// Whether a valid mesh remains active after mutation.
+    pub mesh_active: bool,
 }
 
 /// Review and apply one bounded N-peer proposal.
@@ -317,13 +586,29 @@ pub fn review_and_apply_peer_mesh(case: &ManifoldPeerMeshReviewCase) -> Manifold
         outcome: outcome.clone(),
         applied: accepted_state.is_some(),
         rejection_reason: rejection.clone(),
-        accepted_state,
+        accepted_state: accepted_state.clone(),
         audit_event: ManifoldPeerMeshAuditEvent {
             schema_id: schema(PEER_MESH_AUDIT_SCHEMA),
             event_id: derived("audit.peer-mesh", &case.proposal.proposal_id),
             proposal_id: case.proposal.proposal_id.clone(),
             prior_authority_revision: prior,
             resulting_authority_revision: resulting,
+            prior_authority_epoch: case.current_state.authority_epoch,
+            resulting_authority_epoch: accepted_state
+                .as_ref()
+                .map_or(case.current_state.authority_epoch, |state| {
+                    state.authority_epoch
+                }),
+            prior_coordinator_peer_id: case.current_state.coordinator_peer_id.clone(),
+            resulting_coordinator_peer_id: accepted_state.as_ref().map_or_else(
+                || case.current_state.coordinator_peer_id.clone(),
+                |state| state.coordinator_peer_id.clone(),
+            ),
+            mesh_active: accepted_state
+                .as_ref()
+                .map_or(case.current_state.mesh_id.is_some(), |state| {
+                    state.mesh_id.is_some()
+                }),
             outcome,
             rejection_reason: rejection,
         },
@@ -409,7 +694,9 @@ fn validate_case(case: &ManifoldPeerMeshReviewCase) -> Result<(), ManifoldPeerMe
     if proposal.coordinator_peer_id != proposal.member_peer_ids[0] {
         return Err(ManifoldPeerMeshRejectionReason::CoordinatorMismatch);
     }
-    if proposal.authority_epoch < case.current_state.authority_epoch {
+    if proposal.authority_epoch == 0
+        || proposal.authority_epoch < case.current_state.authority_epoch
+    {
         return Err(ManifoldPeerMeshRejectionReason::StaleEpoch);
     }
     if proposal.authority_epoch == case.current_state.authority_epoch
@@ -464,13 +751,33 @@ fn validate_case(case: &ManifoldPeerMeshReviewCase) -> Result<(), ManifoldPeerMe
                 if route.route_contract_id.as_str() != DIRECT_P2P_ROUTE_CONTRACT {
                     return Err(ManifoldPeerMeshRejectionReason::InvalidRoute);
                 }
-                if !route.authenticated {
+                let pair = canonical_pair(&route.source_peer_id, &route.target_peer_id);
+                let Some(receipt_id) = route.pair_evidence_receipt_id.as_ref() else {
+                    return Err(ManifoldPeerMeshRejectionReason::RouteNotAuthenticated);
+                };
+                let Some(evidence) = case
+                    .accepted_pair_evidence
+                    .iter()
+                    .find(|evidence| &evidence.receipt_id == receipt_id)
+                else {
+                    return Err(ManifoldPeerMeshRejectionReason::RouteNotAuthenticated);
+                };
+                if evidence.peer_ids != [pair.0, pair.1]
+                    || evidence.signer_key_ids.len() != 2
+                    || evidence.signer_key_ids[0] >= evidence.signer_key_ids[1]
+                    || !valid_sha256(&evidence.evidence_sha256)
+                    || evidence.pair_authority_epoch == 0
+                    || evidence.topology_contract_id.as_str()
+                        != crate::PRODUCT_WIFI_DIRECT_TOPOLOGY_CONTRACT
+                    || evidence.expires_at_ms <= case.now_ms
+                    || route.evidence_expires_at_ms > evidence.expires_at_ms
+                {
                     return Err(ManifoldPeerMeshRejectionReason::RouteNotAuthenticated);
                 }
             }
             ManifoldPeerMeshRouteClass::AdvisoryStatusOnly => {
                 if route.route_contract_id.as_str() != ADVISORY_STATUS_ROUTE_CONTRACT
-                    || route.authenticated
+                    || route.pair_evidence_receipt_id.is_some()
                 {
                     return Err(ManifoldPeerMeshRejectionReason::MediaGossipForbidden);
                 }
@@ -502,6 +809,11 @@ fn rank_direct_routes(
             ))
         });
         let winner = candidates[0];
+        let evidence = case
+            .accepted_pair_evidence
+            .iter()
+            .find(|evidence| winner.pair_evidence_receipt_id.as_ref() == Some(&evidence.receipt_id))
+            .expect("validated direct route evidence must exist");
         selected.push(ManifoldPeerMeshSelectedRoute {
             candidate_id: winner.candidate_id.clone(),
             first_peer_id: first,
@@ -509,6 +821,12 @@ fn rank_direct_routes(
             route_contract_id: winner.route_contract_id.clone(),
             observed_latency_ms: winner.observed_latency_ms,
             hop_count: winner.hop_count,
+            pair_evidence_receipt_id: evidence.receipt_id.clone(),
+            pair_evidence_sha256: evidence.evidence_sha256.clone(),
+            pair_authority_revision: evidence.pair_authority_revision,
+            pair_authority_epoch: evidence.pair_authority_epoch,
+            signer_key_ids: evidence.signer_key_ids.clone(),
+            evidence_expires_at_ms: evidence.expires_at_ms,
             direct_media_lane_eligible: true,
         });
     }
@@ -597,7 +915,10 @@ fn mutate_remove(
 ) -> Result<(ManifoldPeerMeshState, ManifoldPeerMeshMutationReceipt), String> {
     removed.sort();
     removed.dedup();
+    let explicitly_removed = removed.clone();
     let prior = state.authority_revision;
+    let prior_epoch = state.authority_epoch;
+    let prior_coordinator = state.coordinator_peer_id.clone();
     let mut next = state.clone();
     let applied = !removed.is_empty();
     if applied {
@@ -611,9 +932,29 @@ fn mutate_remove(
             !removed.contains(&route.first_peer_id) && !removed.contains(&route.second_peer_id)
         });
         if retain_revocation {
-            next.revoked_peer_ids.extend(removed.clone());
+            next.revoked_peer_ids.extend(explicitly_removed);
             next.revoked_peer_ids.sort();
             next.revoked_peer_ids.dedup();
+        }
+        if next.members.len() < MIN_MESH_PEERS {
+            removed.extend(next.members.iter().map(|member| member.peer_id.clone()));
+            removed.sort();
+            removed.dedup();
+            next.mesh_id = None;
+            next.authority_epoch = 0;
+            next.coordinator_peer_id = None;
+            next.members.clear();
+            next.selected_routes.clear();
+        } else if next
+            .coordinator_peer_id
+            .as_ref()
+            .is_some_and(|coordinator| removed.contains(coordinator))
+        {
+            next.coordinator_peer_id = next.members.first().map(|member| member.peer_id.clone());
+            next.authority_epoch = next
+                .authority_epoch
+                .checked_add(1)
+                .ok_or_else(|| "peer-mesh authority epoch overflow".to_owned())?;
         }
     }
     let receipt = ManifoldPeerMeshMutationReceipt {
@@ -624,6 +965,11 @@ fn mutate_remove(
         removed_peer_ids: removed,
         prior_authority_revision: prior,
         resulting_authority_revision: next.authority_revision,
+        prior_authority_epoch: prior_epoch,
+        resulting_authority_epoch: next.authority_epoch,
+        prior_coordinator_peer_id: prior_coordinator,
+        resulting_coordinator_peer_id: next.coordinator_peer_id.clone(),
+        mesh_active: next.mesh_id.is_some(),
     };
     Ok((next, receipt))
 }
@@ -641,6 +987,14 @@ fn canonical_pair(first: &DottedId, second: &DottedId) -> (DottedId, DottedId) {
     } else {
         (second.clone(), first.clone())
     }
+}
+
+fn valid_sha256(value: &str) -> bool {
+    value.len() == 71
+        && value.starts_with("sha256:")
+        && value[7..]
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
 fn schema(value: &str) -> SchemaId {
@@ -691,16 +1045,39 @@ mod tests {
         second: &str,
         latency: u32,
     ) -> ManifoldPeerMeshRouteCandidate {
+        let (first_id, second_id) = canonical_pair(&id(first), &id(second));
         ManifoldPeerMeshRouteCandidate {
             candidate_id: id(&format!("route.{suffix}")),
             source_peer_id: id(first),
             target_peer_id: id(second),
             route_class: ManifoldPeerMeshRouteClass::DirectPairwise,
             route_contract_id: id(DIRECT_P2P_ROUTE_CONTRACT),
-            authenticated: true,
+            pair_evidence_receipt_id: Some(id(&format!(
+                "receipt.pair.{}-{}",
+                first_id.as_str().trim_start_matches("peer."),
+                second_id.as_str().trim_start_matches("peer.")
+            ))),
             observed_latency_ms: latency,
             hop_count: 1,
             evidence_expires_at_ms: 60_000,
+        }
+    }
+
+    fn pair_evidence(first: &str, second: &str, epoch: u64) -> ManifoldPeerMeshPairEvidence {
+        let (first, second) = canonical_pair(&id(first), &id(second));
+        ManifoldPeerMeshPairEvidence {
+            receipt_id: id(&format!(
+                "receipt.pair.{}-{}",
+                first.as_str().trim_start_matches("peer."),
+                second.as_str().trim_start_matches("peer.")
+            )),
+            peer_ids: vec![first, second],
+            signer_key_ids: vec![id("key.pair.first"), id("key.pair.second")],
+            evidence_sha256: format!("sha256:{}", "ab".repeat(32)),
+            pair_authority_revision: Revision::new(epoch).expect("revision"),
+            pair_authority_epoch: epoch,
+            topology_contract_id: id(crate::PRODUCT_WIFI_DIRECT_TOPOLOGY_CONTRACT),
+            expires_at_ms: 60_000,
         }
     }
 
@@ -714,6 +1091,10 @@ mod tests {
                 peers: members.iter().map(|name| peer(name, 61_000)).collect(),
                 applied_proposal_ids: Vec::new(),
             },
+            accepted_pair_evidence: vec![
+                pair_evidence("peer.alpha", "peer.beta", 1),
+                pair_evidence("peer.beta", "peer.gamma", 2),
+            ],
             current_state: ManifoldPeerMeshState {
                 schema_id: schema(PEER_MESH_STATE_SCHEMA),
                 authority_revision: Revision::INITIAL,
@@ -744,7 +1125,7 @@ mod tests {
                         target_peer_id: id("peer.gamma"),
                         route_class: ManifoldPeerMeshRouteClass::AdvisoryStatusOnly,
                         route_contract_id: id(ADVISORY_STATUS_ROUTE_CONTRACT),
-                        authenticated: false,
+                        pair_evidence_receipt_id: None,
                         observed_latency_ms: 2,
                         hop_count: 1,
                         evidence_expires_at_ms: 60_000,
@@ -798,6 +1179,14 @@ mod tests {
             Some(ManifoldPeerMeshRejectionReason::SplitBrain)
         );
 
+        let mut zero_epoch = baseline.clone();
+        zero_epoch.proposal.proposal_id = id("proposal.peer-mesh.zero-epoch.001");
+        zero_epoch.proposal.authority_epoch = 0;
+        assert_eq!(
+            review_and_apply_peer_mesh(&zero_epoch).rejection_reason,
+            Some(ManifoldPeerMeshRejectionReason::StaleEpoch)
+        );
+
         let mut disconnected = baseline.clone();
         disconnected.proposal.proposal_id = id("proposal.peer-mesh.disconnected.001");
         disconnected
@@ -847,6 +1236,10 @@ mod tests {
         .expect("revoke");
         assert!(receipt.applied);
         assert!(revoked.revoked_peer_ids.contains(&id("peer.gamma")));
+        assert!(revoked.mesh_id.is_none());
+        assert_eq!(revoked.authority_epoch, 0);
+        assert!(revoked.coordinator_peer_id.is_none());
+        assert!(!receipt.mesh_active);
         let mut resurrect = case;
         resurrect.current_state = revoked.clone();
         resurrect.proposal.proposal_id = id("proposal.peer-mesh.resurrect.001");
@@ -889,5 +1282,29 @@ mod tests {
             "rusty.manifold.peer.mesh_damage_matrix.v1"
         );
         assert_eq!(damage["cases"].as_array().expect("cases").len(), 6);
+    }
+
+    #[test]
+    fn legacy_v1_mesh_migration_closes_unproven_routes_and_preserves_replay_state() {
+        let json = include_str!("../../../fixtures/peer-mesh/legacy-v1-three-peer-state.json");
+        let (state, receipt) =
+            migrate_legacy_peer_mesh_state_json(json).expect("fail-closed mesh migration");
+        assert_eq!(state.schema_id.as_str(), PEER_MESH_STATE_SCHEMA);
+        assert_eq!(state.authority_revision.get(), 2);
+        assert!(state.mesh_id.is_none());
+        assert_eq!(state.authority_epoch, 0);
+        assert!(state.coordinator_peer_id.is_none());
+        assert!(state.members.is_empty());
+        assert!(state.selected_routes.is_empty());
+        assert_eq!(receipt.invalidated_member_ids.len(), 3);
+        assert_eq!(receipt.invalidated_route_ids.len(), 2);
+        assert_eq!(
+            receipt.preserved_applied_proposal_ids,
+            vec![id("proposal.peer-mesh.legacy.001")]
+        );
+        assert_eq!(state.revoked_peer_ids, vec![id("peer.revoked")]);
+
+        let damaged = json.replace("\"peer_id\": \"peer.beta\"", "\"peer_id\": \"peer.alpha\"");
+        assert!(migrate_legacy_peer_mesh_state_json(&damaged).is_err());
     }
 }

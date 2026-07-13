@@ -4,6 +4,8 @@ members = [
     "crates/rusty-manifold-model",
     "crates/rusty-manifold-peer",
     "crates/rusty-manifold-runtime-host",
+    "crates/rusty-manifold-peer-runtime-host",
+    "crates/rusty-manifold-media-session",
     "crates/rusty-manifold-broker-product",
     "crates/rusty-manifold-broker-adapter",
     "crates/rusty-manifold-admission",

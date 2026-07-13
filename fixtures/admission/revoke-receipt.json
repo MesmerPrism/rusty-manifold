@@ -1,5 +1,5 @@
 {
-  "$schema": "rusty.manifold.admission.receipt.v1",
+  "$schema": "rusty.manifold.admission.receipt.v2",
   "operation": "revoke_token",
   "request_id": "request.admission.revoke",
   "applied": true,

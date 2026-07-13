@@ -5,25 +5,42 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::fmt;
 
-/// Runtime host snapshot schema.
-pub const HOST_SNAPSHOT_SCHEMA: &str = "rusty.manifold.runtime_host.snapshot.v1";
+/// Legacy Runtime Host snapshot schema accepted only by the migration API.
+pub const LEGACY_HOST_SNAPSHOT_V1_SCHEMA: &str = "rusty.manifold.runtime_host.snapshot.v1";
+/// Runtime Host snapshot schema with closed replay/audit lineage.
+pub const HOST_SNAPSHOT_SCHEMA: &str = "rusty.manifold.runtime_host.snapshot.v2";
 /// Runtime host command request schema.
 pub const HOST_COMMAND_REQUEST_SCHEMA: &str = "rusty.manifold.runtime_host.command_request.v1";
 /// Runtime host typed-parameter digest schema.
 pub const HOST_TYPED_PARAMS_DIGEST_SCHEMA: &str =
     "rusty.manifold.runtime_host.typed_params_digest.v1";
-/// Runtime host dispatch receipt schema.
-pub const HOST_DISPATCH_RECEIPT_SCHEMA: &str = "rusty.manifold.runtime_host.dispatch_receipt.v1";
-/// Runtime host application receipt schema.
-pub const HOST_APPLICATION_RECEIPT_SCHEMA: &str =
+/// Legacy dispatch receipt schema accepted only by evidence migration.
+pub const LEGACY_HOST_DISPATCH_RECEIPT_V1_SCHEMA: &str =
+    "rusty.manifold.runtime_host.dispatch_receipt.v1";
+/// Runtime Host dispatch receipt schema bound to an exact authority host.
+pub const HOST_DISPATCH_RECEIPT_SCHEMA: &str = "rusty.manifold.runtime_host.dispatch_receipt.v2";
+/// Legacy application receipt schema accepted only by evidence migration.
+pub const LEGACY_HOST_APPLICATION_RECEIPT_V1_SCHEMA: &str =
     "rusty.manifold.runtime_host.application_receipt.v1";
-/// Runtime host lease-expiry receipt schema.
+/// Runtime Host application receipt schema bound to an exact authority host.
+pub const HOST_APPLICATION_RECEIPT_SCHEMA: &str =
+    "rusty.manifold.runtime_host.application_receipt.v2";
+/// Runtime Host lease-expiry receipt schema.
 pub const HOST_LEASE_EXPIRY_RECEIPT_SCHEMA: &str =
-    "rusty.manifold.runtime_host.lease_expiry_receipt.v1";
-/// Runtime host audit-event schema.
-pub const HOST_AUDIT_EVENT_SCHEMA: &str = "rusty.manifold.runtime_host.audit_event.v1";
+    "rusty.manifold.runtime_host.lease_expiry_receipt.v2";
+/// Legacy Runtime Host audit schema accepted only during snapshot migration.
+pub const LEGACY_HOST_AUDIT_EVENT_V1_SCHEMA: &str = "rusty.manifold.runtime_host.audit_event.v1";
+/// Runtime Host audit-event schema with canonical sequence identities.
+pub const HOST_AUDIT_EVENT_SCHEMA: &str = "rusty.manifold.runtime_host.audit_event.v2";
+/// Explicit Runtime Host snapshot migration receipt schema.
+pub const HOST_MIGRATION_RECEIPT_SCHEMA: &str =
+    "rusty.manifold.runtime_host.snapshot_migration_receipt.v1";
 /// Maximum canonical low-rate parameter document accepted by Runtime Host.
 pub const MAX_TYPED_PARAMS_CANONICAL_BYTES: u32 = 4_096;
+/// Maximum durable command/sweep audit attempts retained by one host snapshot.
+pub const MAX_RUNTIME_AUDIT_EVENTS: usize = 8_192;
+/// Maximum entries in static and replay collections.
+pub const MAX_RUNTIME_SNAPSHOT_RECORDS: usize = 4_096;
 
 /// Registered low-rate command descriptor.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -81,6 +98,9 @@ pub struct ManifoldRuntimeHostSnapshot {
     pub leases: Vec<ManifoldRuntimeLease>,
     /// Successfully applied request ids retained for replay rejection.
     pub applied_request_ids: Vec<DottedId>,
+    /// First-seen lease-expiry sweep identities retained against replay.
+    #[serde(default)]
+    pub reviewed_sweep_ids: Vec<DottedId>,
     /// Append-only runtime-host audit records.
     pub audit_events: Vec<ManifoldRuntimeAuditEvent>,
 }
@@ -155,6 +175,10 @@ pub enum ManifoldRuntimeRejectionReason {
     DispatchRevisionMismatch,
     /// Expiry sweep found no expired leases.
     NoExpiredLeases,
+    /// Lease-expiry sweep identity was already reviewed.
+    ReplayedSweep,
+    /// Durable audit/history capacity was reached.
+    AuthorityCapacityExhausted,
 }
 
 /// Source-only dispatch receipt.
@@ -164,6 +188,8 @@ pub struct ManifoldRuntimeDispatchReceipt {
     /// Schema identifier.
     #[serde(rename = "$schema")]
     pub schema_id: SchemaId,
+    /// Exact Runtime Host that performed review.
+    pub authority_host_id: DottedId,
     /// Derived dispatch identity.
     pub dispatch_id: DottedId,
     /// Reviewed request identity.
@@ -188,6 +214,8 @@ pub struct ManifoldRuntimeApplicationReceipt {
     /// Schema identifier.
     #[serde(rename = "$schema")]
     pub schema_id: SchemaId,
+    /// Exact Runtime Host that applied or rejected the dispatch.
+    pub authority_host_id: DottedId,
     /// Derived receipt identity.
     pub receipt_id: DottedId,
     /// Dispatch identity.
@@ -235,6 +263,8 @@ pub struct ManifoldRuntimeAuditEvent {
     /// Schema identifier.
     #[serde(rename = "$schema")]
     pub schema_id: SchemaId,
+    /// Strictly increasing host-local attempt sequence.
+    pub sequence: u64,
     /// Stable event identity.
     pub event_id: DottedId,
     /// Event kind.
@@ -261,6 +291,63 @@ pub enum ManifoldRuntimeAuditKind {
     LeaseExpiry,
 }
 
+/// Durable evidence that a Runtime Host restart either consumed current v2
+/// state directly or migrated a validated legacy v1 snapshot.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldRuntimeHostMigrationReceipt {
+    /// Receipt schema.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Source snapshot schema observed in the supplied JSON.
+    pub source_schema_id: SchemaId,
+    /// Resulting snapshot schema.
+    pub resulting_schema_id: SchemaId,
+    /// Whether legacy state was migrated.
+    pub migrated: bool,
+    /// Exact restarted Runtime Host.
+    pub authority_host_id: DottedId,
+    /// Resulting accepted authority revision.
+    pub resulting_authority_revision: Revision,
+    /// Number of legacy audit records assigned canonical v2 sequence ids.
+    pub migrated_audit_event_count: usize,
+    /// First-seen legacy sweep ids retained against replay.
+    pub reviewed_sweep_ids: Vec<DottedId>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct LegacyRuntimeAuditEventV1 {
+    #[serde(rename = "$schema")]
+    schema_id: SchemaId,
+    event_id: DottedId,
+    event_kind: ManifoldRuntimeAuditKind,
+    source_id: DottedId,
+    prior_authority_revision: Revision,
+    resulting_authority_revision: Revision,
+    applied: bool,
+    rejection_reason: Option<ManifoldRuntimeRejectionReason>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct LegacyRuntimeHostSnapshotV1 {
+    #[serde(rename = "$schema")]
+    schema_id: SchemaId,
+    host_id: DottedId,
+    authority_revision: Revision,
+    commands: Vec<ManifoldRuntimeCommandDescriptor>,
+    leases: Vec<ManifoldRuntimeLease>,
+    applied_request_ids: Vec<DottedId>,
+    audit_events: Vec<LegacyRuntimeAuditEventV1>,
+}
+
+#[derive(Deserialize)]
+struct SchemaProbe {
+    #[serde(rename = "$schema")]
+    schema_id: SchemaId,
+}
+
 /// Source-only runtime host.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManifoldRuntimeHost {
@@ -278,8 +365,37 @@ impl ManifoldRuntimeHost {
 
     /// Restarts a host from deterministic JSON snapshot state.
     pub fn restart_from_json(json: &str) -> Result<Self, ManifoldRuntimeHostError> {
-        let snapshot = serde_json::from_str(json).map_err(ManifoldRuntimeHostError::Deserialize)?;
-        Self::from_snapshot(snapshot)
+        Self::restart_from_json_with_migration(json).map(|(host, _)| host)
+    }
+
+    /// Restarts current v2 state or migrates a validated v1 snapshot while
+    /// returning explicit schema/audit migration evidence.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when source JSON, legacy lineage, or resulting v2
+    /// snapshot invariants fail.
+    pub fn restart_from_json_with_migration(
+        json: &str,
+    ) -> Result<(Self, ManifoldRuntimeHostMigrationReceipt), ManifoldRuntimeHostError> {
+        let probe: SchemaProbe =
+            serde_json::from_str(json).map_err(ManifoldRuntimeHostError::Deserialize)?;
+        if probe.schema_id.as_str() == HOST_SNAPSHOT_SCHEMA {
+            let snapshot: ManifoldRuntimeHostSnapshot =
+                serde_json::from_str(json).map_err(ManifoldRuntimeHostError::Deserialize)?;
+            let host = Self::from_snapshot(snapshot)?;
+            let receipt =
+                runtime_host_migration_receipt(probe.schema_id, host.snapshot(), false, 0);
+            return Ok((host, receipt));
+        }
+        if probe.schema_id.as_str() != LEGACY_HOST_SNAPSHOT_V1_SCHEMA {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "unsupported_snapshot_schema",
+            ));
+        }
+        let legacy: LegacyRuntimeHostSnapshotV1 =
+            serde_json::from_str(json).map_err(ManifoldRuntimeHostError::Deserialize)?;
+        migrate_legacy_runtime_host_snapshot(legacy)
     }
 
     /// Serializes the accepted snapshot for durable restart.
@@ -303,6 +419,7 @@ impl ManifoldRuntimeHost {
         let rejection = validate_request(&self.snapshot, request, now_ms).err();
         ManifoldRuntimeDispatchReceipt {
             schema_id: schema_id(HOST_DISPATCH_RECEIPT_SCHEMA),
+            authority_host_id: self.snapshot.host_id.clone(),
             dispatch_id: derived_id("dispatch.runtime", &request.request_id),
             request_id: request.request_id.clone(),
             command_id: request.command_id.clone(),
@@ -322,23 +439,44 @@ impl ManifoldRuntimeHost {
         &mut self,
         request: &ManifoldRuntimeCommandRequest,
         dispatch: &ManifoldRuntimeDispatchReceipt,
+        now_ms: u64,
     ) -> ManifoldRuntimeApplicationReceipt {
         let prior = self.snapshot.authority_revision;
-        let mismatch = dispatch.schema_id.as_str() != HOST_DISPATCH_RECEIPT_SCHEMA
+        if self.snapshot.audit_events.len() >= MAX_RUNTIME_AUDIT_EVENTS {
+            return application_receipt(
+                request,
+                dispatch,
+                prior,
+                prior,
+                false,
+                Some(ManifoldRuntimeRejectionReason::AuthorityCapacityExhausted),
+            );
+        }
+        let current_review = self.review_command(request, now_ms);
+        let identity_mismatch = dispatch.schema_id.as_str() != HOST_DISPATCH_RECEIPT_SCHEMA
+            || dispatch.authority_host_id != self.snapshot.host_id
             || dispatch.dispatch_id != derived_id("dispatch.runtime", &request.request_id)
             || dispatch.request_id != request.request_id
             || dispatch.command_id != request.command_id
             || dispatch.params_digest != request.params_digest;
         let stale_dispatch = dispatch.reviewed_authority_revision != prior;
-        let rejection = if mismatch {
+        let mut rejection = if identity_mismatch {
             Some(ManifoldRuntimeRejectionReason::DispatchMismatch)
         } else if stale_dispatch {
             Some(ManifoldRuntimeRejectionReason::DispatchRevisionMismatch)
+        } else if current_review.outcome == ManifoldRuntimeDispatchOutcome::Rejected {
+            current_review.rejection_reason.clone()
+        } else if dispatch != &current_review {
+            Some(ManifoldRuntimeRejectionReason::DispatchMismatch)
         } else {
-            dispatch.rejection_reason.clone()
+            None
         };
-        let applied =
+        let mut applied =
             dispatch.outcome == ManifoldRuntimeDispatchOutcome::Ready && rejection.is_none();
+        if applied && self.snapshot.applied_request_ids.len() >= MAX_RUNTIME_SNAPSHOT_RECORDS {
+            rejection = Some(ManifoldRuntimeRejectionReason::AuthorityCapacityExhausted);
+            applied = false;
+        }
         if applied {
             self.snapshot.authority_revision =
                 prior.next().expect("authority revision must advance");
@@ -349,6 +487,7 @@ impl ManifoldRuntimeHost {
         }
         let resulting = self.snapshot.authority_revision;
         let event = audit_event(
+            (self.snapshot.audit_events.len() as u64) + 1,
             ManifoldRuntimeAuditKind::CommandApplication,
             &request.request_id,
             prior,
@@ -357,17 +496,7 @@ impl ManifoldRuntimeHost {
             rejection.clone(),
         );
         self.snapshot.audit_events.push(event);
-        ManifoldRuntimeApplicationReceipt {
-            schema_id: schema_id(HOST_APPLICATION_RECEIPT_SCHEMA),
-            receipt_id: derived_id("receipt.runtime", &request.request_id),
-            dispatch_id: dispatch.dispatch_id.clone(),
-            request_id: request.request_id.clone(),
-            params_digest: request.params_digest.clone(),
-            applied,
-            prior_authority_revision: prior,
-            resulting_authority_revision: resulting,
-            rejection_reason: rejection,
-        }
+        application_receipt(request, dispatch, prior, resulting, applied, rejection)
     }
 
     /// Performs an explicit revision-guarded lease expiry sweep.
@@ -378,8 +507,35 @@ impl ManifoldRuntimeHost {
         now_ms: u64,
     ) -> ManifoldRuntimeLeaseExpiryReceipt {
         let prior = self.snapshot.authority_revision;
+        if self.snapshot.audit_events.len() >= MAX_RUNTIME_AUDIT_EVENTS {
+            return ManifoldRuntimeLeaseExpiryReceipt {
+                schema_id: schema_id(HOST_LEASE_EXPIRY_RECEIPT_SCHEMA),
+                sweep_id,
+                applied: false,
+                removed_lease_ids: Vec::new(),
+                prior_authority_revision: prior,
+                resulting_authority_revision: prior,
+                rejection_reason: Some(ManifoldRuntimeRejectionReason::AuthorityCapacityExhausted),
+            };
+        }
+        if !self.snapshot.reviewed_sweep_ids.contains(&sweep_id)
+            && self.snapshot.reviewed_sweep_ids.len() >= MAX_RUNTIME_SNAPSHOT_RECORDS
+        {
+            return ManifoldRuntimeLeaseExpiryReceipt {
+                schema_id: schema_id(HOST_LEASE_EXPIRY_RECEIPT_SCHEMA),
+                sweep_id,
+                applied: false,
+                removed_lease_ids: Vec::new(),
+                prior_authority_revision: prior,
+                resulting_authority_revision: prior,
+                rejection_reason: Some(ManifoldRuntimeRejectionReason::AuthorityCapacityExhausted),
+            };
+        }
         let mut removed = Vec::new();
-        let rejection = if expected_revision != prior {
+        let replayed = self.snapshot.reviewed_sweep_ids.contains(&sweep_id);
+        let rejection = if replayed {
+            Some(ManifoldRuntimeRejectionReason::ReplayedSweep)
+        } else if expected_revision != prior {
             Some(ManifoldRuntimeRejectionReason::StaleAuthorityRevision)
         } else {
             removed = self
@@ -395,6 +551,10 @@ impl ManifoldRuntimeHost {
                 None
             }
         };
+        if !replayed {
+            self.snapshot.reviewed_sweep_ids.push(sweep_id.clone());
+            self.snapshot.reviewed_sweep_ids.sort();
+        }
         let applied = rejection.is_none();
         if applied {
             self.snapshot
@@ -405,6 +565,7 @@ impl ManifoldRuntimeHost {
         }
         let resulting = self.snapshot.authority_revision;
         self.snapshot.audit_events.push(audit_event(
+            (self.snapshot.audit_events.len() as u64) + 1,
             ManifoldRuntimeAuditKind::LeaseExpiry,
             &sweep_id,
             prior,
@@ -424,11 +585,200 @@ impl ManifoldRuntimeHost {
     }
 }
 
+fn migrate_legacy_runtime_host_snapshot(
+    legacy: LegacyRuntimeHostSnapshotV1,
+) -> Result<(ManifoldRuntimeHost, ManifoldRuntimeHostMigrationReceipt), ManifoldRuntimeHostError> {
+    validate_legacy_runtime_host_snapshot(&legacy)?;
+    let mut reviewed_sweep_ids = legacy
+        .audit_events
+        .iter()
+        .filter(|event| event.event_kind == ManifoldRuntimeAuditKind::LeaseExpiry)
+        .map(|event| event.source_id.clone())
+        .collect::<Vec<_>>();
+    reviewed_sweep_ids.sort();
+    reviewed_sweep_ids.dedup();
+    let audit_events = legacy
+        .audit_events
+        .iter()
+        .enumerate()
+        .map(|(index, event)| {
+            let sequence = (index as u64) + 1;
+            ManifoldRuntimeAuditEvent {
+                schema_id: schema_id(HOST_AUDIT_EVENT_SCHEMA),
+                sequence,
+                event_id: runtime_audit_id(sequence),
+                event_kind: event.event_kind.clone(),
+                source_id: event.source_id.clone(),
+                prior_authority_revision: event.prior_authority_revision,
+                resulting_authority_revision: event.resulting_authority_revision,
+                applied: event.applied,
+                rejection_reason: event.rejection_reason.clone(),
+            }
+        })
+        .collect::<Vec<_>>();
+    let source_schema_id = legacy.schema_id;
+    let migrated_audit_event_count = audit_events.len();
+    let snapshot = ManifoldRuntimeHostSnapshot {
+        schema_id: schema_id(HOST_SNAPSHOT_SCHEMA),
+        host_id: legacy.host_id,
+        authority_revision: legacy.authority_revision,
+        commands: legacy.commands,
+        leases: legacy.leases,
+        applied_request_ids: legacy.applied_request_ids,
+        reviewed_sweep_ids,
+        audit_events,
+    };
+    let host = ManifoldRuntimeHost::from_snapshot(snapshot)?;
+    let receipt = runtime_host_migration_receipt(
+        source_schema_id,
+        host.snapshot(),
+        true,
+        migrated_audit_event_count,
+    );
+    Ok((host, receipt))
+}
+
+fn validate_legacy_runtime_host_snapshot(
+    snapshot: &LegacyRuntimeHostSnapshotV1,
+) -> Result<(), ManifoldRuntimeHostError> {
+    if snapshot.schema_id.as_str() != LEGACY_HOST_SNAPSHOT_V1_SCHEMA
+        || snapshot.commands.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
+        || snapshot.leases.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
+        || snapshot.applied_request_ids.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
+        || snapshot.audit_events.len() > MAX_RUNTIME_AUDIT_EVENTS
+    {
+        return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+            "legacy_schema_or_capacity",
+        ));
+    }
+    if snapshot
+        .commands
+        .iter()
+        .map(|command| &command.command_id)
+        .collect::<BTreeSet<_>>()
+        .len()
+        != snapshot.commands.len()
+        || snapshot
+            .leases
+            .iter()
+            .map(|lease| &lease.lease_id)
+            .collect::<BTreeSet<_>>()
+            .len()
+            != snapshot.leases.len()
+        || snapshot
+            .applied_request_ids
+            .iter()
+            .collect::<BTreeSet<_>>()
+            .len()
+            != snapshot.applied_request_ids.len()
+        || snapshot
+            .audit_events
+            .iter()
+            .map(|event| &event.event_id)
+            .collect::<BTreeSet<_>>()
+            .len()
+            != snapshot.audit_events.len()
+    {
+        return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+            "legacy_duplicate_identity",
+        ));
+    }
+    let applied_sources = snapshot
+        .audit_events
+        .iter()
+        .filter(|event| {
+            event.event_kind == ManifoldRuntimeAuditKind::CommandApplication && event.applied
+        })
+        .map(|event| event.source_id.clone())
+        .collect::<BTreeSet<_>>();
+    if applied_sources
+        != snapshot
+            .applied_request_ids
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>()
+    {
+        return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+            "legacy_audit_replay_set",
+        ));
+    }
+    let mut rolling_revision = Revision::INITIAL;
+    let mut seen_applied_commands = BTreeSet::new();
+    let mut seen_sweeps = BTreeSet::new();
+    for event in &snapshot.audit_events {
+        let semantic_valid = match event.event_kind {
+            ManifoldRuntimeAuditKind::CommandApplication if event.applied => {
+                seen_applied_commands.insert(event.source_id.clone())
+            }
+            ManifoldRuntimeAuditKind::CommandApplication => {
+                event.rejection_reason.is_some()
+                    && (event.rejection_reason
+                        != Some(ManifoldRuntimeRejectionReason::ReplayedRequest)
+                        || seen_applied_commands.contains(&event.source_id))
+            }
+            ManifoldRuntimeAuditKind::LeaseExpiry => {
+                seen_sweeps.insert(event.source_id.clone())
+                    && event.applied == event.rejection_reason.is_none()
+            }
+        };
+        if event.schema_id.as_str() != LEGACY_HOST_AUDIT_EVENT_V1_SCHEMA
+            || event.event_id != derived_id("audit.runtime", &event.source_id)
+            || event.prior_authority_revision != rolling_revision
+            || (event.applied
+                && event.prior_authority_revision.next()
+                    != Some(event.resulting_authority_revision))
+            || (!event.applied
+                && event.prior_authority_revision != event.resulting_authority_revision)
+            || event.resulting_authority_revision > snapshot.authority_revision
+            || !semantic_valid
+        {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "legacy_audit_lineage",
+            ));
+        }
+        rolling_revision = event.resulting_authority_revision;
+    }
+    if rolling_revision != snapshot.authority_revision {
+        return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+            "legacy_audit_final_revision",
+        ));
+    }
+    Ok(())
+}
+
+fn runtime_host_migration_receipt(
+    source_schema_id: SchemaId,
+    snapshot: &ManifoldRuntimeHostSnapshot,
+    migrated: bool,
+    migrated_audit_event_count: usize,
+) -> ManifoldRuntimeHostMigrationReceipt {
+    ManifoldRuntimeHostMigrationReceipt {
+        schema_id: schema_id(HOST_MIGRATION_RECEIPT_SCHEMA),
+        source_schema_id,
+        resulting_schema_id: snapshot.schema_id.clone(),
+        migrated,
+        authority_host_id: snapshot.host_id.clone(),
+        resulting_authority_revision: snapshot.authority_revision,
+        migrated_audit_event_count,
+        reviewed_sweep_ids: snapshot.reviewed_sweep_ids.clone(),
+    }
+}
+
 fn validate_snapshot(
     snapshot: &ManifoldRuntimeHostSnapshot,
 ) -> Result<(), ManifoldRuntimeHostError> {
     if snapshot.schema_id.as_str() != HOST_SNAPSHOT_SCHEMA {
         return Err(ManifoldRuntimeHostError::InvalidSnapshot("schema_mismatch"));
+    }
+    if snapshot.commands.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
+        || snapshot.leases.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
+        || snapshot.applied_request_ids.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
+        || snapshot.reviewed_sweep_ids.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
+        || snapshot.audit_events.len() > MAX_RUNTIME_AUDIT_EVENTS
+    {
+        return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+            "snapshot_capacity_exceeded",
+        ));
     }
     let command_ids = snapshot
         .commands
@@ -454,6 +804,12 @@ fn validate_snapshot(
             "duplicate_applied_request",
         ));
     }
+    let sweep_ids = snapshot.reviewed_sweep_ids.iter().collect::<BTreeSet<_>>();
+    if sweep_ids.len() != snapshot.reviewed_sweep_ids.len() {
+        return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+            "duplicate_reviewed_sweep",
+        ));
+    }
     let audit_ids = snapshot
         .audit_events
         .iter()
@@ -464,17 +820,85 @@ fn validate_snapshot(
             "duplicate_audit_event",
         ));
     }
-    for event in &snapshot.audit_events {
+    let applied_command_sources = snapshot
+        .audit_events
+        .iter()
+        .filter(|event| {
+            event.event_kind == ManifoldRuntimeAuditKind::CommandApplication && event.applied
+        })
+        .map(|event| event.source_id.clone())
+        .collect::<BTreeSet<_>>();
+    let retained_applied_sources = snapshot
+        .applied_request_ids
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    let reviewed_sweep_sources = snapshot
+        .audit_events
+        .iter()
+        .filter(|event| event.event_kind == ManifoldRuntimeAuditKind::LeaseExpiry)
+        .map(|event| event.source_id.clone())
+        .collect::<BTreeSet<_>>();
+    let retained_sweep_sources = snapshot
+        .reviewed_sweep_ids
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    if applied_command_sources != retained_applied_sources
+        || reviewed_sweep_sources != retained_sweep_sources
+    {
+        return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+            "audit_replay_set_mismatch",
+        ));
+    }
+    let mut rolling_revision = Revision::INITIAL;
+    let mut seen_applied_commands = BTreeSet::new();
+    let mut seen_sweeps = BTreeSet::new();
+    for (index, event) in snapshot.audit_events.iter().enumerate() {
+        let sequence = (index as u64) + 1;
+        let semantic_valid = match event.event_kind {
+            ManifoldRuntimeAuditKind::CommandApplication if event.applied => {
+                event.rejection_reason.is_none()
+                    && seen_applied_commands.insert(event.source_id.clone())
+            }
+            ManifoldRuntimeAuditKind::CommandApplication => {
+                event.rejection_reason.is_some()
+                    && (event.rejection_reason
+                        != Some(ManifoldRuntimeRejectionReason::ReplayedRequest)
+                        || seen_applied_commands.contains(&event.source_id))
+            }
+            ManifoldRuntimeAuditKind::LeaseExpiry
+                if seen_sweeps.insert(event.source_id.clone()) =>
+            {
+                event.applied == event.rejection_reason.is_none()
+            }
+            ManifoldRuntimeAuditKind::LeaseExpiry => {
+                !event.applied
+                    && event.rejection_reason == Some(ManifoldRuntimeRejectionReason::ReplayedSweep)
+            }
+        };
         if event.schema_id.as_str() != HOST_AUDIT_EVENT_SCHEMA
+            || event.sequence != sequence
+            || event.event_id != runtime_audit_id(sequence)
+            || event.prior_authority_revision != rolling_revision
             || (event.applied
                 && event.prior_authority_revision.next()
                     != Some(event.resulting_authority_revision))
             || (!event.applied
                 && event.prior_authority_revision != event.resulting_authority_revision)
             || event.resulting_authority_revision > snapshot.authority_revision
+            || (event.event_kind == ManifoldRuntimeAuditKind::LeaseExpiry
+                && !snapshot.reviewed_sweep_ids.contains(&event.source_id))
+            || !semantic_valid
         {
             return Err(ManifoldRuntimeHostError::InvalidSnapshot("audit_lineage"));
         }
+        rolling_revision = event.resulting_authority_revision;
+    }
+    if rolling_revision != snapshot.authority_revision {
+        return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+            "audit_final_revision_mismatch",
+        ));
     }
     Ok(())
 }
@@ -545,6 +969,7 @@ fn valid_sha256_digest(value: &str) -> bool {
 }
 
 fn audit_event(
+    sequence: u64,
     kind: ManifoldRuntimeAuditKind,
     source_id: &DottedId,
     prior: Revision,
@@ -554,7 +979,8 @@ fn audit_event(
 ) -> ManifoldRuntimeAuditEvent {
     ManifoldRuntimeAuditEvent {
         schema_id: schema_id(HOST_AUDIT_EVENT_SCHEMA),
-        event_id: derived_id("audit.runtime", source_id),
+        sequence,
+        event_id: runtime_audit_id(sequence),
         event_kind: kind,
         source_id: source_id.clone(),
         prior_authority_revision: prior,
@@ -562,6 +988,33 @@ fn audit_event(
         applied,
         rejection_reason: rejection,
     }
+}
+
+fn application_receipt(
+    request: &ManifoldRuntimeCommandRequest,
+    dispatch: &ManifoldRuntimeDispatchReceipt,
+    prior_authority_revision: Revision,
+    resulting_authority_revision: Revision,
+    applied: bool,
+    rejection_reason: Option<ManifoldRuntimeRejectionReason>,
+) -> ManifoldRuntimeApplicationReceipt {
+    ManifoldRuntimeApplicationReceipt {
+        schema_id: schema_id(HOST_APPLICATION_RECEIPT_SCHEMA),
+        authority_host_id: dispatch.authority_host_id.clone(),
+        receipt_id: derived_id("receipt.runtime", &request.request_id),
+        dispatch_id: dispatch.dispatch_id.clone(),
+        request_id: request.request_id.clone(),
+        params_digest: request.params_digest.clone(),
+        applied,
+        prior_authority_revision,
+        resulting_authority_revision,
+        rejection_reason,
+    }
+}
+
+fn runtime_audit_id(sequence: u64) -> DottedId {
+    DottedId::new(format!("audit.runtime.{sequence:020}"))
+        .expect("derived runtime audit identity must be valid")
 }
 
 fn schema_id(value: &str) -> SchemaId {
@@ -630,7 +1083,7 @@ mod tests {
         let mut host = ManifoldRuntimeHost::from_snapshot(snapshot).expect("snapshot");
         let dispatch = host.review_command(&request, 2_000);
         assert_eq!(dispatch.outcome, ManifoldRuntimeDispatchOutcome::Ready);
-        let applied = host.apply_dispatch(&request, &dispatch);
+        let applied = host.apply_dispatch(&request, &dispatch, 2_000);
         assert!(applied.applied);
         assert_eq!(host.snapshot().authority_revision.get(), 2);
         let json = host.snapshot_json().expect("snapshot json");
@@ -650,6 +1103,183 @@ mod tests {
     }
 
     #[test]
+    fn legacy_v1_restart_migrates_canonical_audit_and_emits_receipt() {
+        let json = include_str!("../../../fixtures/runtime-host/legacy-v1-restarted-snapshot.json");
+        let (host, receipt) = ManifoldRuntimeHost::restart_from_json_with_migration(json)
+            .expect("legacy Runtime Host migration");
+        assert!(receipt.migrated);
+        assert_eq!(
+            receipt.source_schema_id.as_str(),
+            LEGACY_HOST_SNAPSHOT_V1_SCHEMA
+        );
+        assert_eq!(receipt.resulting_schema_id.as_str(), HOST_SNAPSHOT_SCHEMA);
+        assert_eq!(receipt.migrated_audit_event_count, 1);
+        assert_eq!(receipt.authority_host_id, host.snapshot().host_id);
+        assert_eq!(host.snapshot().audit_events[0].sequence, 1);
+        assert_eq!(
+            host.snapshot().audit_events[0].event_id,
+            DottedId::new("audit.runtime.00000000000000000001").expect("id")
+        );
+        let v2_json = host.snapshot_json().expect("migrated snapshot");
+        let (restarted, current_receipt) =
+            ManifoldRuntimeHost::restart_from_json_with_migration(&v2_json)
+                .expect("current restart");
+        assert!(!current_receipt.migrated);
+        assert_eq!(restarted, host);
+
+        let damaged = json.replace(
+            "\"prior_authority_revision\": 1",
+            "\"prior_authority_revision\": 2",
+        );
+        assert!(ManifoldRuntimeHost::restart_from_json_with_migration(&damaged).is_err());
+    }
+
+    #[test]
+    fn applied_replay_repeated_rejection_and_repeated_sweep_restart_cleanly() {
+        let snapshot = fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        let request: ManifoldRuntimeCommandRequest =
+            fixture("fixtures/runtime-host/synthetic-runtime-command-request.json");
+        let mut host = ManifoldRuntimeHost::from_snapshot(snapshot).expect("snapshot");
+        let dispatch = host.review_command(&request, 2_000);
+        assert!(host.apply_dispatch(&request, &dispatch, 2_000).applied);
+
+        let mut replay = request.clone();
+        replay.expected_authority_revision = host.snapshot().authority_revision;
+        for _ in 0..2 {
+            let rejected = host.review_command(&replay, 2_100);
+            let receipt = host.apply_dispatch(&replay, &rejected, 2_100);
+            assert_eq!(
+                receipt.rejection_reason,
+                Some(ManifoldRuntimeRejectionReason::ReplayedRequest)
+            );
+        }
+
+        let unknown: ManifoldRuntimeCommandRequest =
+            fixture("fixtures/damaged/runtime-host-unknown-command.json");
+        for _ in 0..2 {
+            let rejected = host.review_command(&unknown, 2_200);
+            let receipt = host.apply_dispatch(&unknown, &rejected, 2_200);
+            assert_eq!(
+                receipt.rejection_reason,
+                Some(ManifoldRuntimeRejectionReason::StaleAuthorityRevision)
+            );
+        }
+
+        let sweep_id = DottedId::new("sweep.runtime.repeated.001").expect("id");
+        let first = host.expire_leases(sweep_id.clone(), host.snapshot().authority_revision, 1_000);
+        assert_eq!(
+            first.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::NoExpiredLeases)
+        );
+        let repeated = host.expire_leases(sweep_id, host.snapshot().authority_revision, 1_000);
+        assert_eq!(
+            repeated.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::ReplayedSweep)
+        );
+
+        let json = host.snapshot_json().expect("snapshot json");
+        let restarted = ManifoldRuntimeHost::restart_from_json(&json).expect("restart");
+        assert_eq!(restarted.snapshot(), host.snapshot());
+        assert!(restarted
+            .snapshot()
+            .audit_events
+            .windows(2)
+            .all(|pair| pair[0].sequence + 1 == pair[1].sequence));
+    }
+
+    #[test]
+    fn restart_rejects_gapped_reordered_or_forged_audit_identity() {
+        let snapshot = fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        let request: ManifoldRuntimeCommandRequest =
+            fixture("fixtures/runtime-host/synthetic-runtime-command-request.json");
+        let mut host = ManifoldRuntimeHost::from_snapshot(snapshot).expect("snapshot");
+        let dispatch = host.review_command(&request, 2_000);
+        assert!(host.apply_dispatch(&request, &dispatch, 2_000).applied);
+        let mut damaged = host.snapshot().clone();
+        damaged.audit_events[0].sequence = 2;
+        assert!(ManifoldRuntimeHost::from_snapshot(damaged).is_err());
+        let mut damaged = host.snapshot().clone();
+        damaged.audit_events[0].event_id =
+            DottedId::new("audit.runtime.00000000000000000999").expect("id");
+        assert!(ManifoldRuntimeHost::from_snapshot(damaged).is_err());
+    }
+
+    #[test]
+    fn command_and_sweep_caps_reject_before_creating_unrestorable_state() {
+        let mut command_snapshot: ManifoldRuntimeHostSnapshot =
+            fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        command_snapshot.leases.clear();
+        let mut host = ManifoldRuntimeHost::from_snapshot(command_snapshot).expect("snapshot");
+        for index in 0..MAX_RUNTIME_SNAPSHOT_RECORDS {
+            let request = ManifoldRuntimeCommandRequest {
+                schema_id: schema_id(HOST_COMMAND_REQUEST_SCHEMA),
+                request_id: DottedId::new(format!("request.runtime.cap.{index:04}")).expect("id"),
+                expected_authority_revision: host.snapshot().authority_revision,
+                requester_id: DottedId::new("client.operator").expect("id"),
+                command_id: DottedId::new("command.status.get").expect("id"),
+                lease_id: None,
+                params_digest: None,
+                issued_at_ms: 1,
+                expires_at_ms: 100_000,
+            };
+            let dispatch = host.review_command(&request, 2_000);
+            assert!(host.apply_dispatch(&request, &dispatch, 2_000).applied);
+        }
+        let overflow = ManifoldRuntimeCommandRequest {
+            schema_id: schema_id(HOST_COMMAND_REQUEST_SCHEMA),
+            request_id: DottedId::new("request.runtime.cap.overflow").expect("id"),
+            expected_authority_revision: host.snapshot().authority_revision,
+            requester_id: DottedId::new("client.operator").expect("id"),
+            command_id: DottedId::new("command.status.get").expect("id"),
+            lease_id: None,
+            params_digest: None,
+            issued_at_ms: 1,
+            expires_at_ms: 100_000,
+        };
+        let dispatch = host.review_command(&overflow, 2_000);
+        let receipt = host.apply_dispatch(&overflow, &dispatch, 2_000);
+        assert_eq!(
+            receipt.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::AuthorityCapacityExhausted)
+        );
+        assert_eq!(
+            host.snapshot().applied_request_ids.len(),
+            MAX_RUNTIME_SNAPSHOT_RECORDS
+        );
+        ManifoldRuntimeHost::restart_from_json(&host.snapshot_json().expect("json"))
+            .expect("command-cap snapshot remains restorable");
+
+        let mut sweep_snapshot: ManifoldRuntimeHostSnapshot =
+            fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        sweep_snapshot.leases.clear();
+        let mut host = ManifoldRuntimeHost::from_snapshot(sweep_snapshot).expect("snapshot");
+        for index in 0..MAX_RUNTIME_SNAPSHOT_RECORDS {
+            let receipt = host.expire_leases(
+                DottedId::new(format!("sweep.runtime.cap.{index:04}")).expect("id"),
+                host.snapshot().authority_revision,
+                2_000,
+            );
+            assert_eq!(
+                receipt.rejection_reason,
+                Some(ManifoldRuntimeRejectionReason::NoExpiredLeases)
+            );
+        }
+        let audit_count = host.snapshot().audit_events.len();
+        let receipt = host.expire_leases(
+            DottedId::new("sweep.runtime.cap.overflow").expect("id"),
+            host.snapshot().authority_revision,
+            2_000,
+        );
+        assert_eq!(
+            receipt.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::AuthorityCapacityExhausted)
+        );
+        assert_eq!(host.snapshot().audit_events.len(), audit_count);
+        ManifoldRuntimeHost::restart_from_json(&host.snapshot_json().expect("json"))
+            .expect("sweep-cap snapshot remains restorable");
+    }
+
+    #[test]
     fn unknown_command_and_missing_or_expired_leases_reject_without_revision_change() {
         let snapshot = fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
         let mut host = ManifoldRuntimeHost::from_snapshot(snapshot).expect("snapshot");
@@ -665,7 +1295,7 @@ mod tests {
                 ManifoldRuntimeDispatchOutcome::Rejected,
                 "{path}"
             );
-            let receipt = host.apply_dispatch(&request, &dispatch);
+            let receipt = host.apply_dispatch(&request, &dispatch, 70_000);
             assert!(!receipt.applied, "{path}");
             assert_eq!(host.snapshot().authority_revision.get(), 1, "{path}");
         }
@@ -715,13 +1345,62 @@ mod tests {
         let mut host = ManifoldRuntimeHost::from_snapshot(snapshot).expect("snapshot");
         let mut dispatch = host.review_command(&request, 2_000);
         dispatch.dispatch_id = DottedId::new("dispatch.runtime.forged").expect("id");
-        let receipt = host.apply_dispatch(&request, &dispatch);
+        let receipt = host.apply_dispatch(&request, &dispatch, 2_000);
         assert!(!receipt.applied);
         assert_eq!(
             receipt.rejection_reason,
             Some(ManifoldRuntimeRejectionReason::DispatchMismatch)
         );
         assert_eq!(host.snapshot().authority_revision.get(), 1);
+    }
+
+    #[test]
+    fn fabricated_ready_expiry_and_state_change_are_revalidated_at_apply() {
+        let snapshot: ManifoldRuntimeHostSnapshot =
+            fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+
+        let unknown: ManifoldRuntimeCommandRequest =
+            fixture("fixtures/damaged/runtime-host-unknown-command.json");
+        let mut forged_host =
+            ManifoldRuntimeHost::from_snapshot(snapshot.clone()).expect("snapshot");
+        let mut fabricated = forged_host.review_command(&unknown, 2_000);
+        fabricated.outcome = ManifoldRuntimeDispatchOutcome::Ready;
+        fabricated.rejection_reason = None;
+        let rejected = forged_host.apply_dispatch(&unknown, &fabricated, 2_000);
+        assert_eq!(
+            rejected.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::UnknownCommand)
+        );
+        assert_eq!(forged_host.snapshot().authority_revision, Revision::INITIAL);
+
+        let request: ManifoldRuntimeCommandRequest =
+            fixture("fixtures/runtime-host/synthetic-runtime-command-request.json");
+        let mut expiry_host =
+            ManifoldRuntimeHost::from_snapshot(snapshot.clone()).expect("snapshot");
+        let dispatch = expiry_host.review_command(&request, 2_000);
+        let expired = expiry_host.apply_dispatch(&request, &dispatch, request.expires_at_ms);
+        assert_eq!(
+            expired.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::ExpiredRequest)
+        );
+        assert_eq!(expiry_host.snapshot().authority_revision, Revision::INITIAL);
+
+        let mut state_host = ManifoldRuntimeHost::from_snapshot(snapshot).expect("snapshot");
+        let mut second = request.clone();
+        second.request_id = DottedId::new("request.runtime.second").expect("id");
+        let second_dispatch = state_host.review_command(&second, 2_000);
+        let first_dispatch = state_host.review_command(&request, 2_000);
+        assert!(
+            state_host
+                .apply_dispatch(&request, &first_dispatch, 2_000)
+                .applied
+        );
+        let stale = state_host.apply_dispatch(&second, &second_dispatch, 2_000);
+        assert_eq!(
+            stale.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::DispatchRevisionMismatch)
+        );
+        assert_eq!(state_host.snapshot().authority_revision.get(), 2);
     }
 
     #[test]
@@ -734,7 +1413,7 @@ mod tests {
         let dispatch = host.review_command(&request, 2_000);
         assert_eq!(dispatch.params_digest, request.params_digest);
         assert_eq!(dispatch.outcome, ManifoldRuntimeDispatchOutcome::Ready);
-        let application = host.apply_dispatch(&request, &dispatch);
+        let application = host.apply_dispatch(&request, &dispatch, 2_000);
         assert!(application.applied);
         assert_eq!(application.params_digest, request.params_digest);
     }
@@ -753,7 +1432,7 @@ mod tests {
             .as_mut()
             .expect("digest")
             .canonical_sha256 = format!("sha256:{}", "cd".repeat(32));
-        let tampered = host.apply_dispatch(&request, &dispatch);
+        let tampered = host.apply_dispatch(&request, &dispatch, 2_000);
         assert_eq!(
             tampered.rejection_reason,
             Some(ManifoldRuntimeRejectionReason::DispatchMismatch)

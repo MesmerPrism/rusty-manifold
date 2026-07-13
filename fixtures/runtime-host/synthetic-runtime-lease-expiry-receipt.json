@@ -1,5 +1,5 @@
 {
-  "$schema": "rusty.manifold.runtime_host.lease_expiry_receipt.v1",
+  "$schema": "rusty.manifold.runtime_host.lease_expiry_receipt.v2",
   "sweep_id": "sweep.runtime.001",
   "applied": true,
   "removed_lease_ids": [

@@ -43,15 +43,16 @@ it must not define Lattice relation semantics or default to legacy
 6. `docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md`
 7. `docs/PEER_SESSION_AUTHORITY.md`
 8. `docs/PEER_MESH_AUTHORITY.md`
-9. `docs/MEDIA_SESSION_AUTHORITY.md`
-10. `docs/RUNTIME_HOST.md`
-11. `docs/BROKER_PRODUCTS.md`
-12. `docs/BROKER_ADAPTERS.md`
-13. `docs/ADMISSION.md`
-14. `docs/IMPLEMENTATION_PLAN.md`
-15. `docs/MODULE_PACKAGE_STRATEGY.md`
-16. `docs/SCHEMA_EVOLUTION.md`
-17. `fixtures/README.md`
+9. `docs/PEER_RUNTIME_HOST.md`
+10. `docs/MEDIA_SESSION_AUTHORITY.md`
+11. `docs/RUNTIME_HOST.md`
+12. `docs/BROKER_PRODUCTS.md`
+13. `docs/BROKER_ADAPTERS.md`
+14. `docs/ADMISSION.md`
+15. `docs/IMPLEMENTATION_PLAN.md`
+16. `docs/MODULE_PACKAGE_STRATEGY.md`
+17. `docs/SCHEMA_EVOLUTION.md`
+18. `fixtures/README.md`
 
 ## Architecture Rules
 
@@ -70,10 +71,26 @@ it must not define Lattice relation semantics or default to legacy
   Manifold owns mesh revision, deterministic coordinator, route ranking,
   split-brain rejection, expiry, revocation, direct-lane eligibility, and
   audit. Advisory gossip is never direct-route or media authority.
+- Products opt into `rusty-manifold-peer-runtime-host` at compile time when
+  they need one restartable owner for accepted peer status, enrollment,
+  signed rendezvous, session/mesh, signed topology, direct-lane lease, replay,
+  and audit state. The extension calls the pure peer authorities and must not
+  absorb Android, Termux, sidecar, socket, codec, or media-payload behavior.
 - Generic media-session descriptors bind accepted Manifold session/stream
   state to source, processor, route, sink, and platform runtime references.
   They carry no media bytes or app-specific capture/codec/socket policy;
   platform lifecycle receipts remain downstream adoption evidence.
+- Packaged media products use `rusty-manifold-media-session` to retain the
+  exact typed descriptor, strict sorted reference sets, and canonical SHA-256.
+  This binding authorizes only the referenced adoption action: command
+  acceptance is never proof that Java, Android, a codec, a socket, a source, or
+  a sink completed its effect.
+- Media authority provenance keeps five identities distinct: the broker
+  product lock id plus semantic fingerprint, SHA-256 of exact packaged product
+  lock bytes, packaged broker client-lock id/SHA-256, signature-projected
+  client/admission grant, and app feature-lock id/SHA-256. Never project a
+  client-lock digest into an app feature-lock field; equal or mismatched lock
+  bindings must fail closed before an inner media lease is minted.
 - Standalone and embedded products must use `rusty-manifold-runtime-host` for
   revisioned review/application, lease expiry, restart, replay, and audit. The
   host is source-only; product adapters and policy stay outside it.
@@ -82,6 +99,9 @@ it must not define Lattice relation semantics or default to legacy
   `media_session` is camera-free; `camera_media` explicitly layers capture
   authority over it. Downstream manifests project the lock and must not expand
   it.
+- `spec_fingerprint` is the deterministic semantic closure fingerprint. It is
+  not the exact packaged-file hash. Broker adapter configs and receipts carry
+  separately named `product_lock_sha256` evidence for the accepted bytes.
 - `rusty-manifold-broker-adapter` is the only standalone/embedded command
   adoption path. Placement changes adapter role labels, never acceptance rules:
   both modes bind the exact product lock, derive the same Runtime Host command
@@ -89,7 +109,8 @@ it must not define Lattice relation semantics or default to legacy
   `module.runtime.host` as authority. Java/JNI/process layers remain adapters.
 - `ManifoldBrokerRuntime` is the only product mutation gate. It co-locates the
   exact broker adapter with Manifold admission, retains one-use permits bound
-  to their opaque token, signature-projected client, exact command capability,
+  to their opaque token, packaged client-lock id/SHA-256,
+  signature-projected client, exact command capability,
   use-creation admission revision, expiry, and provider epoch, consumes a permit before one
   Runtime Host review/apply attempt, and emits the combined receipt. Rebinds to
   the same live provider preserve state; a provider restart creates a fresh
@@ -157,6 +178,7 @@ Run the narrow checks before committing:
 ```powershell
 cargo fmt --all --check
 cargo test --workspace
+cargo test -p rusty-manifold-peer-runtime-host
 cargo run -p rusty-manifold-fixtures -- validate
 cargo run -p rusty-manifold-fixtures -- simulate --check
 cargo run -p rusty-manifold-fixtures -- diff --check

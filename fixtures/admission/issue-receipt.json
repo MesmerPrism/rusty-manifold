@@ -1,12 +1,12 @@
 {
-  "$schema": "rusty.manifold.admission.receipt.v1",
+  "$schema": "rusty.manifold.admission.receipt.v2",
   "operation": "issue_token",
   "request_id": "request.admission.issue",
   "applied": true,
   "prior_authority_revision": 1,
   "resulting_authority_revision": 2,
   "token": {
-    "$schema": "rusty.manifold.admission.token.v1",
+    "$schema": "rusty.manifold.admission.token.v2",
     "token_id": "token.session.0707070707070707070707070707070707070707070707070707070707070707",
     "identity": {
       "client_id": "client.quest.authorized",
@@ -14,6 +14,8 @@
       "signing_fingerprint": "sha256:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
     },
     "grant_id": "grant.quest.authorized",
+    "client_lock_id": "lock.client.quest.authorized",
+    "client_lock_fingerprint": "sha256:c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
     "capabilities": [
       "capability.command.session.list"
     ],

@@ -1,0 +1,102 @@
+{
+  "$schema": "rusty.manifold.broker.runtime_evidence.v1",
+  "provider_epoch_id": "provider.runtime.legacy.001",
+  "host_snapshot": {
+    "$schema": "rusty.manifold.runtime_host.snapshot.v1",
+    "host_id": "host.runtime.test",
+    "authority_revision": 1,
+    "commands": [
+      {
+        "command_id": "command.peer.status.get",
+        "required_lease_scope": null
+      },
+      {
+        "command_id": "command.session.list",
+        "required_lease_scope": null
+      }
+    ],
+    "leases": [],
+    "applied_request_ids": [],
+    "audit_events": []
+  },
+  "admission_snapshot": {
+    "$schema": "rusty.manifold.admission.snapshot.v1",
+    "authority_id": "authority.admission.runtime.test",
+    "authority_revision": 3,
+    "grants": [
+      {
+        "grant_id": "grant.runtime.test",
+        "identity": {
+          "client_id": "client.runtime.test",
+          "platform_subject": "example.client.runtime.test",
+          "signing_fingerprint": "sha256:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+        },
+        "capabilities": [
+          "capability.command.session.list"
+        ],
+        "expires_at_ms": 100000,
+        "revoked": false
+      }
+    ],
+    "active_tokens": [
+      {
+        "$schema": "rusty.manifold.admission.token.v1",
+        "token_id": "token.session.0909090909090909090909090909090909090909090909090909090909090909",
+        "identity": {
+          "client_id": "client.runtime.test",
+          "platform_subject": "example.client.runtime.test",
+          "signing_fingerprint": "sha256:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+        },
+        "grant_id": "grant.runtime.test",
+        "capabilities": [
+          "capability.command.session.list"
+        ],
+        "issued_at_ms": 1000,
+        "expires_at_ms": 21000,
+        "issued_authority_revision": 2
+      }
+    ],
+    "revoked_token_ids": [],
+    "consumed_request_ids": [
+      "request.runtime.legacy.issue"
+    ],
+    "consumed_use_request_ids": [
+      "request.runtime.legacy.use"
+    ],
+    "audit_events": [
+      {
+        "$schema": "rusty.manifold.admission.audit_event.v1",
+        "event_id": "audit.admission.1.request.runtime.legacy.issue",
+        "operation": "issue_token",
+        "request_id": "request.runtime.legacy.issue",
+        "applied": true,
+        "prior_authority_revision": 1,
+        "resulting_authority_revision": 2,
+        "rejection_reason": null
+      },
+      {
+        "$schema": "rusty.manifold.admission.audit_event.v1",
+        "event_id": "audit.admission.2.request.runtime.legacy.use",
+        "operation": "authorize_use",
+        "request_id": "request.runtime.legacy.use",
+        "applied": true,
+        "prior_authority_revision": 2,
+        "resulting_authority_revision": 3,
+        "rejection_reason": null
+      }
+    ],
+    "max_token_ttl_ms": 30000
+  },
+  "pending_bounded_uses": [
+    {
+      "$schema": "rusty.manifold.broker.bounded_use.v1",
+      "admission_use_request_id": "request.runtime.legacy.use",
+      "token_id": "token.session.0909090909090909090909090909090909090909090909090909090909090909",
+      "client_id": "client.runtime.test",
+      "capability_id": "capability.command.session.list",
+      "admission_authority_revision": 3,
+      "expires_at_ms": 15000
+    }
+  ],
+  "consumed_bounded_use_ids": []
+}

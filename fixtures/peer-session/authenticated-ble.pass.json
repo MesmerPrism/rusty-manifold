@@ -6,11 +6,11 @@
     "peers": [
       {
         "identity": {"$schema":"rusty.manifold.peer.identity.v1","peer_id":"peer.alpha","key_fingerprint":"fingerprint.peer.alpha","trust_domain":"trust.morphospace.peer","roles":["observer","rendezvous"]},
-        "status": {"$schema":"rusty.manifold.peer.status.v1","peer_id":"peer.alpha","status_revision":1,"observed_at_ms":1000,"expires_at_ms":61000,"availability":"ready","capability_ids":["capability.rendezvous.ble","capability.topology.wifi-direct","capability.route.rust-direct-p2p"]}
+        "status": {"$schema":"rusty.manifold.peer.status.v1","peer_id":"peer.alpha","status_revision":1,"observed_at_ms":1000,"expires_at_ms":61000,"availability":"ready","capability_ids":["capability.rendezvous.ble","capability.route.rust-direct-p2p","capability.topology.wifi-direct"]}
       },
       {
         "identity": {"$schema":"rusty.manifold.peer.identity.v1","peer_id":"peer.beta","key_fingerprint":"fingerprint.peer.beta","trust_domain":"trust.morphospace.peer","roles":["observer","rendezvous"]},
-        "status": {"$schema":"rusty.manifold.peer.status.v1","peer_id":"peer.beta","status_revision":1,"observed_at_ms":1000,"expires_at_ms":61000,"availability":"ready","capability_ids":["capability.rendezvous.ble","capability.topology.wifi-direct","capability.route.rust-direct-p2p"]}
+        "status": {"$schema":"rusty.manifold.peer.status.v1","peer_id":"peer.beta","status_revision":1,"observed_at_ms":1000,"expires_at_ms":61000,"availability":"ready","capability_ids":["capability.rendezvous.ble","capability.route.rust-direct-p2p","capability.topology.wifi-direct"]}
       }
     ],
     "applied_proposal_ids": ["proposal.peer.alpha.001","proposal.peer.beta.001"]
@@ -25,7 +25,7 @@
     "candidate_peer_id": "peer.beta",
     "group_owner_peer_id": "peer.alpha",
     "client_peer_id": "peer.beta",
-    "requested_capability_ids": ["capability.rendezvous.ble","capability.topology.wifi-direct","capability.route.rust-direct-p2p"],
+    "requested_capability_ids": ["capability.rendezvous.ble","capability.route.rust-direct-p2p","capability.topology.wifi-direct"],
     "topology_contract_id": "rusty.quest.product_wifi_direct_topology.v1",
     "expires_at_ms": 60000,
     "authentication": {

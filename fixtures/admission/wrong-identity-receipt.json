@@ -1,5 +1,5 @@
 {
-  "$schema": "rusty.manifold.admission.receipt.v1",
+  "$schema": "rusty.manifold.admission.receipt.v2",
   "operation": "issue_token",
   "request_id": "request.admission.wrong-identity",
   "applied": false,

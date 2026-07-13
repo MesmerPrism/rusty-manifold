@@ -1,14 +1,16 @@
 {
-  "$schema": "rusty.manifold.broker.adapter_receipt.v1",
+  "$schema": "rusty.manifold.broker.adapter_receipt.v2",
   "adapter_id": "adapter.broker.embedded",
   "mode": "embedded",
   "adapter_role": "in_process_adapter",
   "product_lock_id": "lock.broker.camera.parity",
-  "product_lock_fingerprint": "fnv1a64-5c87754f12db8112",
+  "product_lock_fingerprint": "fnv1a64-841ecdbd0ee13058",
+  "product_lock_sha256": "sha256:f6081f1e35e72f5f6adac51e8b9acc9106f364cca5f92f1a2065af2ccbaff961",
   "authority_host_id": "host.broker.parity",
   "authority_owner_id": "module.runtime.host",
   "dispatch": {
-    "$schema": "rusty.manifold.runtime_host.dispatch_receipt.v1",
+    "$schema": "rusty.manifold.runtime_host.dispatch_receipt.v2",
+    "authority_host_id": "host.broker.parity",
     "dispatch_id": "dispatch.runtime.request.broker.unknown",
     "request_id": "request.broker.unknown",
     "command_id": "command.unknown",
@@ -17,7 +19,8 @@
     "rejection_reason": "unknown_command"
   },
   "application": {
-    "$schema": "rusty.manifold.runtime_host.application_receipt.v1",
+    "$schema": "rusty.manifold.runtime_host.application_receipt.v2",
+    "authority_host_id": "host.broker.parity",
     "receipt_id": "receipt.runtime.request.broker.unknown",
     "dispatch_id": "dispatch.runtime.request.broker.unknown",
     "request_id": "request.broker.unknown",

@@ -10,7 +10,7 @@ decision.
 ## Authority model
 
 - Product/operator configuration owns explicit client grants and capability
-  lists.
+  lists. Every grant also binds the exact packaged client-lock id and SHA-256.
 - Android owns evidence about the immediate Binder caller. A request body is
   never accepted as proof of its own UID, package, or certificate.
 - Manifold owns admission revisions, 256-bit opaque token ids, token lifetime,
@@ -23,7 +23,8 @@ For broker mutations, an accepted `authorize_use` is retained by
 `ManifoldBrokerRuntime` as a one-use permit. The mutation must present both the
 one-use request id and its opaque token id. The permit is bound to the token's
 exact client, one derived command capability, the admission revision produced
-when that bounded use was created, expiry, and the live provider epoch. Later
+when that bounded use was created, packaged client-lock id/SHA-256, expiry,
+and the live provider epoch. Later
 unrelated admission mutations may advance the global revision without changing
 that binding. Exact-token revocation or expiry removes only permits derived
 from the affected token. The permit is consumed before one
@@ -32,7 +33,8 @@ origin, shared secret, or transport acknowledgement cannot substitute for it.
 
 Tokens are random bearer identifiers retained in accepted broker state. They
 bind the exact client identity, source grant, granted capability subset, issue
-revision, and expiry. Maximum lifetime is authority policy. Successful issue,
+revision, packaged client-lock id/SHA-256, and expiry. Maximum lifetime is
+authority policy. Successful issue,
 use, revocation, and expiry advance the admission revision once; rejected work
 emits audit but does not advance accepted state.
 
@@ -51,6 +53,7 @@ emits audit but does not advance accepted state.
 | Revoked token reused | retained revoked-token registry | `token_revoked` |
 | Java/JNI becomes policy owner | thin identity projection and JNI calls into this crate | static policy-absence and differential tests |
 | Admitted use copied across clients/commands | client and exact command-capability binding in `ManifoldBrokerRuntime` | `cross_client_use` / `capability_mismatch` |
+| Client-lock provenance relabelled as app feature-lock provenance | distinct client-lock fields propagated grant → token → bounded use and exact media-grant joins | media lease admission rejected |
 | Old provider state reused after process death | explicit entropy-derived provider epoch | `provider_epoch_mismatch` |
 
 The design intentionally rejects broad shared secrets and unauthenticated

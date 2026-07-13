@@ -1,0 +1,26 @@
+{
+  "$schema": "rusty.manifold.runtime_host.snapshot.v1",
+  "host_id": "host.broker.parity",
+  "authority_revision": 1,
+  "commands": [
+    {
+      "command_id": "command.media.session.start",
+      "required_lease_scope": "lease.media.session"
+    },
+    {
+      "command_id": "command.media.session.stop",
+      "required_lease_scope": "lease.media.session"
+    },
+    {
+      "command_id": "command.peer.status.get",
+      "required_lease_scope": null
+    },
+    {
+      "command_id": "command.session.list",
+      "required_lease_scope": null
+    }
+  ],
+  "leases": [],
+  "applied_request_ids": [],
+  "audit_events": []
+}

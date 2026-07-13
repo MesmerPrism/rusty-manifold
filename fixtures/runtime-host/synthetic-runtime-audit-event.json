@@ -1,6 +1,7 @@
 {
-  "$schema": "rusty.manifold.runtime_host.audit_event.v1",
-  "event_id": "audit.runtime.request.status.001",
+  "$schema": "rusty.manifold.runtime_host.audit_event.v2",
+  "sequence": 1,
+  "event_id": "audit.runtime.00000000000000000001",
   "event_kind": "command_application",
   "source_id": "request.status.001",
   "prior_authority_revision": 1,

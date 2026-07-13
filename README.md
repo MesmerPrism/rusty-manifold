@@ -17,6 +17,12 @@ three-to-32-peer membership, elects a canonical coordinator, ranks
 authenticated direct routes, rejects split brain, and owns expiry/revocation
 and audit. Advisory gossip remains status-only and cannot schedule media.
 
+The opt-in [Peer Runtime Host](docs/PEER_RUNTIME_HOST.md) composes accepted peer
+status, enrollment, signed rendezvous, peer session/mesh, topology, and real
+direct-lane lease plus product-bound media-session authorities into one restartable snapshot and audit
+sequence. It is a source-only compile-time extension; platform, sidecar,
+transport, and media-payload behavior remain outside Manifold authority.
+
 [Media-session authority](docs/MEDIA_SESSION_AUTHORITY.md) binds accepted
 source, processor, route, sink, stream, and platform-runtime references while
 keeping all high-rate bytes on the binary media plane. Quest lifecycle state
@@ -32,7 +38,8 @@ platform code may consume only the receipt-bound payload after application.
 [Broker product specs and locks](docs/BROKER_PRODUCTS.md) select exactly one
 runtime mode and resolve generic media sessions separately from explicit
 camera, direct-P2P, and BLE features into a permission-minimal immutable
-closure.
+closure. The legacy semantic `spec_fingerprint` and the SHA-256 of exact
+packaged lock bytes are intentionally separate provenance fields.
 
 [Broker adapters](docs/BROKER_ADAPTERS.md) bind standalone and embedded
 placements to that exact lock and route every command through the same Runtime
@@ -42,7 +49,8 @@ The integrated broker runtime additionally requires a current, client-bound,
 capability-scoped one-use admission before any product mutation can reach that
 host path. Each bounded use retains the revision that created that use, so an
 unrelated client's admission mutation does not invalidate it; exact-token
-revocation and expiry remove only derived pending uses.
+revocation and expiry remove only derived pending uses. Grants, tokens, and
+bounded uses also retain the exact packaged client-lock id/SHA-256.
 
 [Cross-app admission](docs/ADMISSION.md) binds platform-verified client
 identity to explicit capability grants and Manifold-owned short-lived opaque

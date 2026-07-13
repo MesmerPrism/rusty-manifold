@@ -7,9 +7,10 @@ rules or own accepted state.
 
 ## Authority and binding
 
-An adapter config binds its mode, lock id, lock fingerprint, and Runtime Host
-identity. Construction fails when the product mode is not exclusive, the mode
-does not match the lock, the fingerprint is stale, the Runtime Host command
+An adapter config binds its mode, lock id, semantic lock fingerprint, exact
+packaged `product_lock_sha256`, and Runtime Host identity. Construction fails
+when the product mode is not exclusive, the mode does not match the lock, the
+fingerprint is stale, the Runtime Host command
 registry differs from the lock, lease policy drifts, or the adapter claims an
 authority owner other than `module.runtime.host`.
 
@@ -23,7 +24,9 @@ same `review_command` then `apply_dispatch` path.
 `ManifoldBrokerRuntime` owns the live composition of the exact adapter and
 `rusty-manifold-admission`. A successful signature-scoped `authorize_use`
 creates one pending bounded use containing the use request id, opaque token id,
-client id, exact command capability, resulting admission revision, and expiry.
+client id, packaged client-lock id/SHA-256, exact command capability, resulting
+admission revision, and expiry.
+
 The mutation request must carry both that use id and token id plus the current
 provider epoch; the use id alone is not a bearer credential.
 
@@ -48,6 +51,9 @@ not create acceptance or authority labels.
 
 `rusty.manifold.broker.adapter_receipt.v1` contains placement and product-lock
 identity plus the unmodified Runtime Host dispatch and application receipts.
+The receipt preserves both semantic product fingerprint and exact packaged-lock
+SHA-256.
+
 The process layer is labelled `process_transport_adapter` or
 `in_process_adapter`; the authority owner remains `module.runtime.host`.
 

@@ -1,0 +1,32 @@
+{
+  "$schema": "rusty.manifold.peer.direct_lane_lease_state.v1",
+  "authority_revision": 2,
+  "leases": [
+    {
+      "$schema": "rusty.manifold.peer.direct_lane_lease_record.v1",
+      "lease_id": "lease.peer.direct.request.direct.legacy.001",
+      "request_id": "request.direct.legacy.001",
+      "mesh_id": "mesh.quest.alpha-beta-gamma",
+      "mesh_authority_revision": 4,
+      "enrollment_authority_revision": 3,
+      "selected_route_id": "route.alpha-beta.direct",
+      "peer_ids": [
+        "peer.alpha",
+        "peer.beta"
+      ],
+      "peer_session_id": "session.peer.alpha-beta",
+      "peer_session_authority_revision": 5,
+      "rendezvous_receipt_id": "receipt.rendezvous.alpha-beta",
+      "rendezvous_authority_revision": 6,
+      "media_session_id": null,
+      "media_session_authority_revision": null,
+      "scope": "peer_session",
+      "valid_from_ms": 1000,
+      "expires_at_ms": 60000,
+      "revoked": false
+    }
+  ],
+  "applied_request_ids": [
+    "request.direct.legacy.001"
+  ]
+}

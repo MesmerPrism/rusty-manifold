@@ -237,6 +237,7 @@ fn broker_product_entries() -> Vec<SchemaEntry> {
             &[
                 "fixtures/broker-product/base-standalone.lock.json",
                 "fixtures/broker-product/media-session-standalone.lock.json",
+                "fixtures/broker-product/media-session-embedded.lock.json",
                 "fixtures/broker-product/camera-embedded.lock.json",
                 "fixtures/broker-product/direct-p2p-standalone.lock.json",
                 "fixtures/broker-product/ble-embedded.lock.json",

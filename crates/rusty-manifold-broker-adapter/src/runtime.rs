@@ -1,23 +1,45 @@
 //! Stateful product broker runtime binding admission to Runtime Host mutation.
 
-use crate::{ManifoldBrokerAdapter, ManifoldBrokerAdapterReceipt, RUNTIME_HOST_AUTHORITY_OWNER};
+use crate::{
+    ManifoldBrokerAdapter, ManifoldBrokerAdapterConfig, ManifoldBrokerAdapterReceipt,
+    RUNTIME_HOST_AUTHORITY_OWNER,
+};
 use rusty_manifold_admission::{
-    ManifoldAdmissionAuthority, ManifoldAdmissionReceipt, ManifoldAdmissionRequest,
+    ManifoldAdmissionAuthority, ManifoldAdmissionLegacyClientLockBinding,
+    ManifoldAdmissionMigrationReceipt, ManifoldAdmissionReceipt, ManifoldAdmissionRequest,
     ManifoldAdmissionRevocationRequest, ManifoldAdmissionSnapshot, ManifoldAdmissionUseRequest,
+    ManifoldClientIdentity,
 };
 use rusty_manifold_model::{DottedId, Revision, SchemaId};
-use rusty_manifold_runtime_host::{ManifoldRuntimeCommandRequest, ManifoldRuntimeHostSnapshot};
+use rusty_manifold_runtime_host::{
+    ManifoldRuntimeCommandRequest, ManifoldRuntimeHost, ManifoldRuntimeHostError,
+    ManifoldRuntimeHostMigrationReceipt, ManifoldRuntimeHostSnapshot,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
 /// Stateful broker mutation request schema.
 pub const BROKER_MUTATION_REQUEST_SCHEMA: &str = "rusty.manifold.broker.mutation_request.v1";
-/// Stateful broker mutation receipt schema.
-pub const BROKER_MUTATION_RECEIPT_SCHEMA: &str = "rusty.manifold.broker.mutation_receipt.v1";
-/// One-use admission permit schema.
-pub const BROKER_BOUNDED_USE_SCHEMA: &str = "rusty.manifold.broker.bounded_use.v1";
-/// Integrated broker runtime evidence schema.
-pub const BROKER_RUNTIME_EVIDENCE_SCHEMA: &str = "rusty.manifold.broker.runtime_evidence.v1";
+/// Stateful broker mutation receipt schema with exact bounded-use provenance.
+pub const BROKER_MUTATION_RECEIPT_SCHEMA: &str = "rusty.manifold.broker.mutation_receipt.v2";
+/// Legacy one-use permit schema accepted only during runtime-evidence migration.
+pub const LEGACY_BROKER_BOUNDED_USE_V1_SCHEMA: &str = "rusty.manifold.broker.bounded_use.v1";
+/// One-use admission permit schema with exact identity/grant/client-lock closure.
+pub const BROKER_BOUNDED_USE_SCHEMA: &str = "rusty.manifold.broker.bounded_use.v2";
+/// Legacy broker runtime evidence schema accepted only during migration.
+pub const LEGACY_BROKER_RUNTIME_EVIDENCE_V1_SCHEMA: &str =
+    "rusty.manifold.broker.runtime_evidence.v1";
+/// Integrated broker runtime evidence schema with v2 host/admission provenance.
+pub const BROKER_RUNTIME_EVIDENCE_SCHEMA: &str = "rusty.manifold.broker.runtime_evidence.v2";
+/// Explicit legacy broker runtime-evidence migration receipt schema.
+pub const BROKER_RUNTIME_MIGRATION_RECEIPT_SCHEMA: &str =
+    "rusty.manifold.broker.runtime_evidence_migration_receipt.v1";
+/// Non-command bounded capability consumption receipt schema.
+pub const BROKER_CAPABILITY_USE_RECEIPT_SCHEMA: &str =
+    "rusty.manifold.broker.capability_use_receipt.v1";
+/// Maximum pending/consumed bounded uses per provider epoch.
+pub const MAX_BROKER_BOUNDED_USES: usize = 4_096;
 
 /// One accepted admission use retained until exactly one mutation attempt.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -30,14 +52,37 @@ pub struct ManifoldBrokerBoundedUse {
     pub admission_use_request_id: DottedId,
     /// Opaque token identity used at the signature-scoped admission boundary.
     pub token_id: DottedId,
-    /// Exact client bound by the accepted token and platform identity.
-    pub client_id: DottedId,
+    /// Exact platform-verified identity bound by the token.
+    pub identity: ManifoldClientIdentity,
+    /// Exact admission grant that issued the token.
+    pub admission_grant_id: DottedId,
+    /// Exact packaged broker client-lock identity inherited from the grant.
+    pub client_lock_id: DottedId,
+    /// SHA-256 of the exact packaged broker client-lock bytes.
+    pub client_lock_fingerprint: String,
     /// Exact capability authorized for this use.
     pub capability_id: DottedId,
     /// Admission revision resulting from the accepted use authorization.
     pub admission_authority_revision: Revision,
     /// Absolute use expiry.
     pub expires_at_ms: u64,
+}
+
+/// Applied/rejected non-command bounded capability consumption receipt.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldBrokerCapabilityUseReceipt {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Exact live broker provider epoch.
+    pub provider_epoch_id: DottedId,
+    /// Whether the accepted bounded use was consumed.
+    pub applied: bool,
+    /// Exact consumed bounded use when applied.
+    pub bounded_use: Option<ManifoldBrokerBoundedUse>,
+    /// Stable rejection when not applied.
+    pub rejection_reason: Option<ManifoldBrokerMutationRejectionReason>,
 }
 
 /// One broker mutation guarded by an already accepted bounded use.
@@ -81,6 +126,8 @@ pub enum ManifoldBrokerMutationRejectionReason {
     CrossClientUse,
     /// Admitted capability differs from the exact command capability.
     CapabilityMismatch,
+    /// Provider bounded-use retention reached its explicit cap.
+    AuthorityCapacityExhausted,
 }
 
 /// Integrated admission and Runtime Host mutation receipt.
@@ -109,6 +156,8 @@ pub struct ManifoldBrokerMutationReceipt {
     pub admission_rejection_reason: Option<ManifoldBrokerMutationRejectionReason>,
     /// Exact Runtime Host adapter receipt when admission passed.
     pub adapter_receipt: Option<ManifoldBrokerAdapterReceipt>,
+    /// Exact bounded use consumed by this mutation attempt.
+    pub bounded_use: Option<ManifoldBrokerBoundedUse>,
     /// True only when admission passed and Runtime Host application applied.
     pub applied: bool,
 }
@@ -132,6 +181,54 @@ pub struct ManifoldBrokerRuntimeEvidence {
     pub consumed_bounded_use_ids: Vec<DottedId>,
 }
 
+/// Explicit receipt for a v1 broker runtime-evidence restart.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldBrokerRuntimeMigrationReceipt {
+    /// Receipt schema.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Source broker runtime-evidence schema.
+    pub source_schema_id: SchemaId,
+    /// Resulting broker runtime-evidence schema.
+    pub resulting_schema_id: SchemaId,
+    /// Exact provider process epoch.
+    pub provider_epoch_id: DottedId,
+    /// Nested admission migration evidence.
+    pub admission_migration: ManifoldAdmissionMigrationReceipt,
+    /// Nested Runtime Host migration evidence.
+    pub runtime_host_migration: ManifoldRuntimeHostMigrationReceipt,
+    /// Pending bounded-use ids rebound through exact token/grant/client-lock closure.
+    pub migrated_pending_bounded_use_ids: Vec<DottedId>,
+    /// Already-consumed one-use ids preserved against replay.
+    pub preserved_consumed_bounded_use_ids: Vec<DottedId>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct LegacyBrokerBoundedUseV1 {
+    #[serde(rename = "$schema")]
+    schema_id: SchemaId,
+    admission_use_request_id: DottedId,
+    token_id: DottedId,
+    client_id: DottedId,
+    capability_id: DottedId,
+    admission_authority_revision: Revision,
+    expires_at_ms: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct LegacyBrokerRuntimeEvidenceV1 {
+    #[serde(rename = "$schema")]
+    schema_id: SchemaId,
+    provider_epoch_id: DottedId,
+    host_snapshot: serde_json::Value,
+    admission_snapshot: serde_json::Value,
+    pending_bounded_uses: Vec<LegacyBrokerBoundedUseV1>,
+    consumed_bounded_use_ids: Vec<DottedId>,
+}
+
 /// One stateful Rust broker authority for a live standalone or embedded provider.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManifoldBrokerRuntime {
@@ -143,6 +240,12 @@ pub struct ManifoldBrokerRuntime {
 }
 
 impl ManifoldBrokerRuntime {
+    /// Returns the immutable live adapter/product provenance binding.
+    #[must_use]
+    pub const fn adapter_config(&self) -> &ManifoldBrokerAdapterConfig {
+        self.adapter.config()
+    }
+
     /// Creates a fresh provider epoch over one exact product adapter and grant state.
     ///
     /// # Errors
@@ -160,6 +263,199 @@ impl ManifoldBrokerRuntime {
             pending_bounded_uses: BTreeMap::new(),
             consumed_bounded_use_ids: BTreeSet::new(),
         })
+    }
+
+    /// Restores pending/consumed bounded-use state around an already restored
+    /// adapter and revalidates exact admission/Runtime Host joins.
+    pub fn from_evidence(
+        adapter: ManifoldBrokerAdapter,
+        evidence: ManifoldBrokerRuntimeEvidence,
+    ) -> Result<Self, ManifoldBrokerRuntimeStateError> {
+        if evidence.schema_id.as_str() != BROKER_RUNTIME_EVIDENCE_SCHEMA
+            || adapter.host_snapshot() != &evidence.host_snapshot
+            || evidence.pending_bounded_uses.len() > MAX_BROKER_BOUNDED_USES
+            || evidence.consumed_bounded_use_ids.len() > MAX_BROKER_BOUNDED_USES
+            || evidence
+                .pending_bounded_uses
+                .windows(2)
+                .any(|pair| pair[0].admission_use_request_id >= pair[1].admission_use_request_id)
+            || evidence
+                .consumed_bounded_use_ids
+                .windows(2)
+                .any(|pair| pair[0] >= pair[1])
+        {
+            return Err(ManifoldBrokerRuntimeStateError::InvalidEvidence(
+                "schema_host_or_capacity",
+            ));
+        }
+        let admission =
+            ManifoldAdmissionAuthority::from_snapshot(evidence.admission_snapshot.clone())
+                .map_err(ManifoldBrokerRuntimeStateError::Admission)?;
+        let consumed = evidence
+            .consumed_bounded_use_ids
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let pending = evidence
+            .pending_bounded_uses
+            .iter()
+            .map(|use_| (use_.admission_use_request_id.clone(), use_.clone()))
+            .collect::<BTreeMap<_, _>>();
+        let all_use_ids = pending
+            .keys()
+            .cloned()
+            .chain(consumed.iter().cloned())
+            .collect::<BTreeSet<_>>();
+        let admission_use_ids = admission
+            .snapshot()
+            .consumed_use_request_ids
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        if pending.keys().any(|id| consumed.contains(id))
+            || all_use_ids != admission_use_ids
+            || pending.values().any(|use_| {
+                use_.schema_id.as_str() != BROKER_BOUNDED_USE_SCHEMA
+                    || !admission.snapshot().active_tokens.iter().any(|token| {
+                        token.token_id == use_.token_id
+                            && token.identity == use_.identity
+                            && token.grant_id == use_.admission_grant_id
+                            && token.client_lock_id == use_.client_lock_id
+                            && token.client_lock_fingerprint == use_.client_lock_fingerprint
+                            && token.capabilities.contains(&use_.capability_id)
+                            && token.expires_at_ms >= use_.expires_at_ms
+                    })
+                    || use_.admission_authority_revision > admission.snapshot().authority_revision
+            })
+        {
+            return Err(ManifoldBrokerRuntimeStateError::InvalidEvidence(
+                "bounded_use_admission_join",
+            ));
+        }
+        Ok(Self {
+            provider_epoch_id: evidence.provider_epoch_id,
+            adapter,
+            admission,
+            pending_bounded_uses: pending,
+            consumed_bounded_use_ids: consumed,
+        })
+    }
+
+    /// Restores released v1 broker runtime evidence by explicitly migrating
+    /// its nested admission/Runtime Host snapshots and deriving each old
+    /// client-id-only bounded use from the exact migrated active token.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when JSON, nested migration, exact token/grant/client
+    /// binding, replay sets, provider epoch, or restored adapter closure fails.
+    pub fn from_legacy_evidence_json(
+        adapter: ManifoldBrokerAdapter,
+        legacy_json: &str,
+        admission_bindings: &[ManifoldAdmissionLegacyClientLockBinding],
+    ) -> Result<(Self, ManifoldBrokerRuntimeMigrationReceipt), ManifoldBrokerRuntimeStateError>
+    {
+        let legacy: LegacyBrokerRuntimeEvidenceV1 = serde_json::from_str(legacy_json)
+            .map_err(ManifoldBrokerRuntimeStateError::Deserialize)?;
+        if legacy.schema_id.as_str() != LEGACY_BROKER_RUNTIME_EVIDENCE_V1_SCHEMA
+            || legacy.pending_bounded_uses.len() > MAX_BROKER_BOUNDED_USES
+            || legacy.consumed_bounded_use_ids.len() > MAX_BROKER_BOUNDED_USES
+            || legacy
+                .pending_bounded_uses
+                .windows(2)
+                .any(|pair| pair[0].admission_use_request_id >= pair[1].admission_use_request_id)
+            || legacy
+                .consumed_bounded_use_ids
+                .windows(2)
+                .any(|pair| pair[0] >= pair[1])
+            || legacy
+                .pending_bounded_uses
+                .iter()
+                .any(|use_| use_.schema_id.as_str() != LEGACY_BROKER_BOUNDED_USE_V1_SCHEMA)
+        {
+            return Err(ManifoldBrokerRuntimeStateError::InvalidEvidence(
+                "legacy_schema_order_or_capacity",
+            ));
+        }
+        let host_json = serde_json::to_string(&legacy.host_snapshot)
+            .map_err(ManifoldBrokerRuntimeStateError::SerializeMigrationArtifact)?;
+        let (migrated_host, runtime_host_migration) =
+            ManifoldRuntimeHost::restart_from_json_with_migration(&host_json)
+                .map_err(ManifoldBrokerRuntimeStateError::RuntimeHost)?;
+        if migrated_host.snapshot() != adapter.host_snapshot() {
+            return Err(ManifoldBrokerRuntimeStateError::InvalidEvidence(
+                "legacy_runtime_host_adapter_join",
+            ));
+        }
+        let admission_json = serde_json::to_string(&legacy.admission_snapshot)
+            .map_err(ManifoldBrokerRuntimeStateError::SerializeMigrationArtifact)?;
+        let (migrated_admission, admission_migration) =
+            ManifoldAdmissionAuthority::restart_from_json_with_migration(
+                &admission_json,
+                admission_bindings,
+            )
+            .map_err(ManifoldBrokerRuntimeStateError::Admission)?;
+        let pending_bounded_uses = legacy
+            .pending_bounded_uses
+            .iter()
+            .map(|use_| {
+                let token = migrated_admission
+                    .snapshot()
+                    .active_tokens
+                    .iter()
+                    .find(|token| token.token_id == use_.token_id)
+                    .ok_or(ManifoldBrokerRuntimeStateError::InvalidEvidence(
+                        "legacy_bounded_use_token",
+                    ))?;
+                if token.identity.client_id != use_.client_id
+                    || !token.capabilities.contains(&use_.capability_id)
+                    || token.expires_at_ms < use_.expires_at_ms
+                    || use_.admission_authority_revision
+                        > migrated_admission.snapshot().authority_revision
+                {
+                    return Err(ManifoldBrokerRuntimeStateError::InvalidEvidence(
+                        "legacy_bounded_use_binding",
+                    ));
+                }
+                Ok(ManifoldBrokerBoundedUse {
+                    schema_id: schema_id(BROKER_BOUNDED_USE_SCHEMA),
+                    admission_use_request_id: use_.admission_use_request_id.clone(),
+                    token_id: use_.token_id.clone(),
+                    identity: token.identity.clone(),
+                    admission_grant_id: token.grant_id.clone(),
+                    client_lock_id: token.client_lock_id.clone(),
+                    client_lock_fingerprint: token.client_lock_fingerprint.clone(),
+                    capability_id: use_.capability_id.clone(),
+                    admission_authority_revision: use_.admission_authority_revision,
+                    expires_at_ms: use_.expires_at_ms,
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut migrated_pending_bounded_use_ids = pending_bounded_uses
+            .iter()
+            .map(|use_| use_.admission_use_request_id.clone())
+            .collect::<Vec<_>>();
+        migrated_pending_bounded_use_ids.sort();
+        let evidence = ManifoldBrokerRuntimeEvidence {
+            schema_id: schema_id(BROKER_RUNTIME_EVIDENCE_SCHEMA),
+            provider_epoch_id: legacy.provider_epoch_id.clone(),
+            host_snapshot: migrated_host.snapshot().clone(),
+            admission_snapshot: migrated_admission.snapshot().clone(),
+            pending_bounded_uses,
+            consumed_bounded_use_ids: legacy.consumed_bounded_use_ids.clone(),
+        };
+        let runtime = Self::from_evidence(adapter, evidence)?;
+        let receipt = ManifoldBrokerRuntimeMigrationReceipt {
+            schema_id: schema_id(BROKER_RUNTIME_MIGRATION_RECEIPT_SCHEMA),
+            source_schema_id: legacy.schema_id,
+            resulting_schema_id: schema_id(BROKER_RUNTIME_EVIDENCE_SCHEMA),
+            provider_epoch_id: legacy.provider_epoch_id,
+            admission_migration,
+            runtime_host_migration,
+            migrated_pending_bounded_use_ids,
+            preserved_consumed_bounded_use_ids: legacy.consumed_bounded_use_ids,
+        };
+        Ok((runtime, receipt))
     }
 
     /// Returns the current live provider epoch.
@@ -196,23 +492,43 @@ impl ManifoldBrokerRuntime {
         request: &ManifoldAdmissionUseRequest,
         now_ms: u64,
     ) -> ManifoldAdmissionReceipt {
-        let token_expiry = self
+        let token_binding = self
             .admission
             .snapshot()
             .active_tokens
             .iter()
             .find(|token| token.token_id == request.token_id)
-            .map(|token| token.expires_at_ms);
+            .map(|token| {
+                (
+                    token.expires_at_ms,
+                    token.grant_id.clone(),
+                    token.client_lock_id.clone(),
+                    token.client_lock_fingerprint.clone(),
+                )
+            });
         let receipt = self.admission.authorize_use(request, now_ms);
         if receipt.applied {
             let bounded_use = ManifoldBrokerBoundedUse {
                 schema_id: schema_id(BROKER_BOUNDED_USE_SCHEMA),
                 admission_use_request_id: request.request_id.clone(),
                 token_id: request.token_id.clone(),
-                client_id: request.identity.client_id.clone(),
+                identity: request.identity.clone(),
+                admission_grant_id: token_binding
+                    .as_ref()
+                    .map(|(_, grant_id, _, _)| grant_id.clone())
+                    .expect("applied use retains source token"),
+                client_lock_id: token_binding
+                    .as_ref()
+                    .map(|(_, _, client_lock_id, _)| client_lock_id.clone())
+                    .expect("applied use retains client lock"),
+                client_lock_fingerprint: token_binding
+                    .as_ref()
+                    .map(|(_, _, _, fingerprint)| fingerprint.clone())
+                    .expect("applied use retains client-lock fingerprint"),
                 capability_id: request.capability_id.clone(),
                 admission_authority_revision: receipt.resulting_authority_revision,
-                expires_at_ms: token_expiry
+                expires_at_ms: token_binding
+                    .map(|(expires_at_ms, _, _, _)| expires_at_ms)
                     .unwrap_or(request.expires_at_ms)
                     .min(request.expires_at_ms),
             };
@@ -229,8 +545,15 @@ impl ManifoldBrokerRuntime {
     ) -> ManifoldAdmissionReceipt {
         let receipt = self.admission.revoke_token(request);
         if receipt.applied {
+            let invalidated = self
+                .pending_bounded_uses
+                .values()
+                .filter(|use_| use_.token_id == request.token_id)
+                .map(|use_| use_.admission_use_request_id.clone())
+                .collect::<Vec<_>>();
             self.pending_bounded_uses
                 .retain(|_, use_| use_.token_id != request.token_id);
+            self.consumed_bounded_use_ids.extend(invalidated);
         }
         receipt
     }
@@ -246,8 +569,15 @@ impl ManifoldBrokerRuntime {
             .admission
             .expire_tokens(sweep_id, expected_revision, now_ms);
         if receipt.applied {
+            let invalidated = self
+                .pending_bounded_uses
+                .values()
+                .filter(|use_| receipt.removed_token_ids.contains(&use_.token_id))
+                .map(|use_| use_.admission_use_request_id.clone())
+                .collect::<Vec<_>>();
             self.pending_bounded_uses
                 .retain(|_, use_| !receipt.removed_token_ids.contains(&use_.token_id));
+            self.consumed_bounded_use_ids.extend(invalidated);
         }
         receipt
     }
@@ -288,12 +618,16 @@ impl ManifoldBrokerRuntime {
             Some(ManifoldBrokerMutationRejectionReason::StaleAdmissionRevision)
         } else if bounded_use.is_some_and(|use_| use_.expires_at_ms <= now_ms) {
             Some(ManifoldBrokerMutationRejectionReason::AdmissionUseExpired)
-        } else if bounded_use.map(|use_| &use_.client_id) != Some(&request.command.requester_id) {
+        } else if bounded_use.map(|use_| &use_.identity.client_id)
+            != Some(&request.command.requester_id)
+        {
             Some(ManifoldBrokerMutationRejectionReason::CrossClientUse)
         } else if bounded_use.map(|use_| &use_.capability_id)
             != Some(&command_capability(&request.command.command_id))
         {
             Some(ManifoldBrokerMutationRejectionReason::CapabilityMismatch)
+        } else if self.consumed_bounded_use_ids.len() >= MAX_BROKER_BOUNDED_USES {
+            Some(ManifoldBrokerMutationRejectionReason::AuthorityCapacityExhausted)
         } else {
             None
         };
@@ -307,11 +641,14 @@ impl ManifoldBrokerRuntime {
                 false,
                 Some(reason),
                 None,
+                None,
             );
         }
 
-        self.pending_bounded_uses
-            .remove(&request.admission_use_request_id);
+        let consumed_use = self
+            .pending_bounded_uses
+            .remove(&request.admission_use_request_id)
+            .expect("validated bounded use");
         self.consumed_bounded_use_ids
             .insert(request.admission_use_request_id.clone());
         let adapter_receipt = self.adapter.handle_command(&request.command, now_ms);
@@ -323,7 +660,70 @@ impl ManifoldBrokerRuntime {
             true,
             None,
             Some(adapter_receipt),
+            Some(consumed_use),
         )
+    }
+
+    /// Consumes one accepted bounded use for a non-command capability such as
+    /// canonical `manifold.stream.subscribe`. The caller identity is a
+    /// platform-verified adapter input; no transport-local acceptance exists.
+    #[must_use]
+    pub fn consume_capability_use(
+        &mut self,
+        admission_use_request_id: &DottedId,
+        token_id: &DottedId,
+        expected_admission_authority_revision: Revision,
+        identity: &ManifoldClientIdentity,
+        capability_id: &DottedId,
+        now_ms: u64,
+    ) -> ManifoldBrokerCapabilityUseReceipt {
+        let use_ = self.pending_bounded_uses.get(admission_use_request_id);
+        let rejection = if self
+            .consumed_bounded_use_ids
+            .contains(admission_use_request_id)
+        {
+            Some(ManifoldBrokerMutationRejectionReason::ReplayedAdmissionUse)
+        } else if use_.is_none() {
+            Some(ManifoldBrokerMutationRejectionReason::UnknownAdmissionUse)
+        } else if use_.map(|value| &value.token_id) != Some(token_id) {
+            Some(ManifoldBrokerMutationRejectionReason::AdmissionTokenMismatch)
+        } else if use_.map(|value| value.admission_authority_revision)
+            != Some(expected_admission_authority_revision)
+        {
+            Some(ManifoldBrokerMutationRejectionReason::StaleAdmissionRevision)
+        } else if use_.is_some_and(|value| value.expires_at_ms <= now_ms) {
+            Some(ManifoldBrokerMutationRejectionReason::AdmissionUseExpired)
+        } else if use_.map(|value| &value.identity) != Some(identity) {
+            Some(ManifoldBrokerMutationRejectionReason::CrossClientUse)
+        } else if use_.map(|value| &value.capability_id) != Some(capability_id) {
+            Some(ManifoldBrokerMutationRejectionReason::CapabilityMismatch)
+        } else if self.consumed_bounded_use_ids.len() >= MAX_BROKER_BOUNDED_USES {
+            Some(ManifoldBrokerMutationRejectionReason::AuthorityCapacityExhausted)
+        } else {
+            None
+        };
+        if let Some(reason) = rejection {
+            return ManifoldBrokerCapabilityUseReceipt {
+                schema_id: schema_id(BROKER_CAPABILITY_USE_RECEIPT_SCHEMA),
+                provider_epoch_id: self.provider_epoch_id.clone(),
+                applied: false,
+                bounded_use: None,
+                rejection_reason: Some(reason),
+            };
+        }
+        let bounded_use = self
+            .pending_bounded_uses
+            .remove(admission_use_request_id)
+            .expect("validated bounded use");
+        self.consumed_bounded_use_ids
+            .insert(admission_use_request_id.clone());
+        ManifoldBrokerCapabilityUseReceipt {
+            schema_id: schema_id(BROKER_CAPABILITY_USE_RECEIPT_SCHEMA),
+            provider_epoch_id: self.provider_epoch_id.clone(),
+            applied: true,
+            bounded_use: Some(bounded_use),
+            rejection_reason: None,
+        }
     }
 
     /// Returns a read-only state/evidence projection for rebind and restart tests.
@@ -336,6 +736,53 @@ impl ManifoldBrokerRuntime {
             admission_snapshot: self.admission.snapshot().clone(),
             pending_bounded_uses: self.pending_bounded_uses.values().cloned().collect(),
             consumed_bounded_use_ids: self.consumed_bounded_use_ids.iter().cloned().collect(),
+        }
+    }
+}
+
+/// Broker runtime durable evidence restoration failure.
+#[derive(Debug)]
+pub enum ManifoldBrokerRuntimeStateError {
+    /// Legacy broker runtime evidence JSON failed to decode.
+    Deserialize(serde_json::Error),
+    /// Nested legacy JSON value could not be encoded for its owner migration.
+    SerializeMigrationArtifact(serde_json::Error),
+    /// Admission snapshot failed its own durable validation.
+    Admission(rusty_manifold_admission::ManifoldAdmissionError),
+    /// Runtime Host snapshot failed its owner migration/validation.
+    RuntimeHost(ManifoldRuntimeHostError),
+    /// Cross-authority broker evidence join failed.
+    InvalidEvidence(&'static str),
+}
+
+impl fmt::Display for ManifoldBrokerRuntimeStateError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Deserialize(error) => {
+                write!(formatter, "broker runtime evidence decode failed: {error}")
+            }
+            Self::SerializeMigrationArtifact(error) => {
+                write!(
+                    formatter,
+                    "broker migration artifact encode failed: {error}"
+                )
+            }
+            Self::Admission(error) => write!(formatter, "broker admission state invalid: {error}"),
+            Self::RuntimeHost(error) => write!(formatter, "broker Runtime Host invalid: {error}"),
+            Self::InvalidEvidence(reason) => {
+                write!(formatter, "broker runtime evidence invalid: {reason}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ManifoldBrokerRuntimeStateError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Deserialize(error) | Self::SerializeMigrationArtifact(error) => Some(error),
+            Self::Admission(error) => Some(error),
+            Self::RuntimeHost(error) => Some(error),
+            Self::InvalidEvidence(_) => None,
         }
     }
 }
@@ -364,6 +811,7 @@ fn mutation_receipt(
     admission_applied: bool,
     admission_rejection_reason: Option<ManifoldBrokerMutationRejectionReason>,
     adapter_receipt: Option<ManifoldBrokerAdapterReceipt>,
+    bounded_use: Option<ManifoldBrokerBoundedUse>,
 ) -> ManifoldBrokerMutationReceipt {
     let applied = adapter_receipt
         .as_ref()
@@ -380,6 +828,7 @@ fn mutation_receipt(
         admission_applied,
         admission_rejection_reason,
         adapter_receipt,
+        bounded_use,
         applied,
     }
 }
@@ -392,7 +841,8 @@ fn schema_id(value: &str) -> SchemaId {
 mod tests {
     use super::*;
     use crate::{
-        ManifoldBrokerAdapterConfig, ManifoldBrokerAdapterMode, BROKER_ADAPTER_CONFIG_SCHEMA,
+        packaged_product_lock_sha256, ManifoldBrokerAdapterConfig, ManifoldBrokerAdapterMode,
+        BROKER_ADAPTER_CONFIG_SCHEMA,
     };
     use rusty_manifold_admission::{
         ManifoldAdmissionGrant, ManifoldAdmissionRejectionReason, ManifoldClientIdentity,
@@ -443,16 +893,22 @@ mod tests {
             mode: ManifoldBrokerAdapterMode::Standalone,
             product_lock_id: lock.lock_id.clone(),
             product_lock_fingerprint: lock.spec_fingerprint.clone(),
+            product_lock_sha256: packaged_product_lock_sha256(
+                &serde_json::to_vec(&lock).expect("serialize lock"),
+            ),
             authority_host_id: id("host.runtime.test"),
             authority_owner_id: id(RUNTIME_HOST_AUTHORITY_OWNER),
         };
-        let adapter = ManifoldBrokerAdapter::new(config, lock, leases).expect("adapter");
+        let packaged_lock = serde_json::to_vec(&lock).expect("serialize packaged lock");
+        let adapter = ManifoldBrokerAdapter::new(config, &packaged_lock, leases).expect("adapter");
         let admission = ManifoldAdmissionSnapshot {
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
             authority_id: id("authority.admission.runtime.test"),
             authority_revision: Revision::new(1).expect("revision"),
             grants: vec![ManifoldAdmissionGrant {
                 grant_id: id("grant.runtime.test"),
+                client_lock_id: id("lock.client.runtime.test"),
+                client_lock_fingerprint: format!("sha256:{}", "c1".repeat(32)),
                 identity: identity("client.runtime.test"),
                 capabilities,
                 expires_at_ms: 100_000,
@@ -462,6 +918,7 @@ mod tests {
             revoked_token_ids: Vec::new(),
             consumed_request_ids: Vec::new(),
             consumed_use_request_ids: Vec::new(),
+            reviewed_sweep_ids: Vec::new(),
             audit_events: Vec::new(),
             max_token_ttl_ms: 30_000,
         };
@@ -476,11 +933,16 @@ mod tests {
             mode: ManifoldBrokerAdapterMode::Standalone,
             product_lock_id: product_lock.lock_id.clone(),
             product_lock_fingerprint: product_lock.spec_fingerprint.clone(),
+            product_lock_sha256: packaged_product_lock_sha256(
+                &serde_json::to_vec(&product_lock).expect("serialize lock"),
+            ),
             authority_host_id: id("host.runtime.two_client"),
             authority_owner_id: id(RUNTIME_HOST_AUTHORITY_OWNER),
         };
+        let packaged_lock =
+            serde_json::to_vec(&product_lock).expect("serialize packaged product lock");
         let adapter =
-            ManifoldBrokerAdapter::new(config, product_lock, Vec::new()).expect("adapter");
+            ManifoldBrokerAdapter::new(config, &packaged_lock, Vec::new()).expect("adapter");
         let capability = command_capability(&id(command));
         let admission = ManifoldAdmissionSnapshot {
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
@@ -488,8 +950,14 @@ mod tests {
             authority_revision: Revision::new(1).expect("revision"),
             grants: ["client.runtime.alpha", "client.runtime.beta"]
                 .into_iter()
-                .map(|client| ManifoldAdmissionGrant {
+                .enumerate()
+                .map(|(index, client)| ManifoldAdmissionGrant {
                     grant_id: id(&format!("grant.{client}")),
+                    client_lock_id: id(&format!("lock.{client}")),
+                    client_lock_fingerprint: format!(
+                        "sha256:{}",
+                        if index == 0 { "c2" } else { "c3" }.repeat(32)
+                    ),
                     identity: identity(client),
                     capabilities: vec![capability.clone()],
                     expires_at_ms: 100_000,
@@ -500,6 +968,7 @@ mod tests {
             revoked_token_ids: Vec::new(),
             consumed_request_ids: Vec::new(),
             consumed_use_request_ids: Vec::new(),
+            reviewed_sweep_ids: Vec::new(),
             audit_events: Vec::new(),
             max_token_ttl_ms: 30_000,
         };
@@ -739,6 +1208,62 @@ mod tests {
     }
 
     #[test]
+    fn legacy_runtime_evidence_rebinds_pending_use_through_exact_migrated_token() {
+        let seed = runtime(
+            Vec::new(),
+            vec![id("capability.command.session.list")],
+            Vec::new(),
+            "provider.runtime.seed.001",
+        );
+        let adapter = seed.adapter;
+        let json = include_str!("../../../fixtures/broker-adapter/legacy-v1-runtime-evidence.json");
+        let binding = ManifoldAdmissionLegacyClientLockBinding {
+            grant_id: id("grant.runtime.test"),
+            client_lock_id: id("lock.client.runtime.test"),
+            client_lock_fingerprint: format!("sha256:{}", "c1".repeat(32)),
+        };
+        let (restored_runtime, receipt) = ManifoldBrokerRuntime::from_legacy_evidence_json(
+            adapter,
+            json,
+            std::slice::from_ref(&binding),
+        )
+        .expect("legacy broker runtime migration");
+        assert_eq!(
+            receipt.source_schema_id.as_str(),
+            LEGACY_BROKER_RUNTIME_EVIDENCE_V1_SCHEMA
+        );
+        assert!(receipt.admission_migration.migrated);
+        assert!(receipt.runtime_host_migration.migrated);
+        assert_eq!(receipt.migrated_pending_bounded_use_ids.len(), 1);
+        let pending = &restored_runtime.evidence().pending_bounded_uses[0];
+        assert_eq!(pending.schema_id.as_str(), BROKER_BOUNDED_USE_SCHEMA);
+        assert_eq!(pending.identity.client_id, id("client.runtime.test"));
+        assert_eq!(pending.admission_grant_id, binding.grant_id);
+        assert_eq!(pending.client_lock_id, binding.client_lock_id);
+        assert_eq!(
+            pending.client_lock_fingerprint,
+            binding.client_lock_fingerprint
+        );
+
+        let seed = runtime(
+            Vec::new(),
+            vec![id("capability.command.session.list")],
+            Vec::new(),
+            "provider.runtime.seed.002",
+        );
+        let mut damaged: serde_json::Value = serde_json::from_str(json).expect("legacy evidence");
+        damaged["pending_bounded_uses"][0]["client_id"] =
+            serde_json::Value::String("client.runtime.forged".to_owned());
+        let damaged = serde_json::to_string(&damaged).expect("damaged legacy evidence");
+        assert!(ManifoldBrokerRuntime::from_legacy_evidence_json(
+            seed.adapter,
+            &damaged,
+            &[binding],
+        )
+        .is_err());
+    }
+
+    #[test]
     fn revoke_and_expiry_invalidate_only_uses_derived_from_removed_tokens() {
         let command_id = "command.session.list";
         let revoke_epoch = "epoch.runtime.two_client.revoke";
@@ -782,7 +1307,7 @@ mod tests {
         );
         assert_eq!(
             alpha_after_revoke.admission_rejection_reason,
-            Some(ManifoldBrokerMutationRejectionReason::UnknownAdmissionUse)
+            Some(ManifoldBrokerMutationRejectionReason::ReplayedAdmissionUse)
         );
         let beta_after_revoke = revoked_runtime.handle_mutation(
             &client_mutation(
@@ -836,7 +1361,7 @@ mod tests {
         );
         assert_eq!(
             short_after_expiry.admission_rejection_reason,
-            Some(ManifoldBrokerMutationRejectionReason::UnknownAdmissionUse)
+            Some(ManifoldBrokerMutationRejectionReason::ReplayedAdmissionUse)
         );
         let long_after_expiry = expired_runtime.handle_mutation(
             &client_mutation(
@@ -1029,7 +1554,7 @@ mod tests {
             runtime
                 .handle_mutation(&request, 4_000)
                 .admission_rejection_reason,
-            Some(ManifoldBrokerMutationRejectionReason::UnknownAdmissionUse)
+            Some(ManifoldBrokerMutationRejectionReason::ReplayedAdmissionUse)
         );
         assert_eq!(
             runtime.admission_snapshot().revoked_token_ids.len(),

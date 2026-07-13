@@ -623,6 +623,7 @@ dependencies = [
  "rusty-manifold-runtime-host",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -644,6 +645,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusty-manifold-media-session"
+version = "0.1.0"
+dependencies = [
+ "rusty-manifold-admission",
+ "rusty-manifold-model",
+ "rusty-manifold-runtime-host",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "rusty-manifold-model"
 version = "0.1.0"
 dependencies = [
@@ -656,7 +669,27 @@ name = "rusty-manifold-peer"
 version = "0.1.0"
 dependencies = [
  "ed25519-dalek",
+ "rusty-manifold-admission",
+ "rusty-manifold-media-session",
  "rusty-manifold-model",
+ "rusty-manifold-runtime-host",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
+name = "rusty-manifold-peer-runtime-host"
+version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "rusty-manifold-admission",
+ "rusty-manifold-broker-adapter",
+ "rusty-manifold-broker-product",
+ "rusty-manifold-media-session",
+ "rusty-manifold-model",
+ "rusty-manifold-peer",
+ "rusty-manifold-runtime-host",
  "serde",
  "serde_json",
  "sha2",

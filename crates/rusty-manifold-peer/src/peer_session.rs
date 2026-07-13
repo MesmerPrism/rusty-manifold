@@ -4,9 +4,9 @@ use rusty_manifold_model::{DottedId, Revision, SchemaId};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    validate_current_rendezvous_receipt, ManifoldAcceptedPeerState, ManifoldPeerEnrollmentState,
-    ManifoldPeerRole, ManifoldRendezvousAuthorityState, ManifoldRendezvousReceipt,
-    ManifoldRendezvousReceiptValidationError,
+    validate_current_rendezvous_receipt, ManifoldAcceptedPeerState, ManifoldPeerAvailability,
+    ManifoldPeerEnrollmentState, ManifoldPeerRole, ManifoldRendezvousAuthorityState,
+    ManifoldRendezvousReceipt, ManifoldRendezvousReceiptValidationError,
 };
 
 /// Peer-session proposal schema.
@@ -27,6 +27,9 @@ pub const SIGNED_PEER_SESSION_REVIEW_SCHEMA: &str = "rusty.manifold.peer.signed_
 /// Signed-rendezvous topology authorization schema.
 pub const SIGNED_PEER_TOPOLOGY_AUTHORIZATION_SCHEMA: &str =
     "rusty.manifold.peer.signed_topology_authorization.v1";
+/// Subject-scoped current peer-session receipt schema.
+pub const PEER_SESSION_CURRENT_RECEIPT_SCHEMA: &str =
+    "rusty.manifold.peer.session_current_receipt.v1";
 /// Product Wi-Fi Direct topology contract id.
 pub const PRODUCT_WIFI_DIRECT_TOPOLOGY_CONTRACT: &str =
     "rusty.quest.product_wifi_direct_topology.v1";
@@ -34,12 +37,48 @@ pub const PRODUCT_WIFI_DIRECT_TOPOLOGY_CONTRACT: &str =
 const MAX_RENDEZVOUS_TTL_MS: u64 = 120_000;
 const MAX_SESSION_CAPABILITIES: usize = 16;
 
+/// Closed low-rate capability class accepted by peer-session authority.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ManifoldPeerSessionLowRateCapability {
+    /// Low-rate peer presence/status exchange.
+    PeerPresence,
+    /// Low-rate N-peer mesh status exchange.
+    PeerMeshStatus,
+    /// Authenticated BLE rendezvous control.
+    RendezvousBle,
+    /// Carrier-independent reciprocal Ed25519 rendezvous control.
+    RendezvousReciprocalEd25519,
+    /// Wi-Fi Direct topology setup control.
+    TopologyWifiDirect,
+    /// Rust-owned direct P2P route setup control.
+    RouteRustDirectP2p,
+}
+
+impl ManifoldPeerSessionLowRateCapability {
+    fn from_id(value: &DottedId) -> Option<Self> {
+        match value.as_str() {
+            "capability.peer.presence" => Some(Self::PeerPresence),
+            "capability.peer.mesh.status" => Some(Self::PeerMeshStatus),
+            "capability.rendezvous.ble" => Some(Self::RendezvousBle),
+            "capability.rendezvous.reciprocal-ed25519" => Some(Self::RendezvousReciprocalEd25519),
+            "capability.topology.wifi-direct" => Some(Self::TopologyWifiDirect),
+            "capability.route.rust-direct-p2p" => Some(Self::RouteRustDirectP2p),
+            _ => None,
+        }
+    }
+}
+
 /// Authenticated low-rate rendezvous transport.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PeerRendezvousTransport {
     /// Quest BLE/GATT adapter with authenticated pair evidence.
     BleGattAuthenticated,
+    /// Carrier-independent reciprocal Ed25519 evidence. A platform or operator
+    /// transport may relay the already-signed bytes, but it cannot author the
+    /// identity, signature, acceptance, topology, or direct-lane lease.
+    ReciprocalEd25519,
 }
 
 /// Topology role authorized for a peer.
@@ -221,12 +260,18 @@ pub enum ManifoldPeerSessionRejectionReason {
     HighRateCapability,
     /// Capability list exceeded its bound.
     CapabilityLimitExceeded,
+    /// Capability list was empty, duplicated, or not canonically sorted.
+    InvalidCapabilitySet,
     /// Topology role assignment did not match the pair.
     InvalidTopologyRoles,
     /// Topology contract is unsupported.
     UnsupportedTopologyContract,
     /// Subject attempted to replace an active peer without revocation.
     PeerChangedWithoutRevocation,
+    /// A live session identity was reused for a different pair or contract.
+    SessionIdentityCollision,
+    /// An accepted peer status was not Ready/current for the session window.
+    StalePeerStatus,
     /// The clean product path did not carry an accepted signed-rendezvous receipt.
     SignedRendezvousRequired,
     /// Signed receipt pair, roles, contract, keys, or validity did not match.
@@ -310,6 +355,181 @@ pub struct ManifoldSignedPeerTopologyAuthorization {
     pub signer_key_ids: Vec<DottedId>,
 }
 
+/// Stable current-peer-session rejection family.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ManifoldPeerSessionCurrentRejectionReason {
+    /// Session or retained topology was absent.
+    NotFound,
+    /// Session was explicitly revoked.
+    Revoked,
+    /// Session/topology validity ended.
+    Expired,
+    /// One peer status is no longer ready/current.
+    PeerNotCurrent,
+    /// Reciprocal receipt or signer credentials are no longer current.
+    RendezvousNotCurrent,
+    /// Retained session/topology/receipt closure disagreed.
+    TopologyMismatch,
+}
+
+/// Subject-scoped current receipt for low-rate peer-session consumers.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldPeerSessionCurrentReceipt {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Exact session subject.
+    pub session_id: DottedId,
+    /// Whether every current authority check passed.
+    pub current: bool,
+    /// Stable rejection reason when not current.
+    pub rejection_reason: Option<ManifoldPeerSessionCurrentRejectionReason>,
+    /// Retained session decision when found.
+    pub decision_id: Option<DottedId>,
+    /// Exact reciprocal receipt when found.
+    pub rendezvous_receipt_id: Option<DottedId>,
+    /// Canonical peer pair.
+    pub peer_ids: Vec<DottedId>,
+    /// Current per-peer status revisions.
+    pub peer_status_revisions: Vec<Revision>,
+    /// Current signer keys.
+    pub signer_key_ids: Vec<DottedId>,
+    /// Exact topology contract.
+    pub topology_contract_id: Option<DottedId>,
+    /// Validation time.
+    pub validated_at_ms: u64,
+    /// Subject validity end when found.
+    pub expires_at_ms: Option<u64>,
+}
+
+/// Revalidates one retained peer-session subject against current peer status,
+/// credential, reciprocal receipt, revocation, and topology authority.
+#[must_use]
+pub fn validate_current_peer_session(
+    accepted_peers: &ManifoldAcceptedPeerState,
+    enrollment: &ManifoldPeerEnrollmentState,
+    rendezvous: &ManifoldRendezvousAuthorityState,
+    sessions: &ManifoldPeerSessionState,
+    topologies: &[ManifoldSignedPeerTopologyAuthorization],
+    session_id: &DottedId,
+    now_ms: u64,
+) -> ManifoldPeerSessionCurrentReceipt {
+    let rejected = |reason| ManifoldPeerSessionCurrentReceipt {
+        schema_id: schema(PEER_SESSION_CURRENT_RECEIPT_SCHEMA),
+        session_id: session_id.clone(),
+        current: false,
+        rejection_reason: Some(reason),
+        decision_id: None,
+        rendezvous_receipt_id: None,
+        peer_ids: Vec::new(),
+        peer_status_revisions: Vec::new(),
+        signer_key_ids: Vec::new(),
+        topology_contract_id: None,
+        validated_at_ms: now_ms,
+        expires_at_ms: None,
+    };
+    let Some(session) = sessions
+        .sessions
+        .iter()
+        .find(|session| &session.proposal.session_id == session_id)
+    else {
+        return rejected(ManifoldPeerSessionCurrentRejectionReason::NotFound);
+    };
+    if session.revoked || sessions.revoked_session_ids.contains(session_id) {
+        return rejected(ManifoldPeerSessionCurrentRejectionReason::Revoked);
+    }
+    let Some(receipt_id) = &session.rendezvous_receipt_id else {
+        return rejected(ManifoldPeerSessionCurrentRejectionReason::RendezvousNotCurrent);
+    };
+    let Some(receipt) = rendezvous
+        .accepted_receipts
+        .iter()
+        .find(|receipt| &receipt.receipt_id == receipt_id)
+    else {
+        return rejected(ManifoldPeerSessionCurrentRejectionReason::RendezvousNotCurrent);
+    };
+    let Some(topology) = topologies.iter().find(|topology| {
+        topology.topology_authorization.session_id == *session_id
+            && topology.topology_authorization.decision_id == session.decision_id
+    }) else {
+        return rejected(ManifoldPeerSessionCurrentRejectionReason::NotFound);
+    };
+    let proposal = &session.proposal;
+    let authorization = &topology.topology_authorization;
+    if !authorization.authorized
+        || authorization.denial_reason.is_some()
+        || authorization.proposal_id != proposal.proposal_id
+        || authorization.group_owner_peer_id != proposal.group_owner_peer_id
+        || authorization.client_peer_id != proposal.client_peer_id
+        || authorization.topology_contract_id != proposal.topology_contract_id
+        || topology.rendezvous_receipt_id != *receipt_id
+        || topology.signer_key_ids != receipt.signer_key_ids
+    {
+        return rejected(ManifoldPeerSessionCurrentRejectionReason::TopologyMismatch);
+    }
+    if authorization.valid_from_ms > now_ms
+        || proposal.expires_at_ms <= now_ms
+        || authorization.expires_at_ms <= now_ms
+    {
+        return rejected(ManifoldPeerSessionCurrentRejectionReason::Expired);
+    }
+    let mut peer_ids = vec![
+        proposal.group_owner_peer_id.clone(),
+        proposal.client_peer_id.clone(),
+    ];
+    peer_ids.sort();
+    let mut status_revisions = Vec::with_capacity(2);
+    for peer_id in &peer_ids {
+        let Some(peer) = accepted_peers
+            .peers
+            .iter()
+            .find(|peer| &peer.identity.peer_id == peer_id)
+        else {
+            return rejected(ManifoldPeerSessionCurrentRejectionReason::PeerNotCurrent);
+        };
+        if peer.status.availability != ManifoldPeerAvailability::Ready
+            || peer.status.observed_at_ms > now_ms
+            || peer.status.expires_at_ms <= now_ms
+        {
+            return rejected(ManifoldPeerSessionCurrentRejectionReason::PeerNotCurrent);
+        }
+        status_revisions.push(peer.status.status_revision);
+    }
+    if validate_current_rendezvous_receipt(
+        rendezvous,
+        enrollment,
+        receipt,
+        &proposal.group_owner_peer_id,
+        &proposal.client_peer_id,
+        now_ms,
+    )
+    .is_err()
+    {
+        return rejected(ManifoldPeerSessionCurrentRejectionReason::RendezvousNotCurrent);
+    }
+    ManifoldPeerSessionCurrentReceipt {
+        schema_id: schema(PEER_SESSION_CURRENT_RECEIPT_SCHEMA),
+        session_id: session_id.clone(),
+        current: true,
+        rejection_reason: None,
+        decision_id: Some(session.decision_id.clone()),
+        rendezvous_receipt_id: Some(receipt_id.clone()),
+        peer_ids,
+        peer_status_revisions: status_revisions,
+        signer_key_ids: receipt.signer_key_ids.clone(),
+        topology_contract_id: Some(proposal.topology_contract_id.clone()),
+        validated_at_ms: now_ms,
+        expires_at_ms: Some(
+            proposal
+                .expires_at_ms
+                .min(authorization.expires_at_ms)
+                .min(receipt.expires_at_ms),
+        ),
+    }
+}
+
 /// Explicit peer-session revocation request.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -333,7 +553,17 @@ pub fn review_and_apply_peer_session(
     ManifoldPeerSessionDecision,
     ManifoldPeerTopologyAuthorization,
 ) {
-    let rejection = validate_review(case).err();
+    review_and_apply_peer_session_with_context(case, false)
+}
+
+fn review_and_apply_peer_session_with_context(
+    case: &ManifoldPeerSessionReviewCase,
+    signed_reciprocal_evidence_validated: bool,
+) -> (
+    ManifoldPeerSessionDecision,
+    ManifoldPeerTopologyAuthorization,
+) {
+    let rejection = validate_review(case, signed_reciprocal_evidence_validated).err();
     let prior = case.current_state.authority_revision;
     let decision_id = derived("decision.peer-session", &case.proposal.proposal_id);
     let accepted_state = rejection
@@ -415,7 +645,7 @@ pub fn review_and_apply_signed_peer_session(
         );
     }
 
-    let (mut decision, authorization) = review_and_apply_peer_session(base);
+    let (mut decision, authorization) = review_and_apply_peer_session_with_context(base, true);
     if let Some(state) = &mut decision.accepted_state {
         if let Some(session) = state
             .sessions
@@ -523,6 +753,7 @@ pub fn revoke_peer_session(
 
 fn validate_review(
     case: &ManifoldPeerSessionReviewCase,
+    signed_reciprocal_evidence_validated: bool,
 ) -> Result<(), ManifoldPeerSessionRejectionReason> {
     let proposal = &case.proposal;
     if case.schema_id.as_str() != PEER_SESSION_REVIEW_SCHEMA
@@ -554,16 +785,29 @@ fn validate_review(
     {
         return Err(ManifoldPeerSessionRejectionReason::UntrustedAdapter);
     }
+    let minimum_authenticated_messages = match proposal.authentication.transport {
+        PeerRendezvousTransport::BleGattAuthenticated => 4,
+        PeerRendezvousTransport::ReciprocalEd25519 => 2,
+    };
     if !proposal.authentication.authenticated
         || proposal.authentication.authentication_failures != 0
-        || proposal.authentication.authenticated_messages < 4
+        || proposal.authentication.authenticated_messages < minimum_authenticated_messages
     {
         return Err(ManifoldPeerSessionRejectionReason::AuthenticationFailed);
     }
-    if !proposal.authentication.role_swap_completed
-        || proposal.authentication.reconnects_completed < 2
-    {
-        return Err(ManifoldPeerSessionRejectionReason::RendezvousLifecycleIncomplete);
+    match proposal.authentication.transport {
+        PeerRendezvousTransport::BleGattAuthenticated => {
+            if !proposal.authentication.role_swap_completed
+                || proposal.authentication.reconnects_completed < 2
+            {
+                return Err(ManifoldPeerSessionRejectionReason::RendezvousLifecycleIncomplete);
+            }
+        }
+        PeerRendezvousTransport::ReciprocalEd25519 => {
+            if !signed_reciprocal_evidence_validated {
+                return Err(ManifoldPeerSessionRejectionReason::SignedRendezvousRequired);
+            }
+        }
     }
     if proposal.authentication.observed_at_ms > case.now_ms
         || proposal.authentication.expires_at_ms <= case.now_ms
@@ -596,13 +840,23 @@ fn validate_review(
     if proposal.topology_contract_id.as_str() != PRODUCT_WIFI_DIRECT_TOPOLOGY_CONTRACT {
         return Err(ManifoldPeerSessionRejectionReason::UnsupportedTopologyContract);
     }
-    if proposal.requested_capability_ids.len() > MAX_SESSION_CAPABILITIES {
+    if proposal.requested_capability_ids.is_empty()
+        || proposal.requested_capability_ids.len() > MAX_SESSION_CAPABILITIES
+    {
         return Err(ManifoldPeerSessionRejectionReason::CapabilityLimitExceeded);
     }
-    if proposal.requested_capability_ids.iter().any(|id| {
-        let value = id.as_str();
-        value.contains("media") || value.contains("stream") || value.contains("high-rate")
-    }) {
+    if proposal
+        .requested_capability_ids
+        .windows(2)
+        .any(|pair| pair[0] >= pair[1])
+    {
+        return Err(ManifoldPeerSessionRejectionReason::InvalidCapabilitySet);
+    }
+    if proposal
+        .requested_capability_ids
+        .iter()
+        .any(|capability| ManifoldPeerSessionLowRateCapability::from_id(capability).is_none())
+    {
         return Err(ManifoldPeerSessionRejectionReason::HighRateCapability);
     }
     for peer_id in &pair {
@@ -617,6 +871,13 @@ fn validate_review(
         if !peer.identity.roles.contains(&ManifoldPeerRole::Rendezvous) {
             return Err(ManifoldPeerSessionRejectionReason::PeerNotAcceptedForRendezvous);
         }
+        if peer.status.availability != ManifoldPeerAvailability::Ready
+            || peer.status.observed_at_ms > case.now_ms
+            || peer.status.expires_at_ms <= case.now_ms
+            || proposal.expires_at_ms > peer.status.expires_at_ms
+        {
+            return Err(ManifoldPeerSessionRejectionReason::StalePeerStatus);
+        }
         if proposal
             .requested_capability_ids
             .iter()
@@ -624,6 +885,19 @@ fn validate_review(
         {
             return Err(ManifoldPeerSessionRejectionReason::CapabilityNotShared);
         }
+    }
+    if case.current_state.sessions.iter().any(|session| {
+        !session.revoked
+            && session.proposal.expires_at_ms > case.now_ms
+            && session.proposal.session_id == proposal.session_id
+            && (session.proposal.subject_peer_id != proposal.subject_peer_id
+                || session.proposal.candidate_peer_id != proposal.candidate_peer_id
+                || session.proposal.group_owner_peer_id != proposal.group_owner_peer_id
+                || session.proposal.client_peer_id != proposal.client_peer_id
+                || session.proposal.topology_contract_id != proposal.topology_contract_id
+                || session.proposal.requested_capability_ids != proposal.requested_capability_ids)
+    }) {
+        return Err(ManifoldPeerSessionRejectionReason::SessionIdentityCollision);
     }
     if case.current_state.sessions.iter().any(|session| {
         !session.revoked
@@ -836,16 +1110,15 @@ mod tests {
 
     #[test]
     fn stale_rejected_or_pair_mismatched_signed_receipt_never_authorizes() {
+        let mut unrelated_revision = signed_case();
+        unrelated_revision
+            .current_rendezvous_state
+            .authority_revision = Revision::new(3).expect("revision");
+        let (decision, authorization) = review_and_apply_signed_peer_session(&unrelated_revision);
+        assert!(decision.applied);
+        assert!(authorization.topology_authorization.authorized);
+
         let cases = [
-            {
-                let mut value = signed_case();
-                value.current_rendezvous_state.authority_revision =
-                    Revision::new(3).expect("revision");
-                (
-                    value,
-                    ManifoldPeerSessionRejectionReason::StaleRendezvousAuthority,
-                )
-            },
             {
                 let mut value = signed_case();
                 value.rendezvous_receipt.accepted = false;
@@ -920,6 +1193,91 @@ mod tests {
             );
             assert!(!authorization.authorized, "{path}");
         }
+    }
+
+    #[test]
+    fn peer_status_must_be_ready_current_and_cover_the_session_window() {
+        let cases = [
+            {
+                let mut value = case("fixtures/peer-session/authenticated-ble.pass.json");
+                value.accepted_peers.peers[0].status.availability =
+                    ManifoldPeerAvailability::Degraded;
+                value
+            },
+            {
+                let mut value = case("fixtures/peer-session/authenticated-ble.pass.json");
+                value.accepted_peers.peers[0].status.observed_at_ms = value.now_ms + 1;
+                value
+            },
+            {
+                let mut value = case("fixtures/peer-session/authenticated-ble.pass.json");
+                value.accepted_peers.peers[0].status.expires_at_ms = value.now_ms;
+                value
+            },
+            {
+                let mut value = case("fixtures/peer-session/authenticated-ble.pass.json");
+                value.accepted_peers.peers[0].status.expires_at_ms =
+                    value.proposal.expires_at_ms - 1;
+                value
+            },
+        ];
+        for value in cases {
+            let (decision, authorization) = review_and_apply_peer_session(&value);
+            assert_eq!(
+                decision.rejection_reason,
+                Some(ManifoldPeerSessionRejectionReason::StalePeerStatus)
+            );
+            assert!(!authorization.authorized);
+        }
+    }
+
+    #[test]
+    fn capability_set_is_exact_allowlisted_sorted_and_unique() {
+        let mut duplicate = case("fixtures/peer-session/authenticated-ble.pass.json");
+        duplicate.proposal.requested_capability_ids = vec![
+            DottedId::new("capability.rendezvous.ble").expect("id"),
+            DottedId::new("capability.rendezvous.ble").expect("id"),
+        ];
+        let (decision, _) = review_and_apply_peer_session(&duplicate);
+        assert_eq!(
+            decision.rejection_reason,
+            Some(ManifoldPeerSessionRejectionReason::InvalidCapabilitySet)
+        );
+
+        let mut unknown = case("fixtures/peer-session/authenticated-ble.pass.json");
+        unknown.proposal.requested_capability_ids =
+            vec![DottedId::new("capability.media.video").expect("id")];
+        let (decision, _) = review_and_apply_peer_session(&unknown);
+        assert_eq!(
+            decision.rejection_reason,
+            Some(ManifoldPeerSessionRejectionReason::HighRateCapability)
+        );
+    }
+
+    #[test]
+    fn live_session_id_cannot_be_substituted_by_another_pair_or_role() {
+        let mut value = case("fixtures/peer-session/authenticated-ble.pass.json");
+        let mut occupied = value.proposal.clone();
+        occupied.proposal_id = DottedId::new("proposal.peer-session.occupied").expect("id");
+        occupied.subject_peer_id = DottedId::new("peer.gamma").expect("id");
+        occupied.candidate_peer_id = DottedId::new("peer.delta").expect("id");
+        occupied.group_owner_peer_id = occupied.subject_peer_id.clone();
+        occupied.client_peer_id = occupied.candidate_peer_id.clone();
+        value
+            .current_state
+            .sessions
+            .push(ManifoldAcceptedPeerSession {
+                proposal: occupied,
+                decision_id: DottedId::new("decision.peer-session.occupied").expect("id"),
+                revoked: false,
+                rendezvous_receipt_id: None,
+            });
+        let (decision, authorization) = review_and_apply_peer_session(&value);
+        assert_eq!(
+            decision.rejection_reason,
+            Some(ManifoldPeerSessionRejectionReason::SessionIdentityCollision)
+        );
+        assert!(!authorization.authorized);
     }
 
     #[test]

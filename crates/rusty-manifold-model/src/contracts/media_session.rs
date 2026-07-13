@@ -12,6 +12,7 @@ pub const MANIFOLD_BINARY_MEDIA_PLANE: &str = "binary-media";
 /// Manifold-owned binding between accepted session/stream state and one
 /// platform runtime spec. It contains references only and never media bytes.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManifoldMediaSessionDescriptor {
     /// Schema identifier.
@@ -145,5 +146,16 @@ mod tests {
         assert!(errors
             .iter()
             .any(|error| error.message.contains("duplicates")));
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn unknown_packaged_field_rejects_before_typed_digest() {
+        let mut value = serde_json::to_value(descriptor()).expect("serialize");
+        value
+            .as_object_mut()
+            .expect("object")
+            .insert("injected_authority".to_owned(), serde_json::json!(true));
+        assert!(serde_json::from_value::<ManifoldMediaSessionDescriptor>(value).is_err());
     }
 }

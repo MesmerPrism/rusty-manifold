@@ -1,8 +1,8 @@
 //! Exports deterministic standalone/embedded adapter parity fixtures.
 
 use rusty_manifold_broker_adapter::{
-    ManifoldBrokerAdapter, ManifoldBrokerAdapterConfig, ManifoldBrokerAdapterMode,
-    BROKER_ADAPTER_CONFIG_SCHEMA, RUNTIME_HOST_AUTHORITY_OWNER,
+    packaged_product_lock_sha256, ManifoldBrokerAdapter, ManifoldBrokerAdapterConfig,
+    ManifoldBrokerAdapterMode, BROKER_ADAPTER_CONFIG_SCHEMA, RUNTIME_HOST_AUTHORITY_OWNER,
 };
 use rusty_manifold_broker_product::{
     resolve_broker_product, ManifoldBrokerFeature, ManifoldBrokerProductLock,
@@ -46,11 +46,12 @@ fn export_mode(
         ManifoldBrokerAdapterMode::Embedded => "embedded",
     };
     let lock = product_lock(mode.clone());
+    let packaged_lock = packaged_lock_bytes(&lock);
     let config = config(mode.clone(), &lock);
     write_json(out.join(format!("{name}-config.json")), &config)?;
     write_json(out.join(format!("{name}-product-lock.json")), &lock)?;
 
-    let mut applied = ManifoldBrokerAdapter::new(config.clone(), lock.clone(), vec![lease()])?;
+    let mut applied = ManifoldBrokerAdapter::new(config.clone(), &packaged_lock, vec![lease()])?;
     write_json(
         out.join(format!("{name}-applied.json")),
         &applied.handle_command(
@@ -63,7 +64,7 @@ fn export_mode(
         ),
     )?;
 
-    let mut unknown = ManifoldBrokerAdapter::new(config.clone(), lock.clone(), vec![lease()])?;
+    let mut unknown = ManifoldBrokerAdapter::new(config.clone(), &packaged_lock, vec![lease()])?;
     write_json(
         out.join(format!("{name}-unknown-rejected.json")),
         &unknown.handle_command(
@@ -72,7 +73,7 @@ fn export_mode(
         ),
     )?;
 
-    let mut unleased = ManifoldBrokerAdapter::new(config, lock, vec![lease()])?;
+    let mut unleased = ManifoldBrokerAdapter::new(config, &packaged_lock, vec![lease()])?;
     write_json(
         out.join(format!("{name}-unleased-rejected.json")),
         &unleased.handle_command(
@@ -98,6 +99,14 @@ fn product_lock(mode: ManifoldBrokerAdapterMode) -> ManifoldBrokerProductLock {
     .expect("fixture product must resolve")
 }
 
+fn packaged_lock_bytes(lock: &ManifoldBrokerProductLock) -> Vec<u8> {
+    format!(
+        "{}\n",
+        serde_json::to_string_pretty(lock).expect("serialize packaged product lock")
+    )
+    .into_bytes()
+}
+
 fn config(
     mode: ManifoldBrokerAdapterMode,
     lock: &ManifoldBrokerProductLock,
@@ -111,6 +120,13 @@ fn config(
         mode,
         product_lock_id: lock.lock_id.clone(),
         product_lock_fingerprint: lock.spec_fingerprint.clone(),
+        product_lock_sha256: packaged_product_lock_sha256(
+            format!(
+                "{}\n",
+                serde_json::to_string_pretty(lock).expect("serialize lock")
+            )
+            .as_bytes(),
+        ),
         authority_host_id: id("host.broker.parity"),
         authority_owner_id: id(RUNTIME_HOST_AUTHORITY_OWNER),
     }

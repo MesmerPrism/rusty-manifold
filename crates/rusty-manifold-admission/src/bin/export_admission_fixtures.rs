@@ -97,6 +97,8 @@ fn initial_snapshot() -> ManifoldAdmissionSnapshot {
         authority_revision: revision(1),
         grants: vec![ManifoldAdmissionGrant {
             grant_id: id("grant.quest.authorized"),
+            client_lock_id: id("lock.client.quest.authorized"),
+            client_lock_fingerprint: format!("sha256:{}", "c1".repeat(32)),
             identity: identity(),
             capabilities: vec![id("capability.command.session.list")],
             expires_at_ms: 100_000,
@@ -106,6 +108,7 @@ fn initial_snapshot() -> ManifoldAdmissionSnapshot {
         revoked_token_ids: Vec::new(),
         consumed_request_ids: Vec::new(),
         consumed_use_request_ids: Vec::new(),
+        reviewed_sweep_ids: Vec::new(),
         audit_events: Vec::new(),
         max_token_ttl_ms: 30_000,
     }

@@ -1,0 +1,50 @@
+{
+  "$schema": "rusty.manifold.peer.mesh_state.v1",
+  "authority_revision": 2,
+  "mesh_id": "mesh.quest.alpha-beta-gamma",
+  "authority_epoch": 7,
+  "coordinator_peer_id": "peer.alpha",
+  "members": [
+    {
+      "peer_id": "peer.alpha",
+      "status_revision": 3,
+      "expires_at_ms": 90000
+    },
+    {
+      "peer_id": "peer.beta",
+      "status_revision": 4,
+      "expires_at_ms": 90000
+    },
+    {
+      "peer_id": "peer.gamma",
+      "status_revision": 5,
+      "expires_at_ms": 90000
+    }
+  ],
+  "selected_routes": [
+    {
+      "candidate_id": "route.alpha-beta.direct",
+      "first_peer_id": "peer.alpha",
+      "second_peer_id": "peer.beta",
+      "route_contract_id": "rusty.quest.direct_p2p_socket_route.v1",
+      "observed_latency_ms": 4,
+      "hop_count": 1,
+      "direct_media_lane_eligible": true
+    },
+    {
+      "candidate_id": "route.beta-gamma.direct",
+      "first_peer_id": "peer.beta",
+      "second_peer_id": "peer.gamma",
+      "route_contract_id": "rusty.quest.direct_p2p_socket_route.v1",
+      "observed_latency_ms": 5,
+      "hop_count": 1,
+      "direct_media_lane_eligible": true
+    }
+  ],
+  "applied_proposal_ids": [
+    "proposal.peer-mesh.legacy.001"
+  ],
+  "revoked_peer_ids": [
+    "peer.revoked"
+  ]
+}

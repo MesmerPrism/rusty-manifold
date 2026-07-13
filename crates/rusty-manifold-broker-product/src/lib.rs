@@ -419,6 +419,7 @@ mod tests {
         for name in [
             "base-standalone",
             "media-session-standalone",
+            "media-session-embedded",
             "camera-embedded",
             "direct-p2p-standalone",
             "ble-embedded",

@@ -5,6 +5,7 @@
   "standalone_enabled": true,
   "embedded_enabled": false,
   "features": [
+    "media_session",
     "camera_media"
   ],
   "command_ids": [
@@ -19,11 +20,16 @@
   ],
   "module_ids": [
     "module.media.camera",
+    "module.media.session",
     "module.runtime.host"
   ],
   "permissions": [
     "internet",
+    "user_notifications",
+    "background_service",
+    "background_data_sync",
+    "background_camera",
     "camera"
   ],
-  "spec_fingerprint": "fnv1a64-ad70739bf6657364"
+  "spec_fingerprint": "fnv1a64-07ea86443038fb22"
 }
