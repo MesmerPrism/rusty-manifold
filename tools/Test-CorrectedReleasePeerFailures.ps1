@@ -8,7 +8,7 @@ param(
 $ErrorActionPreference = "Stop"
 $markerPrefix = "MORPHOSPACE_FAILURE_TEST_V1 "
 $markerSchema = "rusty.morphospace.failure_test_result.v1"
-$fatalPattern = '(?im)^\s*(?:FATAL EXCEPTION(?: IN SYSTEM PROCESS)?|Fatal signal\b|thread\s+''[^'']+''\s+panicked at\b|error:\s+test failed\b|test result:\s+FAILED\b|FAILED(?:\s|$))'
+$fatalPattern = '(?m)^\s*(?:FATAL EXCEPTION(?: IN SYSTEM PROCESS)?|Fatal signal\b|thread\s+''[^'']+''\s+panicked at\b|error:\s+test failed\b|test result:\s+FAILED\b|FAILED(?:\s|$))'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 
 # This marker is a private release-harness protocol, not a Manifold contract or

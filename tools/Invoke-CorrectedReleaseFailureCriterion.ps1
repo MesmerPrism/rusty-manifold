@@ -18,7 +18,7 @@ $evidenceRoot = [IO.Path]::GetFullPath($EvidenceDir)
 $exporter = "crates/rusty-manifold-peer/src/bin/export_corrected_release_failure.rs"
 $exportSchema = "rusty.manifold.corrected_release.failure_transition_evidence.v1"
 $phaseExportSchema = "rusty.manifold.corrected_release.failure_transition_phase.v1"
-$fatalPattern = '(?im)^(?:.{0,512}?\s)?(?:FATAL EXCEPTION(?: IN SYSTEM PROCESS)?|Fatal signal\b|thread\s+''[^'']+''\s+panicked at\b|error:\s+test failed\b|test result:\s+FAILED\b|FAILED(?:\s|$))'
+$fatalPattern = '(?m)^(?:.{0,512}?\s)?(?:FATAL EXCEPTION(?: IN SYSTEM PROCESS)?|Fatal signal\b|thread\s+''[^'']+''\s+panicked at\b|error:\s+test failed\b|test result:\s+FAILED\b|FAILED(?:\s|$))'
 New-Item -ItemType Directory -Path $evidenceRoot -Force | Out-Null
 
 $revision = (& git -C $repo rev-parse --verify HEAD).Trim().ToLowerInvariant()
