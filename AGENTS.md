@@ -41,18 +41,19 @@ it must not define Lattice relation semantics or default to legacy
 4. `docs/PORTS_AND_ADAPTERS.md`
 5. `docs/COMMANDS_LEASES_AND_AUTHORITY.md`
 6. `docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md`
-7. `docs/PEER_SESSION_AUTHORITY.md`
-8. `docs/PEER_MESH_AUTHORITY.md`
-9. `docs/PEER_RUNTIME_HOST.md`
-10. `docs/MEDIA_SESSION_AUTHORITY.md`
-11. `docs/RUNTIME_HOST.md`
-12. `docs/BROKER_PRODUCTS.md`
-13. `docs/BROKER_ADAPTERS.md`
-14. `docs/ADMISSION.md`
-15. `docs/IMPLEMENTATION_PLAN.md`
-16. `docs/MODULE_PACKAGE_STRATEGY.md`
-17. `docs/SCHEMA_EVOLUTION.md`
-18. `fixtures/README.md`
+7. `docs/STREAM_OBSERVATION_AUTHORITY.md`
+8. `docs/PEER_SESSION_AUTHORITY.md`
+9. `docs/PEER_MESH_AUTHORITY.md`
+10. `docs/PEER_RUNTIME_HOST.md`
+11. `docs/MEDIA_SESSION_AUTHORITY.md`
+12. `docs/RUNTIME_HOST.md`
+13. `docs/BROKER_PRODUCTS.md`
+14. `docs/BROKER_ADAPTERS.md`
+15. `docs/ADMISSION.md`
+16. `docs/IMPLEMENTATION_PLAN.md`
+17. `docs/MODULE_PACKAGE_STRATEGY.md`
+18. `docs/SCHEMA_EVOLUTION.md`
+19. `fixtures/README.md`
 
 ## Architecture Rules
 
@@ -60,6 +61,11 @@ it must not define Lattice relation semantics or default to legacy
   decisions, lifecycle records, registries, clocks, session evidence, and audit.
 - Clients observe or request through typed contracts. They do not mutate
   accepted state directly.
+- External producers such as Rusty LSL submit only typed, non-authoritative
+  low-rate stream-observation proposals. `rusty-manifold-stream-observation`
+  alone reviews, accepts or rejects, applies, revisions, rejects replays, and
+  audits them. Consumers use only accepted state or Manifold application
+  receipts; proposers cannot assert accepted revision or nested accepted state.
 - Peer adapters propose stable identity and bounded low-rate status through
   `rusty-manifold-peer`; only Manifold review/application advances accepted
   peer state or emits the authoritative audit/application receipt.

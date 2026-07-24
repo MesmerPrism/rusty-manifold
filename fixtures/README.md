@@ -6,6 +6,12 @@ application receipts. Matching damaged fixtures prove stale authority/status,
 replay, untrusted identity, role escalation, high-rate payload, and advisory
 command rejection.
 
+The `stream-observation/` conformance case covers non-mutating review,
+application-time revalidation, one-step revision advance, and restartable
+accepted state/replay/audit lineage. Matching damaged coverage rejects control,
+commands, samples/chunks, routes/endpoints, media, permission(s),
+product/platform locks, and producer-asserted accepted state/revision.
+
 The `runtime-host/` fixtures prove snapshot/restart parity, command dispatch
 and application receipts, explicit lease expiry, and audit persistence. Damaged
 runtime-host requests cover unknown commands and missing/expired leases.

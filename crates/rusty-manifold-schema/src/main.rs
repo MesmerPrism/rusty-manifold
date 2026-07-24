@@ -110,6 +110,7 @@ fn schema_entries() -> Vec<SchemaEntry> {
     entries.extend(command_entries());
     entries.extend(coordination_entries());
     entries.extend(peer_entries());
+    entries.extend(stream_observation_entries());
     entries.extend(runtime_host_entries());
     entries.extend(broker_product_entries());
     entries.extend(broker_adapter_entries());
@@ -119,6 +120,64 @@ fn schema_entries() -> Vec<SchemaEntry> {
     entries.extend(host_and_deployment_entries());
     entries.extend(verification_entries());
     entries
+}
+
+fn stream_observation_entries() -> Vec<SchemaEntry> {
+    let input = &["fixtures/stream-observation/synthetic-conformance-case.json"];
+    let accepted = &["fixtures/stream-observation/synthetic-accepted-conformance-result.json"];
+    let rejected = &["fixtures/stream-observation/synthetic-rejected-conformance-result.json"];
+    vec![
+        entry(
+            "rusty.manifold.stream.observation.v1",
+            "ManifoldStreamObservation",
+            input,
+        ),
+        entry(
+            "rusty.manifold.stream.observation_proposal.v1",
+            "ManifoldStreamObservationProposal",
+            input,
+        ),
+        entry(
+            "rusty.manifold.stream.observation_review_policy.v1",
+            "ManifoldStreamObservationReviewPolicy",
+            input,
+        ),
+        entry(
+            "rusty.manifold.stream.observation_review.v1",
+            "ManifoldStreamObservationReviewDecision",
+            accepted,
+        ),
+        entry(
+            "rusty.manifold.stream.observation_accepted_state.v1",
+            "ManifoldStreamObservationAcceptedState",
+            accepted,
+        ),
+        entry(
+            "rusty.manifold.stream.observation_rejection.v1",
+            "ManifoldStreamObservationRejection",
+            rejected,
+        ),
+        entry(
+            "rusty.manifold.stream.observation_audit_event.v1",
+            "ManifoldStreamObservationAuditEvent",
+            accepted,
+        ),
+        entry(
+            "rusty.manifold.stream.observation_application_receipt.v1",
+            "ManifoldStreamObservationApplicationReceipt",
+            accepted,
+        ),
+        entry(
+            "rusty.manifold.stream.observation_host_snapshot.v1",
+            "ManifoldStreamObservationHostSnapshot",
+            accepted,
+        ),
+        entry(
+            "rusty.manifold.stream.observation_conformance_case.v1",
+            "ManifoldStreamObservationConformanceCase",
+            input,
+        ),
+    ]
 }
 
 fn admission_entries() -> Vec<SchemaEntry> {

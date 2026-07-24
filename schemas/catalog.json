@@ -419,6 +419,76 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.stream.observation.v1",
+      "rust_type": "ManifoldStreamObservation",
+      "fixture_paths": [
+        "fixtures/stream-observation/synthetic-conformance-case.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.stream.observation_proposal.v1",
+      "rust_type": "ManifoldStreamObservationProposal",
+      "fixture_paths": [
+        "fixtures/stream-observation/synthetic-conformance-case.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.stream.observation_review_policy.v1",
+      "rust_type": "ManifoldStreamObservationReviewPolicy",
+      "fixture_paths": [
+        "fixtures/stream-observation/synthetic-conformance-case.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.stream.observation_review.v1",
+      "rust_type": "ManifoldStreamObservationReviewDecision",
+      "fixture_paths": [
+        "fixtures/stream-observation/synthetic-accepted-conformance-result.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.stream.observation_accepted_state.v1",
+      "rust_type": "ManifoldStreamObservationAcceptedState",
+      "fixture_paths": [
+        "fixtures/stream-observation/synthetic-accepted-conformance-result.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.stream.observation_rejection.v1",
+      "rust_type": "ManifoldStreamObservationRejection",
+      "fixture_paths": [
+        "fixtures/stream-observation/synthetic-rejected-conformance-result.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.stream.observation_audit_event.v1",
+      "rust_type": "ManifoldStreamObservationAuditEvent",
+      "fixture_paths": [
+        "fixtures/stream-observation/synthetic-accepted-conformance-result.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.stream.observation_application_receipt.v1",
+      "rust_type": "ManifoldStreamObservationApplicationReceipt",
+      "fixture_paths": [
+        "fixtures/stream-observation/synthetic-accepted-conformance-result.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.stream.observation_host_snapshot.v1",
+      "rust_type": "ManifoldStreamObservationHostSnapshot",
+      "fixture_paths": [
+        "fixtures/stream-observation/synthetic-accepted-conformance-result.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.stream.observation_conformance_case.v1",
+      "rust_type": "ManifoldStreamObservationConformanceCase",
+      "fixture_paths": [
+        "fixtures/stream-observation/synthetic-conformance-case.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.runtime_host.snapshot.v1",
       "rust_type": "ManifoldRuntimeHostSnapshot",
       "fixture_paths": [

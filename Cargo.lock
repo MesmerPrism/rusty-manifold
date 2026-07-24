@@ -713,6 +713,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusty-manifold-stream-observation"
+version = "0.1.0"
+dependencies = [
+ "rusty-manifold-model",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "rusty-manifold-zmq"
 version = "0.1.0"
 dependencies = [
