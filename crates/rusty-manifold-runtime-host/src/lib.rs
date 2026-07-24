@@ -445,7 +445,8 @@ impl ManifoldRuntimeHost {
         if self.snapshot.audit_events.len() >= MAX_RUNTIME_AUDIT_EVENTS {
             return application_receipt(
                 request,
-                dispatch,
+                &self.snapshot.host_id,
+                &derived_id("dispatch.runtime", &request.request_id),
                 prior,
                 prior,
                 false,
@@ -496,7 +497,15 @@ impl ManifoldRuntimeHost {
             rejection.clone(),
         );
         self.snapshot.audit_events.push(event);
-        application_receipt(request, dispatch, prior, resulting, applied, rejection)
+        application_receipt(
+            request,
+            &dispatch.authority_host_id,
+            &dispatch.dispatch_id,
+            prior,
+            resulting,
+            applied,
+            rejection,
+        )
     }
 
     /// Performs an explicit revision-guarded lease expiry sweep.
@@ -992,7 +1001,8 @@ fn audit_event(
 
 fn application_receipt(
     request: &ManifoldRuntimeCommandRequest,
-    dispatch: &ManifoldRuntimeDispatchReceipt,
+    authority_host_id: &DottedId,
+    dispatch_id: &DottedId,
     prior_authority_revision: Revision,
     resulting_authority_revision: Revision,
     applied: bool,
@@ -1000,9 +1010,9 @@ fn application_receipt(
 ) -> ManifoldRuntimeApplicationReceipt {
     ManifoldRuntimeApplicationReceipt {
         schema_id: schema_id(HOST_APPLICATION_RECEIPT_SCHEMA),
-        authority_host_id: dispatch.authority_host_id.clone(),
+        authority_host_id: authority_host_id.clone(),
         receipt_id: derived_id("receipt.runtime", &request.request_id),
-        dispatch_id: dispatch.dispatch_id.clone(),
+        dispatch_id: dispatch_id.clone(),
         request_id: request.request_id.clone(),
         params_digest: request.params_digest.clone(),
         applied,
@@ -1205,7 +1215,7 @@ mod tests {
     }
 
     #[test]
-    fn command_and_sweep_caps_reject_before_creating_unrestorable_state() {
+    fn capacity_exhaustion_receipt_preserves_authority_provenance_and_restorable_state() {
         let mut command_snapshot: ManifoldRuntimeHostSnapshot =
             fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
         command_snapshot.leases.clear();
@@ -1225,6 +1235,22 @@ mod tests {
             let dispatch = host.review_command(&request, 2_000);
             assert!(host.apply_dispatch(&request, &dispatch, 2_000).applied);
         }
+        for index in MAX_RUNTIME_SNAPSHOT_RECORDS..MAX_RUNTIME_AUDIT_EVENTS {
+            let request = ManifoldRuntimeCommandRequest {
+                schema_id: schema_id(HOST_COMMAND_REQUEST_SCHEMA),
+                request_id: DottedId::new(format!("request.runtime.audit.cap.{index:04}"))
+                    .expect("id"),
+                expected_authority_revision: host.snapshot().authority_revision,
+                requester_id: DottedId::new("client.operator").expect("id"),
+                command_id: DottedId::new("command.unknown").expect("id"),
+                lease_id: None,
+                params_digest: None,
+                issued_at_ms: 1,
+                expires_at_ms: 100_000,
+            };
+            let dispatch = host.review_command(&request, 2_000);
+            assert!(!host.apply_dispatch(&request, &dispatch, 2_000).applied);
+        }
         let overflow = ManifoldRuntimeCommandRequest {
             schema_id: schema_id(HOST_COMMAND_REQUEST_SCHEMA),
             request_id: DottedId::new("request.runtime.cap.overflow").expect("id"),
@@ -1236,12 +1262,26 @@ mod tests {
             issued_at_ms: 1,
             expires_at_ms: 100_000,
         };
-        let dispatch = host.review_command(&overflow, 2_000);
-        let receipt = host.apply_dispatch(&overflow, &dispatch, 2_000);
+        let authority_host_id = host.snapshot().host_id.clone();
+        let expected_dispatch_id = derived_id("dispatch.runtime", &overflow.request_id);
+        let prior_revision = host.snapshot().authority_revision;
+        let audit_count = host.snapshot().audit_events.len();
+        let mut forged_dispatch = host.review_command(&overflow, 2_000);
+        forged_dispatch.authority_host_id =
+            DottedId::new("runtime.host.forged").expect("forged host id");
+        forged_dispatch.dispatch_id =
+            DottedId::new("dispatch.runtime.forged").expect("forged dispatch id");
+        let receipt = host.apply_dispatch(&overflow, &forged_dispatch, 2_000);
         assert_eq!(
             receipt.rejection_reason,
             Some(ManifoldRuntimeRejectionReason::AuthorityCapacityExhausted)
         );
+        assert_eq!(receipt.authority_host_id, authority_host_id);
+        assert_eq!(receipt.dispatch_id, expected_dispatch_id);
+        assert_eq!(receipt.prior_authority_revision, prior_revision);
+        assert_eq!(receipt.resulting_authority_revision, prior_revision);
+        assert_eq!(host.snapshot().authority_revision, prior_revision);
+        assert_eq!(host.snapshot().audit_events.len(), audit_count);
         assert_eq!(
             host.snapshot().applied_request_ids.len(),
             MAX_RUNTIME_SNAPSHOT_RECORDS
