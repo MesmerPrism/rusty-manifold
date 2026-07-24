@@ -17,6 +17,28 @@ fn observation() -> ManifoldStreamObservation {
     }
 }
 
+fn applied_twice_to_same_stream() -> ManifoldStreamObservationAuthorityHost {
+    let mut host = ManifoldStreamObservationAuthorityHost::new();
+    let first = proposal(&host);
+    let first_decision = host.review(&policy(), &first, 1_000);
+    assert!(
+        host.apply(&policy(), &first, &first_decision, 1_000)
+            .applied
+    );
+
+    let mut second = first.clone();
+    second.proposal_id = id("proposal.alpha.2");
+    second.expected_authority_revision = Revision::new(2).unwrap();
+    second.observed_at_ms = 1_100;
+    second.expires_at_ms = 2_100;
+    let second_decision = host.review(&policy(), &second, 1_200);
+    assert!(
+        host.apply(&policy(), &second, &second_decision, 1_200)
+            .applied
+    );
+    host
+}
+
 fn proposal(host: &ManifoldStreamObservationAuthorityHost) -> ManifoldStreamObservationProposal {
     let observation = observation();
     ManifoldStreamObservationProposal {
@@ -281,30 +303,53 @@ fn snapshot_rejects_tampered_unique_application_event_id() {
 
 #[test]
 fn restart_rejects_tampered_older_event_after_same_stream_overwrite() {
-    let mut host = ManifoldStreamObservationAuthorityHost::new();
-    let first = proposal(&host);
-    let first_decision = host.review(&policy(), &first, 1_000);
-    assert!(
-        host.apply(&policy(), &first, &first_decision, 1_000)
-            .applied
-    );
-
-    let mut second = first.clone();
-    second.proposal_id = id("proposal.alpha.2");
-    second.expected_authority_revision = Revision::new(2).unwrap();
-    second.observed_at_ms = 1_100;
-    second.expires_at_ms = 2_100;
-    let second_decision = host.review(&policy(), &second, 1_200);
-    assert!(
-        host.apply(&policy(), &second, &second_decision, 1_200)
-            .applied
-    );
-
-    let mut snapshot = host.snapshot().clone();
+    let mut snapshot = applied_twice_to_same_stream().snapshot().clone();
     snapshot.audit_events[0].proposer_id = id("adapter.historical-tamper");
     snapshot.audit_events[0].content_sha256 = format!("sha256:{}", "22".repeat(32));
     let json = serde_json::to_string(&snapshot).unwrap();
     assert!(ManifoldStreamObservationAuthorityHost::restart_from_json(&json).is_err());
+}
+
+#[test]
+fn restart_rejects_rehashed_accepted_event_with_invalid_application_time_window() {
+    let mut snapshot = applied_twice_to_same_stream().snapshot().clone();
+    let event = &mut snapshot.audit_events[0];
+    event.observed_at_ms = event.attempted_at_ms + 1;
+    event.event_id = application_event_id(event);
+    let json = serde_json::to_string(&snapshot).unwrap();
+    assert!(ManifoldStreamObservationAuthorityHost::restart_from_json(&json).is_err());
+}
+
+#[test]
+fn restart_rejects_rehashed_accepted_event_with_policy_digest_mismatch() {
+    let mut snapshot = applied_twice_to_same_stream().snapshot().clone();
+    let event = &mut snapshot.audit_events[0];
+    event.application_policy_sha256 = format!("sha256:{}", "33".repeat(32));
+    event.event_id = application_event_id(event);
+    let json = serde_json::to_string(&snapshot).unwrap();
+    assert!(ManifoldStreamObservationAuthorityHost::restart_from_json(&json).is_err());
+}
+
+#[test]
+fn observation_content_digest_v1_bytes_are_stable() {
+    let observation = observation();
+    let bytes = serde_json::to_vec(&observation).unwrap();
+    assert_eq!(
+        bytes,
+        br#"{"$schema":"rusty.manifold.stream.observation.v1","descriptor_type":"lsl.stream-info","channel_format":"float32","channel_count":8,"nominal_rate_millihz":100000,"native_descriptor_sha256":"sha256:abababababababababababababababababababababababababababababababab"}"#
+    );
+    assert_eq!(
+        observation_content_sha256(&observation),
+        "sha256:7ac114a4a1922293a9f10031a977c528be0c8e0c11689ca41b3760bacb4cd58d"
+    );
+
+    let mut null_options = observation;
+    null_options.nominal_rate_millihz = None;
+    null_options.native_descriptor_sha256 = None;
+    assert_eq!(
+        serde_json::to_vec(&null_options).unwrap(),
+        br#"{"$schema":"rusty.manifold.stream.observation.v1","descriptor_type":"lsl.stream-info","channel_format":"float32","channel_count":8,"nominal_rate_millihz":null,"native_descriptor_sha256":null}"#
+    );
 }
 
 #[test]
@@ -326,6 +371,91 @@ fn receipt_id_changes_with_explicit_carried_identity() {
     assert!(first_receipt.applied && second_receipt.applied);
     assert_ne!(first_receipt.source_id, second_receipt.source_id);
     assert_ne!(first_receipt.receipt_id, second_receipt.receipt_id);
+}
+
+#[test]
+fn restart_rejects_removed_stream_with_retained_audit_lineage() {
+    let mut host = ManifoldStreamObservationAuthorityHost::new();
+    let first = proposal(&host);
+    let first_decision = host.review(&policy(), &first, 1_000);
+    assert!(
+        host.apply(&policy(), &first, &first_decision, 1_000)
+            .applied
+    );
+
+    let mut second = first.clone();
+    second.proposal_id = id("proposal.beta.1");
+    second.source_id = id("source.beta");
+    second.stream_id = id("stream.beta");
+    second.expected_authority_revision = Revision::new(2).unwrap();
+    let mut second_policy = policy();
+    second_policy
+        .allowed_bindings
+        .push(ManifoldStreamObservationBinding {
+            proposer_id: second.proposer_id.clone(),
+            source_id: second.source_id.clone(),
+            stream_id: second.stream_id.clone(),
+        });
+    let second_decision = host.review(&second_policy, &second, 1_000);
+    assert!(
+        host.apply(&second_policy, &second, &second_decision, 1_000)
+            .applied
+    );
+
+    let mut snapshot = host.snapshot().clone();
+    snapshot.accepted_state.streams.remove(0);
+    let json = serde_json::to_string(&snapshot).unwrap();
+    assert!(ManifoldStreamObservationAuthorityHost::restart_from_json(&json).is_err());
+}
+
+#[test]
+fn restart_rejects_valid_looking_accepted_envelope_time_tamper() {
+    let mut host = ManifoldStreamObservationAuthorityHost::new();
+    let proposal = proposal(&host);
+    let decision = host.review(&policy(), &proposal, 1_000);
+    assert!(host.apply(&policy(), &proposal, &decision, 1_000).applied);
+    let mut snapshot = host.snapshot().clone();
+    snapshot.accepted_state.streams[0].observed_at_ms = 901;
+    snapshot.accepted_state.streams[0].expires_at_ms = 2_001;
+    let json = serde_json::to_string(&snapshot).unwrap();
+    assert!(ManifoldStreamObservationAuthorityHost::restart_from_json(&json).is_err());
+}
+
+#[test]
+fn distinct_review_times_produce_distinct_application_artifact_ids() {
+    let first_host = ManifoldStreamObservationAuthorityHost::new();
+    let first = proposal(&first_host);
+    let first_decision = first_host.review(&policy(), &first, 1_000);
+    let mut first_apply = first_host;
+    let first_receipt = first_apply.apply(&policy(), &first, &first_decision, 1_100);
+
+    let second_host = ManifoldStreamObservationAuthorityHost::new();
+    let second = proposal(&second_host);
+    let second_decision = second_host.review(&policy(), &second, 1_001);
+    let mut second_apply = second_host;
+    let second_receipt = second_apply.apply(&policy(), &second, &second_decision, 1_100);
+    assert!(first_receipt.applied && second_receipt.applied);
+    assert_ne!(first_decision.decision_id, second_decision.decision_id);
+    assert_ne!(first_receipt.receipt_id, second_receipt.receipt_id);
+    assert_ne!(
+        first_receipt.audit_event.event_id,
+        second_receipt.audit_event.event_id
+    );
+}
+
+#[test]
+fn future_reviewed_decision_rejects_without_mutation() {
+    let mut host = ManifoldStreamObservationAuthorityHost::new();
+    let proposal = proposal(&host);
+    let decision = host.review(&policy(), &proposal, 1_500);
+    let before = host.snapshot_json().unwrap();
+    let receipt = host.apply(&policy(), &proposal, &decision, 1_400);
+    assert!(!receipt.applied);
+    assert_eq!(
+        receipt.rejection.unwrap().reason,
+        ManifoldStreamObservationRejectionReason::DecisionMismatch
+    );
+    assert_eq!(host.snapshot_json().unwrap(), before);
 }
 
 #[test]

@@ -247,6 +247,8 @@ pub struct ManifoldStreamObservationAuditEvent {
     pub phase: ManifoldStreamObservationAuditPhase,
     /// Proposal identity.
     pub proposal_id: DottedId,
+    /// Exact review decision identity.
+    pub decision_id: DottedId,
     /// Proposer identity.
     pub proposer_id: DottedId,
     /// Source identity.
@@ -255,6 +257,10 @@ pub struct ManifoldStreamObservationAuditEvent {
     pub stream_id: DottedId,
     /// Accepted observation content digest.
     pub content_sha256: String,
+    /// Envelope observation time.
+    pub observed_at_ms: u64,
+    /// Envelope expiry.
+    pub expires_at_ms: u64,
     /// Proposal digest.
     pub proposal_sha256: String,
     /// Exact policy digest bound by review.
@@ -294,6 +300,10 @@ pub struct ManifoldStreamObservationApplicationReceipt {
     pub stream_id: DottedId,
     /// Observation content digest.
     pub content_sha256: String,
+    /// Envelope observation time.
+    pub observed_at_ms: u64,
+    /// Envelope expiry.
+    pub expires_at_ms: u64,
     /// Proposal digest.
     pub proposal_sha256: String,
     /// Exact policy digest bound by review.
@@ -473,6 +483,13 @@ impl ManifoldStreamObservationAuthorityHost {
             outcome_label(&outcome),
             reason_label(reason.as_ref()),
         ];
+        let decision_id = artifact_id(
+            "decision.stream-observation",
+            &identity,
+            revision,
+            revision,
+            now_ms,
+        );
         let audit_event = ManifoldStreamObservationAuditEvent {
             schema_id: schema(AUDIT_SCHEMA),
             event_id: artifact_id(
@@ -484,10 +501,13 @@ impl ManifoldStreamObservationAuthorityHost {
             ),
             phase: ManifoldStreamObservationAuditPhase::Review,
             proposal_id: proposal.proposal_id.clone(),
+            decision_id: decision_id.clone(),
             proposer_id: proposal.proposer_id.clone(),
             source_id: proposal.source_id.clone(),
             stream_id: proposal.stream_id.clone(),
             content_sha256: proposal.content_sha256.clone(),
+            observed_at_ms: proposal.observed_at_ms,
+            expires_at_ms: proposal.expires_at_ms,
             proposal_sha256: digest.clone(),
             reviewed_policy_sha256: policy_digest.clone(),
             application_policy_sha256: policy_digest.clone(),
@@ -499,13 +519,7 @@ impl ManifoldStreamObservationAuthorityHost {
         };
         ManifoldStreamObservationReviewDecision {
             schema_id: schema(REVIEW_SCHEMA),
-            decision_id: artifact_id(
-                "decision.stream-observation",
-                &identity,
-                revision,
-                revision,
-                now_ms,
-            ),
+            decision_id,
             proposal_id: proposal.proposal_id.clone(),
             proposal_sha256: digest.clone(),
             policy_id: policy.policy_id.clone(),
@@ -545,7 +559,7 @@ impl ManifoldStreamObservationAuthorityHost {
         let mut reason =
             duplicate.then_some(ManifoldStreamObservationRejectionReason::DuplicateApplication);
         if reason.is_none() {
-            reason = validate_decision(decision, policy, proposal, &digest, prior).err();
+            reason = validate_decision(decision, policy, proposal, &digest, prior, now_ms).err();
         }
         if reason.is_none() {
             reason = validate_review(&self.snapshot, policy, proposal, &digest, now_ms).err();
@@ -741,6 +755,7 @@ fn validate_decision(
     proposal: &ManifoldStreamObservationProposal,
     digest: &str,
     revision: Revision,
+    now_ms: u64,
 ) -> Result<(), ManifoldStreamObservationRejectionReason> {
     let policy_digest = policy_sha256(policy);
     let identity = [
@@ -766,13 +781,17 @@ fn validate_decision(
         || decision.policy_id != policy.policy_id
         || decision.policy_sha256 != policy_digest
         || decision.reviewed_authority_revision != revision
+        || decision.reviewed_at_ms > now_ms
         || decision.audit_event.schema_id.as_str() != AUDIT_SCHEMA
         || decision.audit_event.phase != ManifoldStreamObservationAuditPhase::Review
         || decision.audit_event.proposal_id != proposal.proposal_id
+        || decision.audit_event.decision_id != decision.decision_id
         || decision.audit_event.proposer_id != proposal.proposer_id
         || decision.audit_event.source_id != proposal.source_id
         || decision.audit_event.stream_id != proposal.stream_id
         || decision.audit_event.content_sha256 != proposal.content_sha256
+        || decision.audit_event.observed_at_ms != proposal.observed_at_ms
+        || decision.audit_event.expires_at_ms != proposal.expires_at_ms
         || decision.audit_event.proposal_sha256 != digest
         || decision.audit_event.reviewed_policy_sha256 != policy_digest
         || decision.audit_event.application_policy_sha256 != policy_digest
@@ -865,9 +884,14 @@ fn validate_snapshot(
                     || event.outcome != ManifoldStreamObservationReviewOutcome::Accepted
                     || event.rejection_reason.is_some()
                     || !valid_sha256(&event.content_sha256)
+                    || event.expires_at_ms <= event.observed_at_ms
+                    || event.expires_at_ms - event.observed_at_ms > MAX_TTL_MS
+                    || event.observed_at_ms > event.attempted_at_ms
+                    || event.attempted_at_ms >= event.expires_at_ms
                     || !valid_sha256(&event.proposal_sha256)
                     || !valid_sha256(&event.reviewed_policy_sha256)
                     || !valid_sha256(&event.application_policy_sha256)
+                    || event.reviewed_policy_sha256 != event.application_policy_sha256
                     || event.event_id != application_event_id(event)
                     || snapshot.applied_proposal_ids.get(index) != Some(&event.proposal_id)
                     || snapshot.applied_proposal_sha256.get(index) != Some(&event.proposal_sha256)
@@ -887,6 +911,22 @@ fn validate_snapshot(
     ) {
         return Err(ManifoldStreamObservationError::InvalidSnapshot("audit ids"));
     }
+    let accepted_stream_ids: BTreeSet<_> = snapshot
+        .accepted_state
+        .streams
+        .iter()
+        .map(|stream| stream.stream_id.as_str())
+        .collect();
+    let audited_stream_ids: BTreeSet<_> = snapshot
+        .audit_events
+        .iter()
+        .map(|event| event.stream_id.as_str())
+        .collect();
+    if accepted_stream_ids != audited_stream_ids {
+        return Err(ManifoldStreamObservationError::InvalidSnapshot(
+            "accepted stream set",
+        ));
+    }
     if snapshot.accepted_state.streams.iter().any(|stream| {
         snapshot
             .audit_events
@@ -897,6 +937,8 @@ fn validate_snapshot(
                 event.source_id != stream.source_id
                     || event.proposer_id != stream.proposer_id
                     || event.content_sha256 != stream.content_sha256
+                    || event.observed_at_ms != stream.observed_at_ms
+                    || event.expires_at_ms != stream.expires_at_ms
             })
     }) {
         return Err(ManifoldStreamObservationError::InvalidSnapshot(
@@ -927,10 +969,13 @@ fn receipt(
     };
     let identity = [
         proposal.proposal_id.as_str(),
+        decision.decision_id.as_str(),
         proposal.proposer_id.as_str(),
         proposal.source_id.as_str(),
         proposal.stream_id.as_str(),
         proposal.content_sha256.as_str(),
+        &proposal.observed_at_ms.to_string(),
+        &proposal.expires_at_ms.to_string(),
         digest.as_str(),
         decision.policy_sha256.as_str(),
         application_policy_digest.as_str(),
@@ -948,10 +993,13 @@ fn receipt(
         ),
         phase: ManifoldStreamObservationAuditPhase::Application,
         proposal_id: proposal.proposal_id.clone(),
+        decision_id: decision.decision_id.clone(),
         proposer_id: proposal.proposer_id.clone(),
         source_id: proposal.source_id.clone(),
         stream_id: proposal.stream_id.clone(),
         content_sha256: proposal.content_sha256.clone(),
+        observed_at_ms: proposal.observed_at_ms,
+        expires_at_ms: proposal.expires_at_ms,
         proposal_sha256: digest.clone(),
         reviewed_policy_sha256: decision.policy_sha256.clone(),
         application_policy_sha256: application_policy_digest.clone(),
@@ -976,6 +1024,8 @@ fn receipt(
         source_id: proposal.source_id.clone(),
         stream_id: proposal.stream_id.clone(),
         content_sha256: proposal.content_sha256.clone(),
+        observed_at_ms: proposal.observed_at_ms,
+        expires_at_ms: proposal.expires_at_ms,
         proposal_sha256: digest,
         reviewed_policy_sha256: decision.policy_sha256.clone(),
         application_policy_sha256: application_policy_digest,
@@ -1056,10 +1106,13 @@ fn artifact_id(
 fn application_event_id(event: &ManifoldStreamObservationAuditEvent) -> DottedId {
     let identity = [
         event.proposal_id.as_str(),
+        event.decision_id.as_str(),
         event.proposer_id.as_str(),
         event.source_id.as_str(),
         event.stream_id.as_str(),
         event.content_sha256.as_str(),
+        &event.observed_at_ms.to_string(),
+        &event.expires_at_ms.to_string(),
         event.proposal_sha256.as_str(),
         event.reviewed_policy_sha256.as_str(),
         event.application_policy_sha256.as_str(),
