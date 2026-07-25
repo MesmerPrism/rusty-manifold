@@ -64,6 +64,11 @@ and safe to use in tests, generated schemas, documentation, and clients.
   and applied/unknown/unleased receipts. Paired receipts deliberately differ in
   placement and lock fingerprint while preserving byte-equivalent Runtime Host
   dispatch/application decisions and `module.runtime.host` authority ownership.
+  `runtime-lease-projection.json` is raw evidence for one already applied
+  control lease's exact authority/application/audit/retained-state/clock
+  provenance. Tests revalidate every field against retained authority-owner
+  state before exposing the one-to-one Runtime Host lease. It is not a
+  signature, portable proof, or lease issuance path.
   The crate's integrated-runtime tests extend this matrix with bounded-use
   admission, product-unselected and stale work, cross-client/capability damage,
   replay, independent-use survival across unrelated revision advances,

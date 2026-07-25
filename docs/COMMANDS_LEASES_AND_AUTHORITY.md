@@ -141,6 +141,34 @@ application receipt. The application advances the authority snapshot revision
 by one and appends the accepted active lease, or rejects application when the
 review itself was rejected.
 
+### Runtime Host lease projection
+
+Runtime Host lease state does not create a second lease authority.
+`rusty-manifold-broker-adapter` may project one already applied control lease
+for Runtime Host consumption only at an authority-owning trust boundary. The
+borrowed, non-cloneable, one-shot projector must receive that owner's retained
+current authority snapshot and current clock. It validates the complete application against its exact prior
+snapshot and requires the same accepted lease to remain exactly once,
+unchanged and active, in current retained state. The projection preserves the
+same lease id, holder, scope, and expiry and records authority revisions,
+review/application/audit identities, clock lineage and uncertainty, and
+versioned domain-separated SHA-256 over bounded exact typed-JSON serialization.
+
+The projection rejects arbitrary inserted leases, rejected or substituted
+review/application/audit lineage, a different clock domain or epoch, clock
+regression, unhealthy or excessively uncertain time, expiry at the conservative
+uncertainty bound, and a lease that was released, renewed, revoked, expired, or
+replaced in retained state. A deserialized receipt remains raw evidence until
+the retained state and source application freshly reproduce every field; the
+receipt is not a signature or portable proof. Projection does not issue,
+renew, release, revoke, expire, or execute a lease. Constructing or restoring
+a `ManifoldRuntimeHostSnapshot` is restart machinery and cannot substitute for
+the control-lease review/application path. The separate Broker adoption slice
+must still replace pre-existing raw lease construction/restart inputs and
+enforce freshly synchronized authority-owner state for every projector
+construction; the source-only constructor cannot authenticate arbitrary
+caller-supplied or cloned state.
+
 The fixture CLI route is:
 
 ```powershell

@@ -19,6 +19,20 @@ is deliberately split:
 5. snapshot JSON round-trips preserve revision, replay guards, leases, and
    audit history across restart.
 
+An accepted lease in a Runtime Host snapshot must ultimately retain its
+upstream Manifold authority provenance. The Broker adapter's source-only
+projector is a borrowed, non-cloneable, one-shot value constructed at the
+authority-owning boundary from retained current authority state and a current
+bounded healthy clock. It validates an
+already applied control lease against the exact prior snapshot, requires it to
+remain current, and maps the same id, holder, scope, and expiry one-to-one. A
+raw deserialized projection exposes no Runtime Host lease until that state is
+freshly revalidated. Runtime Host snapshot construction or restoration does
+not issue, accept, renew, release, revoke, or expire that lease. The current
+checkpoint supplies this provider contract; making it mandatory for all
+Broker construction/restart paths, and enforcing fresh synchronized owner state
+for every projector construction, is a subsequent integration gate.
+
 When a command has typed low-rate effect parameters, its request includes
 `rusty.manifold.runtime_host.typed_params_digest.v1`: the exact parameter type,
 canonical SHA-256, and canonical byte count. Review rejects malformed hashes,

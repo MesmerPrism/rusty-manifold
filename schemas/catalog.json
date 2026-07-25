@@ -537,6 +537,13 @@
       "fixture_paths": []
     },
     {
+      "schema_id": "rusty.manifold.broker.runtime_lease_projection.v1",
+      "rust_type": "ManifoldBrokerRuntimeLeaseProjection",
+      "fixture_paths": [
+        "fixtures/broker-adapter/runtime-lease-projection.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.admission.snapshot.v1",
       "rust_type": "ManifoldAdmissionSnapshot",
       "fixture_paths": [

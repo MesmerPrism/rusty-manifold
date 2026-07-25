@@ -37,6 +37,16 @@ advances preserve independent clients' pending uses while exact-token
 revocation/expiry removes only derived uses. The Runtime Host suite covers
 canonical typed-parameter digest binding through request, dispatch, and
 application plus tamper and 4096-byte limit damage.
+The broker-adapter suite also validates the source-only control-lease
+projection against exact prior snapshot and application lineage, including
+derived review/application/audit ids, one-to-one lease identity, retained
+current-state release/renewal invalidation, versioned domain-separated and
+bounded provenance digests, clock health/epoch/regression/uncertainty,
+conservative expiry, arbitrary insertion, and revalidation after substitution
+of every serialized field. Projection is not lease issuance or lifecycle, and
+the raw receipt is not a portable proof. Source-only tests do not claim to
+authenticate arbitrary caller-supplied or cloned retained state; mandatory
+fresh owner-state construction is a Broker adoption gate.
 
 The peer suite covers operator-enrolled Ed25519 credentials, strict reciprocal
 signature review, retained rendezvous provenance, signed peer-session role and

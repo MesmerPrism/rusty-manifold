@@ -107,6 +107,18 @@ it must not define Lattice relation semantics or default to legacy
   both modes bind the exact product lock, derive the same Runtime Host command
   registry and lease policy, preserve host receipts, and name
   `module.runtime.host` as authority. Java/JNI/process layers remain adapters.
+- Control-lease review/application remains the sole generic lease-acceptance
+  path. The authority-owning boundary may construct a borrowed, non-cloneable,
+  one-shot Broker Runtime Host lease projector only from its retained current
+  authority snapshot and current clock. Projection revalidates the exact prior snapshot,
+  review/application/audit identities, current active lease, bounded healthy
+  clock, expiry, and versioned domain-separated typed-JSON digests before
+  mapping the same lease identity one-to-one. A deserialized receipt is
+  evidence only; only a freshly revalidated wrapper exposes its Runtime Host
+  lease. Projection and `ManifoldRuntimeHost::from_snapshot` never issue or
+  re-admit a lease. This source-only constructor cannot authenticate arbitrary
+  or cloned caller state; the Broker adoption boundary must enforce a freshly
+  synchronized owner view for every construction.
 - `ManifoldBrokerRuntime` is the only product mutation gate. It co-locates the
   exact broker adapter with Manifold admission, retains one-use permits bound
   to their opaque token, packaged client-lock id/SHA-256,

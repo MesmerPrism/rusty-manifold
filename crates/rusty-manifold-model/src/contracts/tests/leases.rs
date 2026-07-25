@@ -22,6 +22,48 @@ fn lease_authority_review_accepts_available_scope() {
 }
 
 #[test]
+fn lease_authority_review_rejects_substituted_derived_lineage_ids() {
+    let snapshot = authority_snapshot();
+    let review = snapshot
+        .review_lease_request(
+            lease_request(),
+            command_review_clock(),
+            vec![id("evidence.lease_authority.request.synthetic_lease_1")],
+        )
+        .unwrap();
+
+    let mut substituted_review = review.clone();
+    substituted_review.review_id = id("lease_review.substituted");
+    assert!(substituted_review
+        .validate_against_snapshot(&snapshot)
+        .is_err());
+
+    let mut substituted_audit = review.clone();
+    substituted_audit.audit_event.event_id = id("audit.lease.substituted");
+    assert!(substituted_audit
+        .validate_against_snapshot(&snapshot)
+        .is_err());
+
+    let mut substituted_lease = review;
+    let lease_id = id("lease.substituted");
+    substituted_lease
+        .accepted
+        .as_mut()
+        .unwrap()
+        .lease_id
+        .clone_from(&lease_id);
+    substituted_lease
+        .audit_event
+        .accepted
+        .as_mut()
+        .unwrap()
+        .lease_id = lease_id;
+    assert!(substituted_lease
+        .validate_against_snapshot(&snapshot)
+        .is_err());
+}
+
+#[test]
 fn lease_authority_application_advances_snapshot() {
     let snapshot = authority_snapshot();
     let review = snapshot

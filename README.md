@@ -45,6 +45,19 @@ packaged lock bytes are intentionally separate provenance fields.
 placements to that exact lock and route every command through the same Runtime
 Host review/application implementation. Their receipts preserve the host
 decision and identify the process layer as an adapter, not authority.
+The adapter also exposes a source-only lease-provenance projection. At the
+authority-owning trust boundary, a borrowed non-cloneable one-shot projector
+is constructed from the retained current authority snapshot and current
+healthy clock. It revalidates the exact
+prior snapshot, review/application/audit identities, current lease, bounded
+clock uncertainty, and conservative expiry before mapping that same lease
+identity for Runtime Host consumption. Raw serialized receipts are evidence,
+not portable authenticity: the retained state must revalidate them before the
+Runtime Host lease is exposed. This slice does not yet make the projection the
+only Broker construction/restart input or prove that a caller reconstructed a
+projector from freshly synchronized owner state. Both are mandatory next-slice
+Broker adoption gates. It does not issue, renew, release, revoke, or expire
+leases.
 The integrated broker runtime additionally requires a current, client-bound,
 capability-scoped one-use admission before any product mutation can reach that
 host path. Each bounded use retains the revision that created that use, so an

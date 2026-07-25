@@ -19,6 +19,54 @@ status/session-list commands need no lease. Media session, direct-P2P topology,
 and BLE rendezvous mutations use stable scoped leases. Both placements call the
 same `review_command` then `apply_dispatch` path.
 
+## Lease provenance projection
+
+Control-lease review and application remain the sole generic lease-acceptance
+path. `ManifoldBrokerRuntimeLeaseProjector` is a borrowed, non-cloneable,
+one-shot authority-owner trust boundary: its constructor must receive the owner's retained current
+`ManifoldAuthoritySnapshot` and current clock, rather than state accepted from
+a peer, fixture, or serialized projection. It validates that retained state,
+then validates a complete `ManifoldControlLeaseAuthorityApplication` against
+the exact prior snapshot. The accepted lease must still exist exactly once,
+unchanged and active, in retained current state. A current healthy,
+non-regressing clock must use the same domain and epoch and remain within the
+configured uncertainty bound. Conservative expiry adds rounded-up uncertainty
+to the current wall-clock reading. The borrow prevents that owner state from
+being mutated while projection is in flight, and projection consumes the
+projector so that instance cannot be reused. The public source-only constructor
+cannot prove that a caller did not create another projector over stale cloned
+state. The Broker adoption slice must keep construction inside the synchronized
+authority owner, take a fresh retained-state/clock view for every projection
+and deserialized-receipt validation, and prevent this projector from being used
+as an ambient adapter-side lease factory.
+
+The resulting
+`rusty.manifold.broker.runtime_lease_projection.v1` receipt retains:
+
+- prior, resulting, and retained-current authority revision;
+- clock domain, epoch, sequence, projection time, uncertainty, and
+  uncertainty-adjusted expiry-check time;
+- review, application, and audit identities;
+- versioned, domain-separated SHA-256 over the exact typed-JSON serialization
+  of prior state, resulting state, retained current state, and the complete
+  application, with a deterministic byte limit;
+- the complete accepted control lease; and
+- a one-to-one Runtime Host lease with the same id, holder, scope, and expiry.
+
+This is projection evidence, not a lease decision, signature, portable proof,
+or claim that arbitrary JSON is current. Deserialization produces a raw
+receipt whose fields are private. Only revalidation against the retained
+authority state and source application returns a wrapper that exposes the
+Runtime Host lease. The exact typed-JSON hashes are a versioned wire contract,
+not a claim of semantic JSON canonicalization.
+
+The adapter does not issue, renew, release, revoke, reinterpret, or silently
+expire a lease, and `ManifoldRuntimeHost::from_snapshot` remains restart
+machinery. This source-only checkpoint does not yet remove the pre-existing
+raw Runtime Host lease inputs from Broker construction/restart. That adoption
+gate, including freshness enforcement for every projector construction,
+belongs to the next integration slice.
+
 ## Integrated mutation gate
 
 `ManifoldBrokerRuntime` owns the live composition of the exact adapter and
@@ -75,6 +123,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\check_all.ps1
 The committed fixture pairs cover applied, unknown-command, and missing-lease
 outcomes. For each pair the standalone and embedded Runtime Host receipts are
 identical while placement-specific metadata remains explicit.
+The committed runtime-lease projection fixture and focused damaged-lineage
+tests cover arbitrary insertion, rejected application, substituted derived
+ids/holder/scope/expiry/revision, current-state release/renewal, clock
+health/epoch/regression/uncertainty, conservative expiry, bounded deterministic
+digests, and substitution of every serialized receipt field followed by
+mandatory revalidation.
 Runtime tests additionally cover product-unselected work, stale Runtime Host
 and admission revisions, replay, expiry, cross-client substitution, capability
 substitution, revocation, same-provider continuity, and fresh provider epochs.

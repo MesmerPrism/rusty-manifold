@@ -212,6 +212,11 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
             "ManifoldBrokerRuntimeEvidence",
             &[],
         ),
+        entry(
+            "rusty.manifold.broker.runtime_lease_projection.v1",
+            "ManifoldBrokerRuntimeLeaseProjection",
+            &["fixtures/broker-adapter/runtime-lease-projection.json"],
+        ),
     ]
 }
 

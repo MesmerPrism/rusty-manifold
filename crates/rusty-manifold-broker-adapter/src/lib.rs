@@ -1,7 +1,9 @@
 //! Standalone and embedded broker adapters over one Manifold Runtime Host.
 
+mod lease_projection;
 mod runtime;
 
+pub use lease_projection::*;
 pub use runtime::*;
 
 use rusty_manifold_broker_product::{ManifoldBrokerProductLock, BROKER_PRODUCT_LOCK_SCHEMA};

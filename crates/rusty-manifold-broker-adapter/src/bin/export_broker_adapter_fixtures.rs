@@ -2,13 +2,17 @@
 
 use rusty_manifold_broker_adapter::{
     packaged_product_lock_sha256, ManifoldBrokerAdapter, ManifoldBrokerAdapterConfig,
-    ManifoldBrokerAdapterMode, BROKER_ADAPTER_CONFIG_SCHEMA, RUNTIME_HOST_AUTHORITY_OWNER,
+    ManifoldBrokerAdapterMode, ManifoldBrokerRuntimeLeaseProjector, BROKER_ADAPTER_CONFIG_SCHEMA,
+    RUNTIME_HOST_AUTHORITY_OWNER,
 };
 use rusty_manifold_broker_product::{
     resolve_broker_product, ManifoldBrokerFeature, ManifoldBrokerProductLock,
     ManifoldBrokerProductSpec, BROKER_PRODUCT_SPEC_SCHEMA,
 };
-use rusty_manifold_model::{DottedId, Revision, SchemaId};
+use rusty_manifold_model::{
+    DottedId, ManifoldAuthoritySnapshot, ManifoldClockSnapshot,
+    ManifoldControlLeaseAuthorityApplication, Revision, SchemaId,
+};
 use rusty_manifold_runtime_host::{
     ManifoldRuntimeCommandRequest, ManifoldRuntimeLease, HOST_COMMAND_REQUEST_SCHEMA,
 };
@@ -25,6 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ] {
         export_mode(&out, mode)?;
     }
+    export_lease_projection(&out)?;
     println!("wrote {}", out.display());
     Ok(())
 }
@@ -86,6 +91,32 @@ fn export_mode(
         ),
     )?;
     Ok(())
+}
+
+fn export_lease_projection(out: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let prior_snapshot: ManifoldAuthoritySnapshot = serde_json::from_str(include_str!(
+        "../../../../fixtures/authority/synthetic-authority-snapshot.json"
+    ))?;
+    let application: ManifoldControlLeaseAuthorityApplication =
+        serde_json::from_str(include_str!(
+            "../../../../fixtures/authority-application/synthetic-lease-accepted-application.json"
+        ))?;
+    let projection_clock: ManifoldClockSnapshot = serde_json::from_str(include_str!(
+        "../../../../fixtures/clock/synthetic-command-review-clock.json"
+    ))?;
+    let current_snapshot = application
+        .applied_snapshot
+        .clone()
+        .ok_or("accepted lease fixture must include an applied snapshot")?;
+    let projection = ManifoldBrokerRuntimeLeaseProjector::from_retained_authority_state(
+        &current_snapshot,
+        &projection_clock,
+    )?
+    .project(&prior_snapshot, &application)?;
+    write_json(
+        out.join("runtime-lease-projection.json"),
+        projection.receipt(),
+    )
 }
 
 fn product_lock(mode: ManifoldBrokerAdapterMode) -> ManifoldBrokerProductLock {

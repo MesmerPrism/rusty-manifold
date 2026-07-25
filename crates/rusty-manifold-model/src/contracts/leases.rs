@@ -199,6 +199,12 @@ impl ManifoldControlLeaseAuthorityReview {
             ));
         }
 
+        validate_derived_authority_id(
+            &self.review_id,
+            &self.review_id,
+            control_lease_authority_review_id(&self.audit_event.request.request_id),
+        )?;
+
         if self.authority_id != snapshot.authority_id
             || self.authority_id != self.audit_event.authority_id
         {
@@ -491,6 +497,20 @@ impl ManifoldControlLeaseAuthorityAuditEvent {
             ));
         }
 
+        let expected_outcome = match self.event_kind {
+            ManifoldControlLeaseAuthorityAuditEventKind::LeaseAccepted => {
+                ManifoldControlLeaseAuthorityReviewOutcome::LeaseAccepted
+            }
+            ManifoldControlLeaseAuthorityAuditEventKind::LeaseRejected => {
+                ManifoldControlLeaseAuthorityReviewOutcome::LeaseRejected
+            }
+        };
+        validate_derived_authority_id(
+            &self.event_id,
+            &self.event_id,
+            control_lease_authority_audit_event_id(&self.request.request_id, expected_outcome),
+        )?;
+
         snapshot.validate_authority_links()?;
 
         if self.authority_id != snapshot.authority_id {
@@ -560,7 +580,8 @@ impl ManifoldControlLeaseAuthorityAuditEvent {
                 ));
             }
 
-            if accepted.holder_id != self.request.holder_id
+            if accepted.lease_id != control_lease_id(&self.request.request_id)
+                || accepted.holder_id != self.request.holder_id
                 || accepted.scope != self.request.scope
                 || accepted.required_capability != self.request.required_capability
                 || accepted.state != LeaseState::Active
