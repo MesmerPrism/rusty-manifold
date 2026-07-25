@@ -174,6 +174,11 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
     vec![
         entry(
             "rusty.manifold.broker.adapter_config.v1",
+            "LegacyBrokerAdapterConfigV1",
+            &["fixtures/broker-adapter/legacy-v1-standalone-config.json"],
+        ),
+        entry(
+            "rusty.manifold.broker.adapter_config.v2",
             "ManifoldBrokerAdapterConfig",
             &[
                 "fixtures/broker-adapter/standalone-config.json",
@@ -182,6 +187,11 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
         ),
         entry(
             "rusty.manifold.broker.adapter_receipt.v1",
+            "LegacyBrokerAdapterReceiptV1",
+            &["fixtures/broker-adapter/legacy-v1-standalone-applied.json"],
+        ),
+        entry(
+            "rusty.manifold.broker.adapter_receipt.v2",
             "ManifoldBrokerAdapterReceipt",
             &[
                 "fixtures/broker-adapter/standalone-applied.json",
@@ -193,7 +203,17 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
             ],
         ),
         entry(
+            "rusty.manifold.broker.adapter_migration_receipt.v1",
+            "ManifoldBrokerAdapterMigrationReceipt",
+            &[],
+        ),
+        entry(
             "rusty.manifold.broker.bounded_use.v1",
+            "LegacyBrokerBoundedUseV1",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.bounded_use.v2",
             "ManifoldBrokerBoundedUse",
             &[],
         ),
@@ -204,13 +224,53 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
         ),
         entry(
             "rusty.manifold.broker.mutation_receipt.v1",
+            "LegacyManifoldBrokerMutationReceiptV1",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.mutation_receipt.v2",
             "ManifoldBrokerMutationReceipt",
             &[],
         ),
         entry(
-            "rusty.manifold.broker.runtime_evidence.v1",
-            "ManifoldBrokerRuntimeEvidence",
+            "rusty.manifold.broker.capability_use_receipt.v1",
+            "ManifoldBrokerCapabilityUseReceipt",
             &[],
+        ),
+        entry(
+            "rusty.manifold.broker.runtime_evidence.v1",
+            "LegacyBrokerRuntimeEvidenceV1",
+            &["fixtures/broker-adapter/legacy-v1-runtime-evidence.json"],
+        ),
+        entry(
+            "rusty.manifold.broker.runtime_evidence.v2",
+            "LegacyBrokerRuntimeEvidenceV2",
+            &["fixtures/broker-adapter/runtime-evidence-v2.json"],
+        ),
+        entry(
+            "rusty.manifold.broker.runtime_evidence.v3",
+            "ManifoldBrokerRuntimeEvidence",
+            &["fixtures/broker-adapter/runtime-evidence-v3.json"],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_source.v1",
+            "ManifoldBrokerControlLeaseSource",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_authority_evidence.v1",
+            "ManifoldBrokerControlLeaseAuthorityEvidence",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.runtime_evidence_migration_receipt.v1",
+            "ManifoldBrokerRuntimeMigrationReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.runtime_evidence_authority_migration_receipt.v1",
+            "ManifoldBrokerRuntimeAuthorityMigrationReceipt",
+            &["fixtures/broker-adapter/runtime-evidence-v2-authority-migration-receipt.json"],
         ),
         entry(
             "rusty.manifold.broker.runtime_lease_projection.v1",

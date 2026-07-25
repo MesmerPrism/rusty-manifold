@@ -164,10 +164,23 @@ receipt is not a signature or portable proof. Projection does not issue,
 renew, release, revoke, expire, or execute a lease. Constructing or restoring
 a `ManifoldRuntimeHostSnapshot` is restart machinery and cannot substitute for
 the control-lease review/application path. The separate Broker adoption slice
-must still replace pre-existing raw lease construction/restart inputs and
-enforce freshly synchronized authority-owner state for every projector
-construction; the source-only constructor cannot authenticate arbitrary
+must enforce a synchronized authority-owner boundary around projector
+construction because the source-only constructor cannot authenticate arbitrary
 caller-supplied or cloned state.
+
+The first Broker-adoption checkpoint now closes construction and restart:
+normal adapter APIs require a `ManifoldBrokerControlLeaseAuthority`, accept no
+raw Runtime Host lease collection, and validate the exact projected set on
+both fresh construction and restart. Runtime evidence v3 retains current owner
+state plus ordered source applications. Restore requires a separately supplied
+same-authority, same-clock-lineage, non-regressing retained view and reprojects
+every source before exposing the runtime. Released v2 evidence is accepted only
+by an explicitly named authority-adoption migration that cannot synthesize a
+lease decision and whose receipt binds the exact raw/typed source, owner, host,
+lease set, product, clock, and result. The product owner is capped at 256
+projected leases and 8 MiB serialized evidence; runtime evidence JSON is capped
+at 16 MiB before decode. Issue, renewal, release, explicit expiry, and revocation
+transport remain separate lifecycle sub-slices.
 
 The fixture CLI route is:
 

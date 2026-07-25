@@ -1,0 +1,53 @@
+{
+  "$schema": "rusty.manifold.broker.runtime_evidence.v2",
+  "admission_snapshot": {
+    "$schema": "rusty.manifold.admission.snapshot.v2",
+    "active_tokens": [],
+    "audit_events": [],
+    "authority_id": "authority.admission.broker.fixture",
+    "authority_revision": 1,
+    "consumed_request_ids": [],
+    "consumed_use_request_ids": [],
+    "grants": [],
+    "max_token_ttl_ms": 30000,
+    "reviewed_sweep_ids": [],
+    "revoked_token_ids": []
+  },
+  "consumed_bounded_use_ids": [],
+  "host_snapshot": {
+    "$schema": "rusty.manifold.runtime_host.snapshot.v2",
+    "applied_request_ids": [],
+    "audit_events": [],
+    "authority_revision": 1,
+    "commands": [
+      {
+        "command_id": "command.media.session.start",
+        "required_lease_scope": "lease.media.session"
+      },
+      {
+        "command_id": "command.media.session.stop",
+        "required_lease_scope": "lease.media.session"
+      },
+      {
+        "command_id": "command.peer.status.get",
+        "required_lease_scope": null
+      },
+      {
+        "command_id": "command.session.list",
+        "required_lease_scope": null
+      }
+    ],
+    "host_id": "host.broker.parity",
+    "leases": [
+      {
+        "expires_at_ms": 1765000030100,
+        "holder_id": "client.parity",
+        "lease_id": "lease.media.session.client",
+        "scope": "lease.media.session"
+      }
+    ],
+    "reviewed_sweep_ids": []
+  },
+  "pending_bounded_uses": [],
+  "provider_epoch_id": "provider_epoch.broker.fixture"
+}

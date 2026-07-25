@@ -11,8 +11,9 @@ use std::fmt;
 use rusty_manifold_broker_adapter::{
     ManifoldBrokerAdapterMode, ManifoldBrokerAdapterRole, ManifoldBrokerMutationReceipt,
     ManifoldBrokerMutationRequest, ManifoldBrokerRuntime, ManifoldBrokerRuntimeEvidence,
-    BROKER_ADAPTER_RECEIPT_SCHEMA, BROKER_BOUNDED_USE_SCHEMA, BROKER_MUTATION_RECEIPT_SCHEMA,
-    BROKER_MUTATION_REQUEST_SCHEMA, BROKER_RUNTIME_EVIDENCE_SCHEMA, RUNTIME_HOST_AUTHORITY_OWNER,
+    ManifoldBrokerRuntimeStateError, BROKER_ADAPTER_RECEIPT_SCHEMA, BROKER_BOUNDED_USE_SCHEMA,
+    BROKER_MUTATION_RECEIPT_SCHEMA, BROKER_MUTATION_REQUEST_SCHEMA, BROKER_RUNTIME_EVIDENCE_SCHEMA,
+    RUNTIME_HOST_AUTHORITY_OWNER,
 };
 use rusty_manifold_media_session::{
     expire_media_sessions, review_and_apply_media_session_acceptance,
@@ -843,17 +844,20 @@ impl ManifoldPeerRuntimeHost {
         Ok(receipt)
     }
 
-    /// Atomically consumes one bounded use in the owning live `BrokerRuntime`
-    /// and mints the corresponding short-lived inner media Runtime Host lease.
+    /// Consumes one bounded use in the owning live `BrokerRuntime` and, when
+    /// accepted by the peer host, mints the corresponding short-lived inner
+    /// media Runtime Host lease.
     /// A caller-supplied/deserialized mutation receipt is never accepted as
-    /// authority. Both candidate states commit only after the complete live
-    /// broker result and current evidence have been revalidated.
+    /// authority. Preflight rejects before Broker mutation. Once a live Broker
+    /// decision is exposed, its one-use consumption commits before peer-host
+    /// composition so an error cannot turn the decision into a retry oracle.
     ///
     /// # Errors
     ///
-    /// Returns a host error without committing either candidate when family,
-    /// capacity, replay, broker, provenance, command, or current-state gates
-    /// reject.
+    /// Returns before Broker mutation when family, capacity, replay,
+    /// provenance, or current-state preflight rejects. A later composition
+    /// error leaves the peer host unchanged but preserves Broker one-use
+    /// consumption.
     pub fn apply_broker_media_command_and_admit_runtime_lease(
         &mut self,
         broker_runtime: &mut ManifoldBrokerRuntime,
@@ -869,86 +873,99 @@ impl ManifoldPeerRuntimeHost {
         next_host.ensure_event_capacity()?;
         next_host.preflight_broker_media_runtime_lease(broker_runtime, request, now_ms)?;
 
-        let mut preview_broker = broker_runtime.clone();
-        let preview = preview_broker.handle_mutation(request, now_ms);
-        if !preview.admission_applied {
-            return Ok(broker_lease_attempt(
-                ManifoldPeerRuntimeBrokerLeaseAttemptOutcome::BrokerAdmissionRejected,
-                preview,
-                None,
-                None,
-            ));
-        }
+        let observed = broker_runtime
+            .commit_mutation(
+                request,
+                now_ms,
+                |receipt,
+                 broker_evidence|
+                 -> Result<
+                    (
+                        ManifoldPeerRuntimeHost,
+                        ManifoldPeerRuntimeBrokerLeaseAttempt,
+                    ),
+                    ManifoldPeerRuntimeHostError,
+                > {
+                    if !receipt.admission_applied {
+                        return Ok((
+                        next_host,
+                        broker_lease_attempt(
+                            ManifoldPeerRuntimeBrokerLeaseAttemptOutcome::BrokerAdmissionRejected,
+                            receipt.clone(),
+                            None,
+                            None,
+                        ),
+                    ));
+                    }
+                    if !receipt.applied {
+                        let rejection = "outer_broker_command_rejected".to_owned();
+                        next_host.record(
+                            ManifoldPeerRuntimeAuditKind::BrokerLeaseAdmission,
+                            request.admission_use_request_id.clone(),
+                            next_host.snapshot.media_command_runtime.authority_revision,
+                            next_host.snapshot.media_command_runtime.authority_revision,
+                            false,
+                            Some(rejection.clone()),
+                        )?;
+                        validate_snapshot(&next_host.snapshot)?;
+                        return Ok((
+                            next_host,
+                            broker_lease_attempt(
+                                ManifoldPeerRuntimeBrokerLeaseAttemptOutcome::BrokerCommandRejected,
+                                receipt.clone(),
+                                None,
+                                Some(rejection),
+                            ),
+                        ));
+                    }
 
-        let mut next_broker = broker_runtime.clone();
-        let receipt = next_broker.handle_mutation(request, now_ms);
-        if receipt != preview {
-            return Err(ManifoldPeerRuntimeHostError::Authority(
-                "live broker mutation differed from pure preview".to_owned(),
-            ));
-        }
-        if !receipt.applied {
-            let rejection = "outer_broker_command_rejected".to_owned();
-            next_host.record(
-                ManifoldPeerRuntimeAuditKind::BrokerLeaseAdmission,
-                request.admission_use_request_id.clone(),
-                next_host.snapshot.media_command_runtime.authority_revision,
-                next_host.snapshot.media_command_runtime.authority_revision,
-                false,
-                Some(rejection.clone()),
-            )?;
-            validate_snapshot(&next_host.snapshot)?;
-            *self = next_host;
-            *broker_runtime = next_broker;
-            return Ok(broker_lease_attempt(
-                ManifoldPeerRuntimeBrokerLeaseAttemptOutcome::BrokerCommandRejected,
-                receipt,
-                None,
-                Some(rejection),
-            ));
-        }
-
-        let broker_evidence = next_broker.evidence();
-        let mut admitted_host = next_host.clone();
-        let admission = admitted_host.admit_live_broker_media_receipt(
-            request,
-            &receipt,
-            &broker_evidence,
-            now_ms,
-        );
-        match admission {
-            Ok(admission) => {
-                validate_snapshot(&admitted_host.snapshot)?;
-                *self = admitted_host;
-                *broker_runtime = next_broker;
-                Ok(broker_lease_attempt(
-                    ManifoldPeerRuntimeBrokerLeaseAttemptOutcome::LeaseAdmitted,
-                    receipt,
-                    Some(admission),
-                    None,
-                ))
-            }
-            Err(error) => {
-                let rejection = error.to_string();
-                next_host.record(
-                    ManifoldPeerRuntimeAuditKind::BrokerLeaseAdmission,
-                    request.admission_use_request_id.clone(),
-                    next_host.snapshot.media_command_runtime.authority_revision,
-                    next_host.snapshot.media_command_runtime.authority_revision,
-                    false,
-                    Some(rejection.clone()),
-                )?;
-                validate_snapshot(&next_host.snapshot)?;
-                *self = next_host;
-                *broker_runtime = next_broker;
-                Ok(broker_lease_attempt(
-                    ManifoldPeerRuntimeBrokerLeaseAttemptOutcome::PeerLeaseRejected,
-                    receipt,
-                    None,
-                    Some(rejection),
-                ))
-            }
-        }
+                    let mut admitted_host = next_host.clone();
+                    match admitted_host.admit_live_broker_media_receipt(
+                        request,
+                        receipt,
+                        broker_evidence,
+                        now_ms,
+                    ) {
+                        Ok(admission) => {
+                            validate_snapshot(&admitted_host.snapshot)?;
+                            Ok((
+                                admitted_host,
+                                broker_lease_attempt(
+                                    ManifoldPeerRuntimeBrokerLeaseAttemptOutcome::LeaseAdmitted,
+                                    receipt.clone(),
+                                    Some(admission),
+                                    None,
+                                ),
+                            ))
+                        }
+                        Err(error) => {
+                            let rejection = error.to_string();
+                            next_host.record(
+                                ManifoldPeerRuntimeAuditKind::BrokerLeaseAdmission,
+                                request.admission_use_request_id.clone(),
+                                next_host.snapshot.media_command_runtime.authority_revision,
+                                next_host.snapshot.media_command_runtime.authority_revision,
+                                false,
+                                Some(rejection.clone()),
+                            )?;
+                            validate_snapshot(&next_host.snapshot)?;
+                            Ok((
+                                next_host,
+                                broker_lease_attempt(
+                                    ManifoldPeerRuntimeBrokerLeaseAttemptOutcome::PeerLeaseRejected,
+                                    receipt.clone(),
+                                    None,
+                                    Some(rejection),
+                                ),
+                            ))
+                        }
+                    }
+                },
+            )
+            .map_err(ManifoldPeerRuntimeHostError::from)?;
+        let (committed_host, attempt) = observed?;
+        *self = committed_host;
+        Ok(attempt)
     }
 
     fn preflight_broker_media_runtime_lease(
@@ -1883,6 +1900,14 @@ impl std::error::Error for ManifoldPeerRuntimeHostError {
             | Self::MissingTopology(_)
             | Self::Authority(_) => None,
         }
+    }
+}
+
+impl From<ManifoldBrokerRuntimeStateError> for ManifoldPeerRuntimeHostError {
+    fn from(error: ManifoldBrokerRuntimeStateError) -> Self {
+        Self::Authority(format!(
+            "live broker transaction reconstruction failed: {error}"
+        ))
     }
 }
 

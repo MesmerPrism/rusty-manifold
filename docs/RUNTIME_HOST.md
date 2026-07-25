@@ -30,8 +30,14 @@ raw deserialized projection exposes no Runtime Host lease until that state is
 freshly revalidated. Runtime Host snapshot construction or restoration does
 not issue, accept, renew, release, revoke, or expire that lease. The current
 checkpoint supplies this provider contract; making it mandatory for all
-Broker construction/restart paths, and enforcing fresh synchronized owner state
-for every projector construction, is a subsequent integration gate.
+Broker construction/restart paths is now enforced by
+`ManifoldBrokerControlLeaseAuthority`: normal adapter APIs accept no raw lease
+collection and reject restored host leases that differ from owner-derived
+projections. Broker runtime evidence v3 retains owner, host, and admission state
+together and requires a separately supplied non-regressing owner view during
+restart. Runtime Host still exposes compatibility construction and local expiry
+for non-Broker owners; the Broker path must not treat either as generic lease
+authority. Owner-driven lifecycle synchronization is the next sub-slice.
 
 When a command has typed low-rate effect parameters, its request includes
 `rusty.manifold.runtime_host.typed_params_digest.v1`: the exact parameter type,

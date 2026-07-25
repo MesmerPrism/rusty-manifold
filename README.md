@@ -54,16 +54,27 @@ clock uncertainty, and conservative expiry before mapping that same lease
 identity for Runtime Host consumption. Raw serialized receipts are evidence,
 not portable authenticity: the retained state must revalidate them before the
 Runtime Host lease is exposed. This slice does not yet make the projection the
-only Broker construction/restart input or prove that a caller reconstructed a
-projector from freshly synchronized owner state. Both are mandatory next-slice
-Broker adoption gates. It does not issue, renew, release, revoke, or expire
-leases.
+only source of generic lease decisions or prove freshness outside the
+authority-owning trust boundary. Normal adapter construction and restart now
+accept no raw Runtime Host lease collection: they require a non-cloneable
+Broker control-lease owner that reprojects exact source applications against a
+supplied retained authority/clock view. Integrated runtime evidence v3 persists
+that owner state beside host and admission state; restart requires a separately
+supplied non-regressing owner view, and released v2 evidence uses an explicit
+digest-bound authority-adoption migration. Per-product owner evidence is capped
+at 256 projected leases and 8 MiB; integrated evidence JSON is capped at 16 MiB
+before decode. Lifecycle mutation transport remains the next slice. This code
+does not issue, renew, release, revoke, or expire leases.
 The integrated broker runtime additionally requires a current, client-bound,
 capability-scoped one-use admission before any product mutation can reach that
 host path. Each bounded use retains the revision that created that use, so an
 unrelated client's admission mutation does not invalidate it; exact-token
 revocation and expiry remove only derived pending uses. Grants, tokens, and
 bounded uses also retain the exact packaged client-lock id/SHA-256.
+Direct adapter mutation is crate-private, so external product work enters only
+through the integrated runtime gate.
+Construction and continuity restore are trusted deployment-owner APIs; the
+deployment must externally fence one writable runtime per provider epoch.
 
 [Cross-app admission](docs/ADMISSION.md) binds platform-verified client
 identity to explicit capability grants and Manifold-owned short-lived opaque

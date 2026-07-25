@@ -47,6 +47,12 @@ of every serialized field. Projection is not lease issuance or lifecycle, and
 the raw receipt is not a portable proof. Source-only tests do not claim to
 authenticate arbitrary caller-supplied or cloned retained state; mandatory
 fresh owner-state construction is a Broker adoption gate.
+The Broker-owner suite additionally proves that normal construction and
+restart accept no raw lease vector, exact source applications reproduce the
+host lease set, duplicate and host-only leases reject, authority/clock/lease
+regression rejects, v3 owner/host/admission evidence round-trips, ordinary
+restore rejects v2, and explicit v2 authority-adoption migration creates no
+lease authority.
 
 The peer suite covers operator-enrolled Ed25519 credentials, strict reciprocal
 signature review, retained rendezvous provenance, signed peer-session role and

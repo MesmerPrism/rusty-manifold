@@ -498,6 +498,13 @@
     },
     {
       "schema_id": "rusty.manifold.broker.adapter_config.v1",
+      "rust_type": "LegacyBrokerAdapterConfigV1",
+      "fixture_paths": [
+        "fixtures/broker-adapter/legacy-v1-standalone-config.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.adapter_config.v2",
       "rust_type": "ManifoldBrokerAdapterConfig",
       "fixture_paths": [
         "fixtures/broker-adapter/standalone-config.json",
@@ -506,6 +513,13 @@
     },
     {
       "schema_id": "rusty.manifold.broker.adapter_receipt.v1",
+      "rust_type": "LegacyBrokerAdapterReceiptV1",
+      "fixture_paths": [
+        "fixtures/broker-adapter/legacy-v1-standalone-applied.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.adapter_receipt.v2",
       "rust_type": "ManifoldBrokerAdapterReceipt",
       "fixture_paths": [
         "fixtures/broker-adapter/standalone-applied.json",
@@ -517,7 +531,17 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.broker.adapter_migration_receipt.v1",
+      "rust_type": "ManifoldBrokerAdapterMigrationReceipt",
+      "fixture_paths": []
+    },
+    {
       "schema_id": "rusty.manifold.broker.bounded_use.v1",
+      "rust_type": "LegacyBrokerBoundedUseV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.bounded_use.v2",
       "rust_type": "ManifoldBrokerBoundedUse",
       "fixture_paths": []
     },
@@ -528,13 +552,61 @@
     },
     {
       "schema_id": "rusty.manifold.broker.mutation_receipt.v1",
+      "rust_type": "LegacyManifoldBrokerMutationReceiptV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.mutation_receipt.v2",
       "rust_type": "ManifoldBrokerMutationReceipt",
       "fixture_paths": []
     },
     {
-      "schema_id": "rusty.manifold.broker.runtime_evidence.v1",
-      "rust_type": "ManifoldBrokerRuntimeEvidence",
+      "schema_id": "rusty.manifold.broker.capability_use_receipt.v1",
+      "rust_type": "ManifoldBrokerCapabilityUseReceipt",
       "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence.v1",
+      "rust_type": "LegacyBrokerRuntimeEvidenceV1",
+      "fixture_paths": [
+        "fixtures/broker-adapter/legacy-v1-runtime-evidence.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence.v2",
+      "rust_type": "LegacyBrokerRuntimeEvidenceV2",
+      "fixture_paths": [
+        "fixtures/broker-adapter/runtime-evidence-v2.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence.v3",
+      "rust_type": "ManifoldBrokerRuntimeEvidence",
+      "fixture_paths": [
+        "fixtures/broker-adapter/runtime-evidence-v3.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_source.v1",
+      "rust_type": "ManifoldBrokerControlLeaseSource",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_authority_evidence.v1",
+      "rust_type": "ManifoldBrokerControlLeaseAuthorityEvidence",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence_migration_receipt.v1",
+      "rust_type": "ManifoldBrokerRuntimeMigrationReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence_authority_migration_receipt.v1",
+      "rust_type": "ManifoldBrokerRuntimeAuthorityMigrationReceipt",
+      "fixture_paths": [
+        "fixtures/broker-adapter/runtime-evidence-v2-authority-migration-receipt.json"
+      ]
     },
     {
       "schema_id": "rusty.manifold.broker.runtime_lease_projection.v1",

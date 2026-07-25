@@ -119,8 +119,22 @@ it must not define Lattice relation semantics or default to legacy
   re-admit a lease. This source-only constructor cannot authenticate arbitrary
   or cloned caller state; the Broker adoption boundary must enforce a freshly
   synchronized owner view for every construction.
+- Normal Broker adapter construction and restart accept no raw Runtime Host
+  lease collection. They require one private-field, non-cloneable
+  `ManifoldBrokerControlLeaseAuthority` whose source applications reproduce
+  every product-relevant host lease. `rusty.manifold.broker.runtime_evidence.v3`
+  retains that owner state beside host and admission state. Restart requires a
+  separately supplied non-regressing retained authority/clock view; v2 evidence
+  enters only through explicit authority-adoption migration. One product is
+  capped at 256 projected leases and 8 MiB owner evidence; current/legacy
+  integrated runtime evidence is capped at 16 MiB before JSON decode.
+  Construction, evidence, and continuity restore are trusted deployment-owner
+  APIs. Deployment must externally fence one writable runtime per provider
+  epoch across processes/storage; library validation does not prove exclusive
+  storage ownership or global exactly-once behavior under a forked snapshot.
 - `ManifoldBrokerRuntime` is the only product mutation gate. It co-locates the
-  exact broker adapter with Manifold admission, retains one-use permits bound
+  exact broker adapter, synchronized generic control-lease owner, and Manifold
+  admission, retains one-use permits bound
   to their opaque token, packaged client-lock id/SHA-256,
   signature-projected client, exact command capability,
   use-creation admission revision, expiry, and provider epoch, consumes a permit before one
@@ -129,6 +143,10 @@ it must not define Lattice relation semantics or default to legacy
   explicit epoch. An unrelated grant/token mutation may advance the global
   admission revision without invalidating another client's bounded use;
   revocation or expiry invalidates only uses derived from the affected token.
+  The adapter's direct review/apply method is crate-private; fixture export is
+  feature-gated and exposes no arbitrary command route. Composed owners use a
+  commit-before-observe mutation API; no public preview/candidate-copy surface
+  may turn a consumed one-use decision into a rollback oracle.
 - Runtime Host requests that carry low-rate effect parameters must bind the
   canonical typed payload through
   `rusty.manifold.runtime_host.typed_params_digest.v1`. Review, dispatch, and

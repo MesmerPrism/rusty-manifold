@@ -8,8 +8,10 @@ use rusty_manifold_admission::{
 };
 use rusty_manifold_broker_adapter::{
     command_capability, packaged_product_lock_sha256, ManifoldBrokerAdapter,
-    ManifoldBrokerAdapterConfig, ManifoldBrokerAdapterMode, ManifoldBrokerMutationRequest,
-    ManifoldBrokerRuntime, BROKER_ADAPTER_CONFIG_SCHEMA, BROKER_MUTATION_REQUEST_SCHEMA,
+    ManifoldBrokerAdapterConfig, ManifoldBrokerAdapterMode, ManifoldBrokerControlLeaseAuthority,
+    ManifoldBrokerControlLeaseSource, ManifoldBrokerMutationRequest, ManifoldBrokerRuntime,
+    BROKER_ADAPTER_CONFIG_SCHEMA, BROKER_CONTROL_LEASE_SOURCE_SCHEMA,
+    BROKER_MUTATION_REQUEST_SCHEMA,
 };
 use rusty_manifold_broker_product::{
     resolve_broker_product, ManifoldBrokerFeature, ManifoldBrokerProductSpec,
@@ -25,7 +27,8 @@ use rusty_manifold_media_session::{
     MANIFOLD_MEDIA_SESSION_TERMINATION_REQUEST_SCHEMA,
 };
 use rusty_manifold_model::{
-    DottedId, ManifoldMediaSessionDescriptor, Revision, SchemaId, MANIFOLD_BINARY_MEDIA_PLANE,
+    DottedId, ManifoldAuthoritySnapshot, ManifoldClockSnapshot, ManifoldControlLeaseRequest,
+    ManifoldMediaSessionDescriptor, Revision, SafetyClass, SchemaId, MANIFOLD_BINARY_MEDIA_PLANE,
     MANIFOLD_MEDIA_SESSION_SCHEMA,
 };
 use rusty_manifold_peer::{
@@ -282,6 +285,59 @@ fn id(value: &str) -> DottedId {
 
 fn schema_id(value: &str) -> SchemaId {
     SchemaId::new(value).expect("test schema")
+}
+
+fn broker_control_lease_authority(
+    lease: &ManifoldRuntimeLease,
+) -> ManifoldBrokerControlLeaseAuthority {
+    let mut prior: ManifoldAuthoritySnapshot = serde_json::from_str(include_str!(
+        "../../../fixtures/authority/synthetic-authority-snapshot.json"
+    ))
+    .expect("prior authority snapshot");
+    let clock: ManifoldClockSnapshot = serde_json::from_str(include_str!(
+        "../../../fixtures/clock/synthetic-command-review-clock.json"
+    ))
+    .expect("projection clock");
+    let capability = id("capability.broker.peer-runtime.test");
+    prior.host_manifest.capabilities.push(capability.clone());
+    let suffix = lease
+        .lease_id
+        .as_str()
+        .strip_prefix("lease.")
+        .expect("lease id");
+    let review = prior
+        .review_lease_request(
+            ManifoldControlLeaseRequest {
+                schema_id: schema_id("rusty.manifold.command.lease_request.v1"),
+                request_id: id(&format!("request.{suffix}")),
+                holder_id: lease.holder_id.clone(),
+                scope: lease.scope.clone(),
+                expected_revision: prior.authority_revision,
+                requested_ttl_ms: 30_000,
+                required_capability: capability,
+                safety_class: SafetyClass::BoundedMutation,
+            },
+            clock.clone(),
+            vec![id("evidence.broker.peer-runtime.test.lease")],
+        )
+        .expect("lease review");
+    let application = prior
+        .apply_control_lease_authority_review(review)
+        .expect("lease application");
+    let current = application
+        .applied_snapshot
+        .clone()
+        .expect("applied snapshot");
+    ManifoldBrokerControlLeaseAuthority::from_caller_attested_retained_authority_state(
+        current,
+        clock,
+        vec![ManifoldBrokerControlLeaseSource {
+            schema_id: schema_id(BROKER_CONTROL_LEASE_SOURCE_SCHEMA),
+            prior_authority_snapshot: prior,
+            application,
+        }],
+    )
+    .expect("control-lease authority")
 }
 
 fn key(seed: u8) -> SigningKey {
@@ -1465,7 +1521,7 @@ fn peer_only_and_enrollment_only_product_locks_need_no_fake_media_module() {
 
 #[test]
 #[allow(clippy::too_many_lines)]
-fn live_broker_mutation_atomically_mints_uses_releases_and_restores_media_lease() {
+fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() {
     let product_lock = resolve_broker_product(&ManifoldBrokerProductSpec {
         schema_id: schema_id(BROKER_PRODUCT_SPEC_SCHEMA),
         product_id: id("broker.runtime.media-test"),
@@ -1494,6 +1550,13 @@ fn live_broker_mutation_atomically_mints_uses_releases_and_restores_media_lease(
     )
     .expect("peer host without ambient media lease");
 
+    let broker_lease = ManifoldRuntimeLease {
+        lease_id: grant.broker_runtime_lease_id.clone(),
+        scope: id("lease.media.session"),
+        holder_id: grant.client_id.clone(),
+        expires_at_ms: 100_000,
+    };
+    let control_lease_authority = broker_control_lease_authority(&broker_lease);
     let broker_adapter = ManifoldBrokerAdapter::new(
         ManifoldBrokerAdapterConfig {
             schema_id: schema_id(BROKER_ADAPTER_CONFIG_SCHEMA),
@@ -1506,12 +1569,7 @@ fn live_broker_mutation_atomically_mints_uses_releases_and_restores_media_lease(
             authority_owner_id: id(RUNTIME_HOST_AUTHORITY_OWNER),
         },
         &packaged_product_lock,
-        vec![ManifoldRuntimeLease {
-            lease_id: grant.broker_runtime_lease_id.clone(),
-            scope: id("lease.media.session"),
-            holder_id: grant.client_id.clone(),
-            expires_at_ms: 100_000,
-        }],
+        &control_lease_authority,
     )
     .expect("outer broker adapter");
     let outer_capability = command_capability(&grant.broker_command_id);
@@ -1537,21 +1595,25 @@ fn live_broker_mutation_atomically_mints_uses_releases_and_restores_media_lease(
         audit_events: Vec::new(),
         max_token_ttl_ms: 30_000,
     };
-    let mut broker =
-        ManifoldBrokerRuntime::new(id(PROVIDER_EPOCH_ID), broker_adapter, admission_snapshot)
-            .expect("outer broker runtime");
+    let mut broker = ManifoldBrokerRuntime::new(
+        id(PROVIDER_EPOCH_ID),
+        broker_adapter,
+        control_lease_authority,
+        admission_snapshot,
+    )
+    .expect("outer broker runtime");
     let rejected_after_admission =
         broker_media_mutation(&mut broker, &grant, "consume-rejected", 29, 2_000);
 
     let mut rejected = rejected_after_admission.clone();
     rejected.command.command_id = id("command.media.session.stop");
     let unchanged_host = host.clone();
-    let unchanged_broker = broker.clone();
+    let unchanged_broker = broker.evidence();
     assert!(host
         .apply_broker_media_command_and_admit_runtime_lease(&mut broker, &rejected, 4_000)
         .is_err());
     assert_eq!(host, unchanged_host);
-    assert_eq!(broker, unchanged_broker);
+    assert_eq!(broker.evidence(), unchanged_broker);
 
     let mut rejected_after_admission = rejected_after_admission;
     rejected_after_admission.command.expected_authority_revision = broker
@@ -1579,7 +1641,7 @@ fn live_broker_mutation_atomically_mints_uses_releases_and_restores_media_lease(
         .contains(&rejected_after_admission.admission_use_request_id));
     assert!(host.snapshot().broker_lease_admissions.is_empty());
     let consumed_host = host.clone();
-    let consumed_broker = broker.clone();
+    let consumed_broker = broker.evidence();
     assert!(host
         .apply_broker_media_command_and_admit_runtime_lease(
             &mut broker,
@@ -1588,7 +1650,7 @@ fn live_broker_mutation_atomically_mints_uses_releases_and_restores_media_lease(
         )
         .is_err());
     assert_eq!(host, consumed_host);
-    assert_eq!(broker, consumed_broker);
+    assert_eq!(broker.evidence(), consumed_broker);
 
     let mutation = broker_media_mutation(&mut broker, &grant, "first", 30, 3_200);
     let attempt = host
@@ -1605,13 +1667,13 @@ fn live_broker_mutation_atomically_mints_uses_releases_and_restores_media_lease(
         .consumed_bounded_use_ids
         .contains(&mutation.admission_use_request_id));
     let committed_host = host.clone();
-    let committed_broker = broker.clone();
+    let committed_broker = broker.evidence();
     assert!(matches!(
         host.apply_broker_media_command_and_admit_runtime_lease(&mut broker, &mutation, 4_100),
         Err(ManifoldPeerRuntimeHostError::ReplayedMutation(_))
     ));
     assert_eq!(host, committed_host);
-    assert_eq!(broker, committed_broker);
+    assert_eq!(broker.evidence(), committed_broker);
 
     let acceptance = media_acceptance_request(
         &host,
