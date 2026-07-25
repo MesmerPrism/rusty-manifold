@@ -3,6 +3,7 @@
 #[cfg(feature = "fixture-export")]
 mod fixture_export;
 mod lease_authority;
+mod lease_lifecycle;
 mod lease_projection;
 mod runtime;
 
@@ -10,6 +11,7 @@ mod runtime;
 #[doc(hidden)]
 pub use fixture_export::export_broker_adapter_fixtures;
 pub use lease_authority::*;
+pub use lease_lifecycle::*;
 pub use lease_projection::*;
 pub use runtime::*;
 
@@ -17,11 +19,13 @@ use rusty_manifold_broker_product::{ManifoldBrokerProductLock, BROKER_PRODUCT_LO
 use rusty_manifold_model::{DottedId, Revision, SchemaId};
 use rusty_manifold_runtime_host::{
     ManifoldRuntimeApplicationReceipt, ManifoldRuntimeCommandDescriptor,
-    ManifoldRuntimeCommandRequest, ManifoldRuntimeDispatchOutcome, ManifoldRuntimeDispatchReceipt,
-    ManifoldRuntimeHost, ManifoldRuntimeHostError, ManifoldRuntimeHostSnapshot,
-    ManifoldRuntimeLease, ManifoldRuntimeRejectionReason, ManifoldRuntimeTypedParamsDigest,
-    HOST_APPLICATION_RECEIPT_SCHEMA, HOST_DISPATCH_RECEIPT_SCHEMA, HOST_SNAPSHOT_SCHEMA,
-    LEGACY_HOST_APPLICATION_RECEIPT_V1_SCHEMA, LEGACY_HOST_DISPATCH_RECEIPT_V1_SCHEMA,
+    ManifoldRuntimeCommandRequest, ManifoldRuntimeControlLeaseAdoptionReceipt,
+    ManifoldRuntimeControlLeaseAdoptionRequest, ManifoldRuntimeDispatchOutcome,
+    ManifoldRuntimeDispatchReceipt, ManifoldRuntimeHost, ManifoldRuntimeHostError,
+    ManifoldRuntimeHostSnapshot, ManifoldRuntimeLease, ManifoldRuntimeRejectionReason,
+    ManifoldRuntimeTypedParamsDigest, HOST_APPLICATION_RECEIPT_SCHEMA,
+    HOST_DISPATCH_RECEIPT_SCHEMA, HOST_SNAPSHOT_SCHEMA, LEGACY_HOST_APPLICATION_RECEIPT_V1_SCHEMA,
+    LEGACY_HOST_DISPATCH_RECEIPT_V1_SCHEMA,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -428,6 +432,11 @@ impl ManifoldBrokerAdapter {
     }
 
     /// Restarts an adapter from a durable Runtime Host snapshot and revalidates lock parity.
+    ///
+    /// # Errors
+    ///
+    /// Returns when packaged-lock, host binding, snapshot, or synchronized
+    /// control-lease owner validation fails.
     pub fn restart_from_json(
         config: ManifoldBrokerAdapterConfig,
         packaged_product_lock_bytes: &[u8],
@@ -518,6 +527,30 @@ impl ManifoldBrokerAdapter {
         }
     }
 
+    pub(crate) fn apply_control_lease_adoption(
+        &mut self,
+        request: &ManifoldRuntimeControlLeaseAdoptionRequest,
+        lease_authority: &ManifoldBrokerControlLeaseAuthority,
+    ) -> Result<ManifoldRuntimeControlLeaseAdoptionReceipt, ManifoldBrokerAdapterError> {
+        validate_lease_scope_closure(&self.product_lock, lease_authority.runtime_leases())?;
+        let receipt = self.host.apply_control_lease_adoption(request);
+        if receipt.applied {
+            validate_host_binding(&self.config, &self.product_lock, self.host.snapshot())?;
+            lease_authority
+                .validate_host_snapshot(self.host.snapshot())
+                .map_err(ManifoldBrokerAdapterError::ControlLeaseAuthority)?;
+        }
+        Ok(receipt)
+    }
+
+    pub(crate) fn supports_control_lease_scope(&self, scope: &DottedId) -> bool {
+        self.product_lock
+            .command_ids
+            .iter()
+            .filter_map(lease_scope_for_command)
+            .any(|allowed| &allowed == scope)
+    }
+
     /// Returns accepted Runtime Host state.
     #[must_use]
     pub const fn host_snapshot(&self) -> &ManifoldRuntimeHostSnapshot {
@@ -525,6 +558,10 @@ impl ManifoldBrokerAdapter {
     }
 
     /// Serializes durable Runtime Host state for process restart.
+    ///
+    /// # Errors
+    ///
+    /// Returns when Runtime Host snapshot serialization fails.
     pub fn snapshot_json(&self) -> Result<String, ManifoldBrokerAdapterError> {
         self.host
             .snapshot_json()
@@ -553,6 +590,7 @@ fn snapshot_from_lock(
         leases,
         applied_request_ids: Vec::new(),
         reviewed_sweep_ids: Vec::new(),
+        reviewed_control_lease_adoption_ids: Vec::new(),
         audit_events: Vec::new(),
     };
     validate_host_binding(config, lock, &snapshot)?;
@@ -682,7 +720,27 @@ fn validate_host_binding(
             return Err(ManifoldBrokerAdapterError::LeasePolicyMismatch);
         }
     }
+    validate_lease_scope_closure(lock, &snapshot.leases)?;
     Ok(())
+}
+
+fn validate_lease_scope_closure(
+    lock: &ManifoldBrokerProductLock,
+    leases: &[ManifoldRuntimeLease],
+) -> Result<(), ManifoldBrokerAdapterError> {
+    let allowed_scopes = lock
+        .command_ids
+        .iter()
+        .filter_map(lease_scope_for_command)
+        .collect::<BTreeSet<_>>();
+    if leases
+        .iter()
+        .any(|lease| !allowed_scopes.contains(&lease.scope))
+    {
+        Err(ManifoldBrokerAdapterError::LeasePolicyMismatch)
+    } else {
+        Ok(())
+    }
 }
 
 fn lease_scope_for_command(command_id: &DottedId) -> Option<DottedId> {

@@ -56,12 +56,19 @@ installed in that product's Runtime Host must be reproduced from one retained
 source application and remain byte-equal in the supplied owner view. Duplicate
 projected identities and owner-only or host-only divergence reject.
 
-`rusty.manifold.broker.runtime_evidence.v3` persists the control-lease owner
-evidence beside the Runtime Host, admission authority, bounded uses, and
-provider epoch. Restore does not trust its historical clock as current:
-`refresh_from_evidence` requires a separately supplied same-authority,
-same-clock-lineage view with non-regressing authority revision, sequence,
-monotonic time, wall time, and adjustment count, then reprojects every source.
+`rusty.manifold.broker.runtime_evidence.v4` persists the v2 control-lease owner
+evidence beside the Runtime Host, admission authority, generic bounded uses,
+an immutable ledger of every successfully authorized lifecycle use, pending
+lifecycle permits, explicit revoke/expiry invalidations, consumption
+tombstones, integrated lifecycle receipts, and provider epoch. Restore requires
+the lifecycle authorization ledger to partition exactly into pending,
+receipt-completed, or explicitly invalidated uses. These classes are pairwise
+disjoint, completed/invalidated uses must be consumption tombstones, and every
+receipt must retain the exact originally authorized use. Restore does not trust
+its historical clock as current: `refresh_from_v2_evidence` requires a separately supplied
+same-authority, same-clock-lineage view with non-regressing authority revision,
+sequence, monotonic time, wall time, and adjustment count, then replays the
+chronological transition ledger and reprojects every product lease.
 The library cannot authenticate who supplied that view; keeping it inside the
 synchronized authority owner remains a deployment trust boundary.
 The public constructor is therefore named
@@ -80,24 +87,71 @@ second restored writer. If a trusted owner deliberately forks one snapshot,
 one-use guarantees apply independently inside each unsupported split-brain
 fork; Manifold makes no global exactly-once claim in that deployment.
 
-One product retains at most 256 projected control leases. Owner evidence is
-also capped at 8 MiB of serialized typed JSON before source reprojection.
+One product retains at most 64 projected control leases. Owner evidence is
+also capped at 4,096 transitions and 48 MiB of serialized typed JSON before
+source reprojection. Authority snapshots are capped at 128 KiB and each exact
+transition at 512 KiB. Issue and renewal stop before a 64-transition/32 MiB
+cleanup suffix, enough for one accepted cleanup per maximum live product lease.
+Rejected generic decisions remain in integrated lifecycle receipts but do not
+consume accepted owner-transition capacity. Near the reserve boundary, cleanup
+is previewed against both owner and Host and only a fully applicable cleanup
+may consume a reserved permit/receipt slot.
 Current and legacy integrated runtime JSON entrypoints reject input above
-16 MiB before deserialization, and typed runtime restoration enforces the same
+64 MiB before deserialization, and typed runtime restoration enforces the same
 aggregate serialized budget before constructing live state.
 
-Ordinary v3 restore rejects released v2 evidence. Explicit
+Issue, renewal, release, and explicit lease-only expiry are admitted through
+operation-specific capabilities, bound to the exact compact request digest,
+provider epoch, token, verified identity, grant/client lock, expected owner
+revision, and scope or lease identity. Holder/requester fields are derived from
+the verified admission identity. Each attempt consumes its bound use exactly
+once. Generic authority rejection retains the exact rejected transition in the
+integrated lifecycle receipt without advancing accepted owner state.
+Accepted owner state and Runtime Host state commit together; Host rejection or
+composition failure discards both accepted candidates while retaining the
+consumption tombstone and failure receipt. Expiry binds an exact canonical set
+of product lease IDs. A generic sweep that also selects stream subscriptions,
+unrelated Manifold leases, or any other lease set is rejected before owner or
+Host application.
+
+Restore binds every accepted Host adoption to its exact nested owner
+transition, deterministic adoption identity, Manifold and Host revisions,
+operation-specific lease-id delta, and Host audit event, then requires the
+complete current Host lease set to equal the current owner set. This checkpoint
+does not claim a standalone reconstruction of every intermediate Host lease
+object after that object was later renewed or removed; a future chronological
+Host-state replay/digest layer can add that historical proof without changing
+current accepted-state authority.
+
+After all product leases and pending uses are drained,
+`rollover_drained_provider_epoch` remains available without appending another
+transition. It checkpoints complete source and result evidence with
+domain-separated digests, preserves the exact generic authority
+identity/revision/snapshot and clock lineage, preserves Runtime Host state and
+replay/audit history, compacts the empty product owner to a new baseline,
+invalidates old admission tokens and tombstones through a fresh admission
+snapshot, and installs a different provider epoch. Rollover rejects while any
+product lease or pending use remains.
+
+Ordinary v4 restore rejects released v2/v3 evidence. Explicit
 `from_legacy_v2_evidence_json` migration accepts it only when its exact host
 snapshot already closes over separately supplied validated owner lineage. The
 migration receipt binds domain-separated SHA-256 for the exact source JSON,
 compact typed source, adopted owner lineage, host snapshot, canonical host
-lease set, and resulting v3 evidence plus adapter/product/authority/clock
+lease set, and resulting current evidence plus adapter/product/authority/clock
 identities. Its fixed success outcome records that an existing authority was
 adopted without a new lease decision. V1 migration remains separately named
 and accepts no ambient upgrade through ordinary restore.
 A deserialized migration receipt is raw evidence until `validate_against`
 recomputes every binding from the source JSON, adapter config, owner evidence,
-and resulting v3 evidence.
+and resulting current evidence.
+
+Released v3 state enters through `from_legacy_v3_evidence_json`. Its migration
+first applies the Runtime Host v2-to-v3 snapshot migration, adopts the exact v1
+owner evidence as the immutable v2 baseline, preserves pending generic command
+and capability uses as generic uses, and synthesizes no lifecycle use,
+transition, or receipt. This prevents old command permits from becoming lease
+authority during upgrade.
 Migration `*_sha256` bindings are domain-separated rather than plain hashes of
 the artifact alone. Their public framing is UTF-8 domain bytes, one zero byte,
 then exact artifact bytes; output is lower-case `sha256:<hex>`. The crate
@@ -171,7 +225,7 @@ the consumed Broker use.
 
 This checkpoint is an intentional pre-1.0 Rust API and durable-evidence break:
 raw Runtime Host lease vectors are no longer accepted by Broker adapter/runtime
-constructors, and normal integrated restore accepts only runtime evidence v3.
+constructors, and normal integrated restore accepts only runtime evidence v4.
 Downstream callers must:
 
 1. obtain a caller-attested current Manifold authority snapshot and clock;

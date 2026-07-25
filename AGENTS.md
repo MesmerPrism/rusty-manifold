@@ -122,12 +122,24 @@ it must not define Lattice relation semantics or default to legacy
 - Normal Broker adapter construction and restart accept no raw Runtime Host
   lease collection. They require one private-field, non-cloneable
   `ManifoldBrokerControlLeaseAuthority` whose source applications reproduce
-  every product-relevant host lease. `rusty.manifold.broker.runtime_evidence.v3`
-  retains that owner state beside host and admission state. Restart requires a
-  separately supplied non-regressing retained authority/clock view; v2 evidence
-  enters only through explicit authority-adoption migration. One product is
-  capped at 256 projected leases and 8 MiB owner evidence; current/legacy
-  integrated runtime evidence is capped at 16 MiB before JSON decode.
+  every product-relevant host lease. `rusty.manifold.broker.runtime_evidence.v4`
+  retains the v2 owner transition ledger beside host, admission, exact
+  lifecycle authorization/disposition records, consumption tombstones, and
+  integrated lifecycle receipts. Restore requires every successful lifecycle
+  authorization to be exactly pending, receipt-completed, or explicitly
+  invalidated by token revoke/expiry. Issue, renewal, release, and lease-only expiry serialize through
+  the same `&mut ManifoldBrokerRuntime` gate as commands. An accepted owner
+  transition commits only with matching Runtime Host adoption; adoption
+  failure commits only permit consumption and failure evidence. Restart
+  requires a separately supplied non-regressing retained authority/clock view.
+  V3 evidence enters only through explicit lifecycle migration, which preserves
+  generic pending uses without promoting them to lifecycle authority. One
+  product is capped at 64 projected leases and owner evidence reserves one
+  512 KiB transition per possible cleanup near its 4,096-transition/48 MiB
+  limits; current/legacy integrated runtime evidence is capped at 64 MiB before
+  JSON decode. Once drained, an in-band epoch rollover checkpoints the complete
+  prior evidence by digest, preserves owner/Host lineage, compacts the empty
+  product owner baseline, and invalidates old admission state.
   Construction, evidence, and continuity restore are trusted deployment-owner
   APIs. Deployment must externally fence one writable runtime per provider
   epoch across processes/storage; library validation does not prove exclusive

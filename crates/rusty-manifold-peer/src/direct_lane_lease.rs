@@ -1654,6 +1654,7 @@ mod tests {
             }],
             applied_request_ids: Vec::new(),
             reviewed_sweep_ids: Vec::new(),
+            reviewed_control_lease_adoption_ids: Vec::new(),
             audit_events: Vec::new(),
         })
         .expect("direct Runtime Host");
@@ -1942,6 +1943,7 @@ mod tests {
             }],
             applied_request_ids: Vec::new(),
             reviewed_sweep_ids: Vec::new(),
+            reviewed_control_lease_adoption_ids: Vec::new(),
             audit_events: Vec::new(),
         })
         .expect("runtime");

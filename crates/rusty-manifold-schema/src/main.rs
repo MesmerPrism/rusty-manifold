@@ -170,6 +170,7 @@ fn admission_entries() -> Vec<SchemaEntry> {
     ]
 }
 
+#[allow(clippy::too_many_lines)]
 fn broker_adapter_entries() -> Vec<SchemaEntry> {
     vec![
         entry(
@@ -249,8 +250,13 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
         ),
         entry(
             "rusty.manifold.broker.runtime_evidence.v3",
-            "ManifoldBrokerRuntimeEvidence",
+            "LegacyManifoldBrokerRuntimeEvidenceV3",
             &["fixtures/broker-adapter/runtime-evidence-v3.json"],
+        ),
+        entry(
+            "rusty.manifold.broker.runtime_evidence.v4",
+            "ManifoldBrokerRuntimeEvidence",
+            &["fixtures/broker-adapter/runtime-evidence-v4.json"],
         ),
         entry(
             "rusty.manifold.broker.control_lease_source.v1",
@@ -263,6 +269,36 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
             &[],
         ),
         entry(
+            "rusty.manifold.broker.control_lease_authority_evidence.v2",
+            "ManifoldBrokerControlLeaseAuthorityEvidenceV2",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_transition.v1",
+            "ManifoldBrokerControlLeaseTransition",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_lifecycle_request.v1",
+            "ManifoldBrokerControlLeaseLifecycleRequest",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_lifecycle_use.v1",
+            "ManifoldBrokerControlLeaseLifecycleUse",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_lifecycle_authorization_receipt.v1",
+            "ManifoldBrokerControlLeaseLifecycleAuthorizationReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_lifecycle_receipt.v1",
+            "ManifoldBrokerControlLeaseLifecycleReceipt",
+            &[],
+        ),
+        entry(
             "rusty.manifold.broker.runtime_evidence_migration_receipt.v1",
             "ManifoldBrokerRuntimeMigrationReceipt",
             &[],
@@ -271,6 +307,16 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
             "rusty.manifold.broker.runtime_evidence_authority_migration_receipt.v1",
             "ManifoldBrokerRuntimeAuthorityMigrationReceipt",
             &["fixtures/broker-adapter/runtime-evidence-v2-authority-migration-receipt.json"],
+        ),
+        entry(
+            "rusty.manifold.broker.runtime_evidence_lifecycle_migration_receipt.v1",
+            "ManifoldBrokerRuntimeLifecycleMigrationReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.runtime_epoch_rollover_receipt.v1",
+            "ManifoldBrokerRuntimeEpochRolloverReceipt",
+            &[],
         ),
         entry(
             "rusty.manifold.broker.runtime_lease_projection.v1",
@@ -316,11 +362,21 @@ fn runtime_host_entries() -> Vec<SchemaEntry> {
     vec![
         entry(
             "rusty.manifold.runtime_host.snapshot.v1",
-            "ManifoldRuntimeHostSnapshot",
+            "LegacyManifoldRuntimeHostSnapshotV1",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.snapshot.v2",
+            "LegacyManifoldRuntimeHostSnapshotV2",
             &[
                 "fixtures/runtime-host/synthetic-runtime-host-snapshot.json",
                 "fixtures/runtime-host/synthetic-runtime-host-restarted-snapshot.json",
             ],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.snapshot.v3",
+            "ManifoldRuntimeHostSnapshot",
+            &[],
         ),
         entry(
             "rusty.manifold.runtime_host.command_request.v1",
@@ -351,6 +407,16 @@ fn runtime_host_entries() -> Vec<SchemaEntry> {
             "rusty.manifold.runtime_host.lease_expiry_receipt.v1",
             "ManifoldRuntimeLeaseExpiryReceipt",
             &["fixtures/runtime-host/synthetic-runtime-lease-expiry-receipt.json"],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.control_lease_adoption_request.v1",
+            "ManifoldRuntimeControlLeaseAdoptionRequest",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.control_lease_adoption_receipt.v1",
+            "ManifoldRuntimeControlLeaseAdoptionReceipt",
+            &[],
         ),
         entry(
             "rusty.manifold.runtime_host.audit_event.v1",

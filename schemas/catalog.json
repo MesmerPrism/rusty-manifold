@@ -420,11 +420,21 @@
     },
     {
       "schema_id": "rusty.manifold.runtime_host.snapshot.v1",
-      "rust_type": "ManifoldRuntimeHostSnapshot",
+      "rust_type": "LegacyManifoldRuntimeHostSnapshotV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.snapshot.v2",
+      "rust_type": "LegacyManifoldRuntimeHostSnapshotV2",
       "fixture_paths": [
         "fixtures/runtime-host/synthetic-runtime-host-snapshot.json",
         "fixtures/runtime-host/synthetic-runtime-host-restarted-snapshot.json"
       ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.snapshot.v3",
+      "rust_type": "ManifoldRuntimeHostSnapshot",
+      "fixture_paths": []
     },
     {
       "schema_id": "rusty.manifold.runtime_host.command_request.v1",
@@ -461,6 +471,16 @@
       "fixture_paths": [
         "fixtures/runtime-host/synthetic-runtime-lease-expiry-receipt.json"
       ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.control_lease_adoption_request.v1",
+      "rust_type": "ManifoldRuntimeControlLeaseAdoptionRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.control_lease_adoption_receipt.v1",
+      "rust_type": "ManifoldRuntimeControlLeaseAdoptionReceipt",
+      "fixture_paths": []
     },
     {
       "schema_id": "rusty.manifold.runtime_host.audit_event.v1",
@@ -581,9 +601,16 @@
     },
     {
       "schema_id": "rusty.manifold.broker.runtime_evidence.v3",
-      "rust_type": "ManifoldBrokerRuntimeEvidence",
+      "rust_type": "LegacyManifoldBrokerRuntimeEvidenceV3",
       "fixture_paths": [
         "fixtures/broker-adapter/runtime-evidence-v3.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence.v4",
+      "rust_type": "ManifoldBrokerRuntimeEvidence",
+      "fixture_paths": [
+        "fixtures/broker-adapter/runtime-evidence-v4.json"
       ]
     },
     {
@@ -597,6 +624,36 @@
       "fixture_paths": []
     },
     {
+      "schema_id": "rusty.manifold.broker.control_lease_authority_evidence.v2",
+      "rust_type": "ManifoldBrokerControlLeaseAuthorityEvidenceV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_transition.v1",
+      "rust_type": "ManifoldBrokerControlLeaseTransition",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_lifecycle_request.v1",
+      "rust_type": "ManifoldBrokerControlLeaseLifecycleRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_lifecycle_use.v1",
+      "rust_type": "ManifoldBrokerControlLeaseLifecycleUse",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_lifecycle_authorization_receipt.v1",
+      "rust_type": "ManifoldBrokerControlLeaseLifecycleAuthorizationReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_lifecycle_receipt.v1",
+      "rust_type": "ManifoldBrokerControlLeaseLifecycleReceipt",
+      "fixture_paths": []
+    },
+    {
       "schema_id": "rusty.manifold.broker.runtime_evidence_migration_receipt.v1",
       "rust_type": "ManifoldBrokerRuntimeMigrationReceipt",
       "fixture_paths": []
@@ -607,6 +664,16 @@
       "fixture_paths": [
         "fixtures/broker-adapter/runtime-evidence-v2-authority-migration-receipt.json"
       ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence_lifecycle_migration_receipt.v1",
+      "rust_type": "ManifoldBrokerRuntimeLifecycleMigrationReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_epoch_rollover_receipt.v1",
+      "rust_type": "ManifoldBrokerRuntimeEpochRolloverReceipt",
+      "fixture_paths": []
     },
     {
       "schema_id": "rusty.manifold.broker.runtime_lease_projection.v1",

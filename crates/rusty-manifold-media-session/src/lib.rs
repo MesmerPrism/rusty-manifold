@@ -1217,6 +1217,7 @@ mod tests {
             }],
             applied_request_ids: Vec::new(),
             reviewed_sweep_ids: Vec::new(),
+            reviewed_control_lease_adoption_ids: Vec::new(),
             audit_events: Vec::new(),
         };
         let command = ManifoldRuntimeCommandRequest {

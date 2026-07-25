@@ -69,14 +69,18 @@ and safe to use in tests, generated schemas, documentation, and clients.
   provenance. Tests revalidate every field against retained authority-owner
   state before exposing the one-to-one Runtime Host lease. It is not a
   signature, portable proof, or lease issuance path.
-  `runtime-evidence-v3.json` closes the current source applications and
-  retained authority/clock view over the exact Runtime Host lease set, admission
-  state, bounded-use state, and provider epoch. It is deterministic synthetic
-  restart evidence, not a portable freshness claim.
+  `runtime-evidence-v4.json` closes the current owner transition ledger and
+  retained authority/clock view over the exact Runtime Host lease set,
+  admission state, generic bounded uses, the immutable lifecycle-authorization
+  ledger and pending/receipt/invalidated disposition, lifecycle receipts, and
+  provider epoch. It is deterministic synthetic restart evidence, not a
+  portable freshness claim. `runtime-evidence-v3.json` is the released input
+  retained for explicit lifecycle migration; its generic pending uses remain
+  generic and are never promoted to lifecycle authority.
   `runtime-evidence-v2.json` is a released legacy input retained only for the
-  explicit v2-to-v3 authority-adoption route. Its paired migration receipt
+  explicit v2 authority-adoption route. Its paired migration receipt
   binds the exact source bytes, typed source, owner lineage, host, canonical
-  lease set, adapter/product/clock identities, and resulting v3 evidence.
+  lease set, adapter/product/clock identities, and resulting current evidence.
   The crate's integrated-runtime tests extend this matrix with bounded-use
   admission, product-unselected and stale work, cross-client/capability damage,
   replay, independent-use survival across unrelated revision advances,

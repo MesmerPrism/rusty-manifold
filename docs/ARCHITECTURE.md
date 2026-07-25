@@ -28,10 +28,11 @@ Broker Runtime Host leases are derived state, not a second lease authority.
 Normal Broker construction and restart retain a synchronized
 `ManifoldBrokerControlLeaseAuthority` containing the current owner view and
 exact source applications; no raw Runtime Host lease collection enters those
-paths. Durable runtime evidence v3 closes that owner state over host and
-admission state and requires a separately supplied non-regressing owner view
-before restart. Lifecycle transport advances Manifold authority first and is a
-separate implementation layer from this restart closure.
+paths. Durable runtime evidence v4 closes the owner baseline and chronological
+lease transitions over Host/admission state, lifecycle authorization
+disposition, and integrated owner/Host receipts. Restart requires a separately
+supplied non-regressing owner view. Platform lifecycle transport remains a
+downstream adoption layer rather than a competing authority.
 
 Remote camera control follows the same rule. Manifold owns source-only command
 descriptors, envelopes, authority reviews, and dispatch receipts for receiver

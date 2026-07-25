@@ -149,12 +149,32 @@ fn export_runtime_evidence(out: &Path) -> Result<(), Box<dyn std::error::Error>>
         admission,
     )?;
     let current_evidence = runtime.evidence();
-    write_json(out.join("runtime-evidence-v3.json"), &current_evidence)?;
+    write_json(out.join("runtime-evidence-v4.json"), &current_evidence)?;
+
+    let mut legacy_host = serde_json::to_value(&current_evidence.host_snapshot)?;
+    let legacy_host_object = legacy_host
+        .as_object_mut()
+        .ok_or("Runtime Host fixture must serialize as an object")?;
+    legacy_host_object.insert(
+        "$schema".to_owned(),
+        serde_json::Value::String("rusty.manifold.runtime_host.snapshot.v2".to_owned()),
+    );
+    legacy_host_object.remove("reviewed_control_lease_adoption_ids");
+    let legacy_v3 = serde_json::json!({
+        "$schema": crate::LEGACY_BROKER_RUNTIME_EVIDENCE_V3_SCHEMA,
+        "provider_epoch_id": current_evidence.provider_epoch_id.clone(),
+        "host_snapshot": legacy_host.clone(),
+        "control_lease_authority": current_evidence.control_lease_authority.baseline.clone(),
+        "admission_snapshot": current_evidence.admission_snapshot.clone(),
+        "pending_bounded_uses": current_evidence.pending_bounded_uses.clone(),
+        "consumed_bounded_use_ids": current_evidence.consumed_bounded_use_ids.clone(),
+    });
+    write_json(out.join("runtime-evidence-v3.json"), &legacy_v3)?;
 
     let legacy_v2 = serde_json::json!({
         "$schema": crate::LEGACY_BROKER_RUNTIME_EVIDENCE_V2_SCHEMA,
         "provider_epoch_id": current_evidence.provider_epoch_id,
-        "host_snapshot": current_evidence.host_snapshot,
+        "host_snapshot": legacy_host,
         "admission_snapshot": current_evidence.admission_snapshot,
         "pending_bounded_uses": current_evidence.pending_bounded_uses,
         "consumed_bounded_use_ids": current_evidence.consumed_bounded_use_ids,

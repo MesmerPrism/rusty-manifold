@@ -171,16 +171,19 @@ caller-supplied or cloned state.
 The first Broker-adoption checkpoint now closes construction and restart:
 normal adapter APIs require a `ManifoldBrokerControlLeaseAuthority`, accept no
 raw Runtime Host lease collection, and validate the exact projected set on
-both fresh construction and restart. Runtime evidence v3 retains current owner
-state plus ordered source applications. Restore requires a separately supplied
+both fresh construction and restart. Runtime evidence v4 retains the v2 owner
+baseline and chronological transition ledger, Runtime Host/admission state,
+immutable lifecycle authorizations and their pending/receipt/invalidated
+disposition, and integrated owner/Host receipts. Restore requires a separately supplied
 same-authority, same-clock-lineage, non-regressing retained view and reprojects
-every source before exposing the runtime. Released v2 evidence is accepted only
+every source and transition before exposing the runtime. Released v2/v3 evidence is accepted only
 by an explicitly named authority-adoption migration that cannot synthesize a
 lease decision and whose receipt binds the exact raw/typed source, owner, host,
-lease set, product, clock, and result. The product owner is capped at 256
-projected leases and 8 MiB serialized evidence; runtime evidence JSON is capped
-at 16 MiB before decode. Issue, renewal, release, explicit expiry, and revocation
-transport remain separate lifecycle sub-slices.
+lease set, product, clock, and result. The product owner is capped at 64
+projected leases, 4,096 transitions, and 48 MiB serialized evidence; runtime
+evidence JSON is capped at 64 MiB before decode. Issue, renewal, release, and
+exact lease-only expiry now serialize through the same Broker runtime gate;
+transport and platform lifecycle adoption remain separate downstream slices.
 
 The fixture CLI route is:
 

@@ -33,11 +33,12 @@ checkpoint supplies this provider contract; making it mandatory for all
 Broker construction/restart paths is now enforced by
 `ManifoldBrokerControlLeaseAuthority`: normal adapter APIs accept no raw lease
 collection and reject restored host leases that differ from owner-derived
-projections. Broker runtime evidence v3 retains owner, host, and admission state
-together and requires a separately supplied non-regressing owner view during
-restart. Runtime Host still exposes compatibility construction and local expiry
-for non-Broker owners; the Broker path must not treat either as generic lease
-authority. Owner-driven lifecycle synchronization is the next sub-slice.
+projections. Broker runtime evidence v4 retains the chronological owner
+transitions, Host/admission state, lifecycle authorization disposition, and
+integrated adoption receipts together, and requires a separately supplied
+non-regressing owner view during restart. Runtime Host still exposes
+compatibility construction and local expiry for non-Broker owners; the Broker
+path must not treat either as generic lease authority.
 
 When a command has typed low-rate effect parameters, its request includes
 `rusty.manifold.runtime_host.typed_params_digest.v1`: the exact parameter type,
