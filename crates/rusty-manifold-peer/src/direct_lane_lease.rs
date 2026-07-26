@@ -1651,10 +1651,12 @@ mod tests {
                 scope,
                 holder_id: client_id.clone(),
                 expires_at_ms: 100_000,
+                derivative_binding: None,
             }],
             applied_request_ids: Vec::new(),
             reviewed_sweep_ids: Vec::new(),
             reviewed_control_lease_adoption_ids: Vec::new(),
+            reviewed_derivative_lease_revocation_ids: Vec::new(),
             audit_events: Vec::new(),
         })
         .expect("direct Runtime Host");
@@ -1940,10 +1942,12 @@ mod tests {
                 scope: runtime_scope,
                 holder_id: runtime_client_id.clone(),
                 expires_at_ms: 100_000,
+                derivative_binding: None,
             }],
             applied_request_ids: Vec::new(),
             reviewed_sweep_ids: Vec::new(),
             reviewed_control_lease_adoption_ids: Vec::new(),
+            reviewed_derivative_lease_revocation_ids: Vec::new(),
             audit_events: Vec::new(),
         })
         .expect("runtime");

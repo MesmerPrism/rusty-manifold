@@ -551,6 +551,12 @@ impl ManifoldBrokerAdapter {
             .any(|allowed| &allowed == scope)
     }
 
+    pub(crate) fn product_features(
+        &self,
+    ) -> &[rusty_manifold_broker_product::ManifoldBrokerFeature] {
+        &self.product_lock.features
+    }
+
     /// Returns accepted Runtime Host state.
     #[must_use]
     pub const fn host_snapshot(&self) -> &ManifoldRuntimeHostSnapshot {
@@ -591,6 +597,7 @@ fn snapshot_from_lock(
         applied_request_ids: Vec::new(),
         reviewed_sweep_ids: Vec::new(),
         reviewed_control_lease_adoption_ids: Vec::new(),
+        reviewed_derivative_lease_revocation_ids: Vec::new(),
         audit_events: Vec::new(),
     };
     validate_host_binding(config, lock, &snapshot)?;
@@ -907,6 +914,7 @@ mod tests {
             scope: id("lease.media.session"),
             holder_id: id("client.parity"),
             expires_at_ms: 60_000,
+            derivative_binding: None,
         }
     }
 

@@ -17,7 +17,10 @@ One durable snapshot retains:
 - accepted/revoked/expired N-peer mesh membership and ranked direct routes;
 - real direct-lane leases and their replay-protected mutations;
 - product-bound media-session decisions, the embedded media-command Runtime
-  Host, and retained outer-broker-to-inner-lease admission/release history; and
+  Host, and retained outer-broker-to-inner-lease admission/release history;
+- exact Broker revocation-barrier convergence, media cleanup obligations,
+  derivative Runtime Host lease-removal receipts, and terminal cleanup
+  completions; and
 - one strictly ordered, append-only audit sequence spanning every authority
   family.
 
@@ -50,6 +53,36 @@ reimplement enrollment, signature, session, mesh, route, or lease decisions.
   commits both states only on success. Stop/revoke precedes replay-guarded
   release. A fresh bounded use may start the same immutable grant again after
   release while older generations remain audit history.
+- Snapshot v3 joins an exact converged Broker barrier by provider epoch,
+  application, lease, and consumer identity. It revokes dependent peer media
+  decisions, sessions, routes, and streams, then atomically removes complete
+  byte-equal derivative leases through Runtime Host v4. Each Broker-backed
+  inner lease is minted with accepted lineage binding the Broker provider
+  epoch, outer control lease, and exact one-use admission authorization.
+  Preflight, commit, restart, and convergence revalidate that binding against
+  retained Broker grant and use receipts. Runtime Host removes only the
+  complete current set matching the revoked outer lease; an unbound,
+  unrelated, mixed, or partial set fails closed. Cleanup obligations remain
+  durable until a separate replay-protected completion request records
+  terminal platform cleanup. Only that completion receipt is suitable for the
+  Broker consumer-acknowledgement digest; convergence alone is not cleanup.
+- A peer host advances to a fresh drained Broker provider epoch only through
+  `rollover_drained_broker_provider_epoch`. The peer verifies the exact Broker
+  source/result evidence digests and counts, requires every source-epoch peer
+  convergence to have terminal cleanup and an exact Broker acknowledgement,
+  retains all convergence and replay/audit history, and appends a peer-owned
+  checkpoint digest for the source epoch and immutable audit prefix. Restart
+  accepts historical Broker joins only through this ordered checkpoint chain;
+  active admissions must always belong to the current live Broker epoch.
+- Released snapshots v1 and v2 enter only through explicit migration. V1
+  migration initializes empty convergence/cleanup collections; both migrations
+  initialize an empty rollover-checkpoint chain without inventing a revocation,
+  terminal acknowledgement, or epoch transition. For an active legacy
+  Broker-backed admission, migration backfills a derivative binding only when
+  the live Broker join proves one exact provider epoch, outer lease, grant, and
+  use receipt for the retained inner lease. Ambiguous, damaged, or historical
+  pre-binding convergence shapes are rejected rather than assigned invented
+  lineage.
 
 ## Boundary
 
@@ -73,5 +106,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\check_all.ps1
 
 The focused tests cover snapshot restart and damage, exact current revisions,
 rendezvous/session/direct-lane replay, key rotation recovery, credential
-revocation invalidation, split-brain rejection, expiry/sweep replay, and a
-real peer-session-scoped direct-lane lease.
+revocation invalidation, split-brain rejection, expiry/sweep replay, a real
+peer-session-scoped direct-lane lease, Broker-barrier convergence, derivative
+lease lineage and complete-set removal, legacy binding backfill, damaged
+binding rejection, and replay-protected terminal cleanup completion.

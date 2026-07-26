@@ -1,12 +1,13 @@
-# Manifold Runtime Host v1
+# Manifold Runtime Host
 
 `rusty-manifold-runtime-host` is the source-only authority engine for accepted
 runtime state. It has no sockets, platform SDKs, dynamic plugin loader, UI, or
 product policy.
 
-The host owns a durable revisioned snapshot containing the command registry,
-accepted leases, replay identities, and append-only audit events. Command work
-is deliberately split:
+Current snapshot/audit v4 owns the command registry, accepted leases, command
+and adoption replay identities, derivative-revocation replay identities, and
+append-only audit events. Released snapshots migrate explicitly rather than
+being accepted as current state. Command work is deliberately split:
 
 1. `review_command` checks schema, revision, replay, freshness, registration,
    and required lease identity/scope/holder/expiry without mutation.
@@ -18,6 +19,38 @@ is deliberately split:
    changes accepted state.
 5. snapshot JSON round-trips preserve revision, replay guards, leases, and
    audit history across restart.
+
+Control-lease adoption is a separate typed path. Adoption request/receipt v2
+accepts generic issue, renewal, holder release, authority-owned revocation, or
+lease-only expiry applications. The host validates the complete application
+against the exact supplied prior Manifold authority snapshot before applying
+the operation-specific lease delta. Revocation removes only a byte-equal
+current Host lease; a substituted authority, application, holder, scope,
+expiry, prior snapshot, or Host revision rejects without changing accepted
+lease state. Adoption identities and audit survive restart, so replay remains
+rejected.
+
+Derivative-lease revocation v1 is the downstream convergence path for leases
+whose authority comes from an upstream accepted revocation. The coordinator
+supplies a nonempty lease-id-ordered set of complete current Host lease
+objects, a distinct one-shot convergence identity, and an
+`upstream_revocation_proof.v1`. That proof binds the exact provider epoch,
+prior generic authority snapshot, accepted revocation application, and
+tombstone. Its fields are private: callers must construct it through the
+validation API, and Runtime Host revalidates it immediately before mutation
+and again from retained audit state. Each accepted derivative lease carries
+`derivative_lease_binding.v1`, which binds its coordinator-issued identity to
+the provider epoch, upstream control lease, and one-use source authorization
+that created it. Runtime Host derives the complete current set matching the
+proof's provider epoch and revoked upstream lease, compares that set and every
+lease object byte-for-byte, and removes the whole set in one revision or
+removes none. Exact input and proof are retained in audit event v4; the receipt
+revalidates against live or restarted snapshot v4. Replay, stale revision,
+fabricated upstream lineage, noncanonical order, empty input, identity
+aliasing, unbound or unrelated leases, partial matching sets, and any
+lease-object substitution fail closed. The convergence coordinator remains
+responsible for authenticating that the proof's provider epoch is the live
+upstream owner before calling Runtime Host.
 
 An accepted lease in a Runtime Host snapshot must ultimately retain its
 upstream Manifold authority provenance. The Broker adapter's source-only
@@ -33,12 +66,17 @@ checkpoint supplies this provider contract; making it mandatory for all
 Broker construction/restart paths is now enforced by
 `ManifoldBrokerControlLeaseAuthority`: normal adapter APIs accept no raw lease
 collection and reject restored host leases that differ from owner-derived
-projections. Broker runtime evidence v4 retains the chronological owner
-transitions, Host/admission state, lifecycle authorization disposition, and
-integrated adoption receipts together, and requires a separately supplied
-non-regressing owner view during restart. Runtime Host still exposes
+projections. Broker runtime evidence v5 retains chronological owner
+transitions, Host/admission state, lifecycle authorization disposition,
+integrated adoption receipts, and administrative-revocation barriers together,
+and requires a separately supplied non-regressing owner view during restart.
+Runtime Host still exposes
 compatibility construction and local expiry for non-Broker owners; the Broker
 path must not treat either as generic lease authority.
+
+Released snapshot/audit v3 remains migration input. Explicit restart migration
+initializes derivative-revocation replay state and upgrades audit vocabulary to
+v4 without inventing a derivative cleanup decision.
 
 When a command has typed low-rate effect parameters, its request includes
 `rusty.manifold.runtime_host.typed_params_digest.v1`: the exact parameter type,

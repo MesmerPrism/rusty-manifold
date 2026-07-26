@@ -7,8 +7,15 @@ replay, untrusted identity, role escalation, high-rate payload, and advisory
 command rejection.
 
 The `runtime-host/` fixtures prove snapshot/restart parity, command dispatch
-and application receipts, explicit lease expiry, and audit persistence. Damaged
-runtime-host requests cover unknown commands and missing/expired leases.
+and application receipts, explicit lease expiry, v2 control-lease revocation
+adoption, derivative-lease convergence, and audit persistence. Accepted
+revocation adoption removes only exact leases. Derivative cleanup removes the
+complete current set whose accepted binding matches the proof's provider epoch
+and upstream control lease. The paired damaged application and substituted
+derivative binding are rejected without moving Host lease state. A v3-to-v4
+migration receipt proves replay state is initialized without inventing cleanup.
+Damaged runtime-host requests also cover unknown commands and missing/expired
+leases.
 Typed-parameter digest compatibility remains optional in the baseline fixture
 documents, while focused Runtime Host tests prove canonical digest propagation,
 tamper rejection, and the bounded canonical-size rule.
@@ -29,9 +36,12 @@ and safe to use in tests, generated schemas, documentation, and clients.
 - `synthetic/`: deterministic synthetic scalar source profiles and generated
   JSONL sample fixtures.
 - `stream-subscription/`: stream subscription request, renewal, release, accepted, and rejection examples.
-- `command/`: command and lease request, renewal, release, acknowledgement,
-  rejection, and remote-camera command handoff examples.
-- `authority/`: command authority snapshots tying host, clock, stream registry, module runtime, command ids, and leases together, including the remote-camera Q2Q session authority snapshot.
+- `command/`: command and lease request, renewal, release, authority-owned
+  revocation, acknowledgement, rejection, and remote-camera command handoff
+  examples.
+- `authority/`: command authority snapshots tying host, clock, stream registry,
+  module runtime, command ids, leases, and retained revocation tombstones
+  together, including the remote-camera Q2Q session authority snapshot.
 - `audit/`: authority audit-event examples.
 - `authority-review/`: deterministic command authority review outputs from the fixture CLI, including the remote-camera Q2Q receiver, sender, status, and stop reviews.
 - `command-dispatch/`: deterministic source-only command dispatch receipt outputs from the fixture CLI, including the remote-camera Q2Q receiver-first handoff receipts.
@@ -41,6 +51,8 @@ and safe to use in tests, generated schemas, documentation, and clients.
 - `lease-review/`: deterministic lease authority review outputs from the fixture CLI.
 - `lease-release-review/`: deterministic lease release authority review outputs from the fixture CLI.
 - `lease-renewal-review/`: deterministic lease renewal authority review outputs from the fixture CLI.
+- `lease-revocation-review/`: deterministic accepted and authority-mismatch
+  administrative lease-revocation reviews.
 - `stream-registry-review/`: deterministic stream-registry authority review outputs from the fixture CLI.
 - `stream-subscription-review/`: deterministic stream-subscription authority review outputs from the fixture CLI.
 - `stream-subscription-release-review/`: deterministic stream-subscription release authority review outputs from the fixture CLI.
@@ -69,12 +81,22 @@ and safe to use in tests, generated schemas, documentation, and clients.
   provenance. Tests revalidate every field against retained authority-owner
   state before exposing the one-to-one Runtime Host lease. It is not a
   signature, portable proof, or lease issuance path.
-  `runtime-evidence-v4.json` closes the current owner transition ledger and
-  retained authority/clock view over the exact Runtime Host lease set,
-  admission state, generic bounded uses, the immutable lifecycle-authorization
-  ledger and pending/receipt/invalidated disposition, lifecycle receipts, and
-  provider epoch. It is deterministic synthetic restart evidence, not a
-  portable freshness claim. `runtime-evidence-v3.json` is the released input
+  `runtime-evidence-v5.json` is the current deterministic restart evidence. It
+  closes owner evidence v3 and transition v2 over the exact Runtime Host lease
+  set, admission state, lifecycle authorization/disposition, revocation-use
+  invalidations, fail-closed revocation barriers, barrier-recovery receipts,
+  terminal consumer acknowledgements, exact committed mutation and
+  non-command capability-use receipts, terminal admission-token history,
+  the immutable generic-use authorization ledger that closes complete
+  use-request/token/grant/client-lock provenance, explicit generic-use
+  invalidations, lifecycle receipts, accumulated
+  cross-epoch control-lease request replay identities, and provider epoch.
+  `runtime-evidence-v4.json` remains
+  byte-for-byte as the
+  released migration input; its paired revocation-migration receipt binds the
+  exact source bytes and decision-free v5 result and records that no barrier
+  was synthesized. Neither fixture is a portable freshness claim.
+  `runtime-evidence-v3.json` is the released input
   retained for explicit lifecycle migration; its generic pending uses remain
   generic and are never promoted to lifecycle authority.
   `runtime-evidence-v2.json` is a released legacy input retained only for the

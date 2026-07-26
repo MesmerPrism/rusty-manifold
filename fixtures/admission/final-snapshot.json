@@ -52,7 +52,41 @@
       "applied": true,
       "prior_authority_revision": 2,
       "resulting_authority_revision": 3,
-      "rejection_reason": null
+      "rejection_reason": null,
+      "use_authorization": {
+        "request": {
+          "$schema": "rusty.manifold.admission.use_request.v1",
+          "request_id": "request.admission.use",
+          "expected_authority_revision": 2,
+          "token_id": "token.session.0707070707070707070707070707070707070707070707070707070707070707",
+          "identity": {
+            "client_id": "client.quest.authorized",
+            "platform_subject": "io.github.mesmerprism.rustymanifold.admission.client",
+            "signing_fingerprint": "sha256:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+          },
+          "capability_id": "capability.command.session.list",
+          "issued_at_ms": 2000,
+          "expires_at_ms": 6000
+        },
+        "token": {
+          "$schema": "rusty.manifold.admission.token.v2",
+          "token_id": "token.session.0707070707070707070707070707070707070707070707070707070707070707",
+          "identity": {
+            "client_id": "client.quest.authorized",
+            "platform_subject": "io.github.mesmerprism.rustymanifold.admission.client",
+            "signing_fingerprint": "sha256:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+          },
+          "grant_id": "grant.quest.authorized",
+          "client_lock_id": "lock.client.quest.authorized",
+          "client_lock_fingerprint": "sha256:c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+          "capabilities": [
+            "capability.command.session.list"
+          ],
+          "issued_at_ms": 2000,
+          "expires_at_ms": 22000,
+          "issued_authority_revision": 2
+        }
+      }
     },
     {
       "$schema": "rusty.manifold.admission.audit_event.v2",

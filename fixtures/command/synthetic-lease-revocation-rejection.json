@@ -1,0 +1,9 @@
+{
+  "$schema": "rusty.manifold.command.lease_revocation_rejection.v1",
+  "request_id": "request.synthetic.lease_revocation.authority_mismatch",
+  "rejection_code": "authority_id_mismatch",
+  "message": "control lease revocation request authority does not own this snapshot",
+  "retryable": false,
+  "current_revision": 1,
+  "active_lease_count": 4
+}

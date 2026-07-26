@@ -56,19 +56,33 @@ installed in that product's Runtime Host must be reproduced from one retained
 source application and remain byte-equal in the supplied owner view. Duplicate
 projected identities and owner-only or host-only divergence reject.
 
-`rusty.manifold.broker.runtime_evidence.v4` persists the v2 control-lease owner
-evidence beside the Runtime Host, admission authority, generic bounded uses,
-an immutable ledger of every successfully authorized lifecycle use, pending
-lifecycle permits, explicit revoke/expiry invalidations, consumption
-tombstones, integrated lifecycle receipts, and provider epoch. Restore requires
+`rusty.manifold.broker.runtime_evidence.v5` persists v3 control-lease owner
+evidence and v2 transitions beside the Runtime Host, admission authority,
+generic bounded uses, an immutable authorization record for every successful
+generic use, terminal admission-token history, every successfully authorized
+lifecycle use, pending lifecycle
+permits, explicit invalidations, consumption tombstones, integrated lifecycle
+receipts, exact non-command capability-use receipts, and
+administrative-revocation barriers. Every retained mutation or non-command
+consumption
+receipt must reproduce its complete bounded-use object byte-for-byte from the
+authorization record, which in turn joins the exact applied admission audit
+revision and its complete request/token binding, retained grant/client-lock
+identity, capability, and live-or-terminal token identity. Command
+capabilities may only enter the Runtime Host mutation path; the generic
+capability-consumption path rejects them. Restore requires every authorized
+generic use to appear in exactly one of pending, explicitly invalidated,
+committed mutation, or committed non-command receipt state. It also requires
 the lifecycle authorization ledger to partition exactly into pending,
 receipt-completed, or explicitly invalidated uses. These classes are pairwise
 disjoint, completed/invalidated uses must be consumption tombstones, and every
-receipt must retain the exact originally authorized use. Restore does not trust
-its historical clock as current: `refresh_from_v2_evidence` requires a separately supplied
-same-authority, same-clock-lineage view with non-regressing authority revision,
-sequence, monotonic time, wall time, and adjustment count, then replays the
-chronological transition ledger and reprojects every product lease.
+receipt must retain the exact originally authorized use. Revocation-caused
+invalidations must join their exact barrier and lifecycle/application
+identities. Restore does not trust its historical clock as current:
+`refresh_from_v2_evidence` requires a separately supplied same-authority,
+same-clock-lineage view with non-regressing authority revision, sequence,
+monotonic time, wall time, and adjustment count, then replays the chronological
+transition ledger and reprojects every product lease.
 The library cannot authenticate who supplied that view; keeping it inside the
 synchronized authority owner remains a deployment trust boundary.
 The public constructor is therefore named
@@ -100,12 +114,14 @@ Current and legacy integrated runtime JSON entrypoints reject input above
 64 MiB before deserialization, and typed runtime restoration enforces the same
 aggregate serialized budget before constructing live state.
 
-Issue, renewal, release, and explicit lease-only expiry are admitted through
-operation-specific capabilities, bound to the exact compact request digest,
-provider epoch, token, verified identity, grant/client lock, expected owner
-revision, and scope or lease identity. Holder/requester fields are derived from
-the verified admission identity. Each attempt consumes its bound use exactly
-once. Generic authority rejection retains the exact rejected transition in the
+Issue, renewal, holder release, authority-owned revocation, and explicit
+lease-only expiry are admitted through operation-specific capabilities, bound
+to the exact compact request digest, provider epoch, token, verified identity,
+grant/client lock, expected owner revision, and scope or lease identity.
+Holder/requester fields are derived from the verified admission identity;
+revocation instead binds the exact current authority identity and a
+machine-readable reason. Each attempt consumes its bound use exactly once.
+Generic authority rejection retains the exact rejected transition in the
 integrated lifecycle receipt without advancing accepted owner state.
 Accepted owner state and Runtime Host state commit together; Host rejection or
 composition failure discards both accepted candidates while retaining the
@@ -113,6 +129,36 @@ consumption tombstone and failure receipt. Expiry binds an exact canonical set
 of product lease IDs. A generic sweep that also selects stream subscriptions,
 unrelated Manifold leases, or any other lease set is rejected before owner or
 Host application.
+
+Administrative revocation has one stricter failure rule. Once the generic
+authority has accepted it, the runtime installs a barrier for that exact lease.
+Successful Host adoption records a converged barrier. Host rejection or an
+unexpected composition error records a pending-host-convergence barrier in the
+original accepted owner/Host state. Both states reject commands and later
+lifecycle requests for the revoked lease; a composition failure cannot reopen
+use while downstream cleanup catches up. The barrier retains the exact generic
+transition and, when converged, the matching Host adoption receipt.
+
+One pending Host-convergence barrier freezes lifecycle authorization and
+commit globally, not only operations naming the affected lease. Every attempt
+rejects with `PendingRevocationConvergence` until the deployment owner resolves
+that barrier through recovery; ordinary product mutation cannot bypass or
+partially advance around the unresolved owner/Host split.
+
+A deployment owner can retry a pending Host barrier only through an exact
+CAS-bound recovery request carrying provider epoch, barrier identity, and
+expected owner/Host revisions. Recovery receipts are replay ordered and retain
+the exact transition and Host adoption. Rejected recovery receipts stop being
+retained before they could consume the final slot needed to converge each
+pending barrier; a successful exact recovery can use that reserved slot.
+Restart validation recognizes the original composition-failure receipt and its
+single exact applied recovery as one closed transition, while rejecting
+missing, duplicated, or substituted recovery evidence. Downstream owners do
+not mutate the
+barrier: after joining a converged barrier and completing their own cleanup,
+they return domain-separated convergence and terminal-cleanup receipt digests
+in a typed consumer acknowledgement. Products that include the Peer Runtime
+Host require its acknowledgement before drained epoch rollover.
 
 Restore binds every accepted Host adoption to its exact nested owner
 transition, deterministic adoption identity, Manifold and Host revisions,
@@ -130,8 +176,20 @@ domain-separated digests, preserves the exact generic authority
 identity/revision/snapshot and clock lineage, preserves Runtime Host state and
 replay/audit history, compacts the empty product owner to a new baseline,
 invalidates old admission tokens and tombstones through a fresh admission
-snapshot, and installs a different provider epoch. Rollover rejects while any
-product lease or pending use remains.
+snapshot, and installs a different provider epoch. Rollover v2 also
+checkpoints revocation barriers, terminal consumer acknowledgements, and exact
+mutation and non-command capability-use receipts with their immutable
+admission-authorization provenance, terminal token history, and generic-use
+invalidations.
+Its resulting evidence accumulates the prior compacted set
+plus source-application, transition-application, lifecycle-receipt, and
+authorized-use request identities, and its
+`checkpointed_control_lease_request_count` binds the resulting set length.
+Later provider epochs reject every accumulated identity as replay; rollover is
+therefore a compaction boundary, not a replay boundary. The bounded replay set
+must remain within the integrated-runtime capacity. Rollover rejects while any
+product lease or pending use remains, any barrier is pending, or a
+product-required retaining consumer has not acknowledged terminal cleanup.
 
 Ordinary v4 restore rejects released v2/v3 evidence. Explicit
 `from_legacy_v2_evidence_json` migration accepts it only when its exact host
@@ -145,6 +203,13 @@ and accepts no ambient upgrade through ordinary restore.
 A deserialized migration receipt is raw evidence until `validate_against`
 recomputes every binding from the source JSON, adapter config, owner evidence,
 and resulting current evidence.
+
+Released v4 state enters only through `migrate_v4_evidence_json`. That
+migration validates the exact source JSON and current Host closure, upgrades
+owner, transition, lifecycle, and Host-adoption schema vocabulary, preserves
+all decisions and replay identities, and synthesizes no authority revision,
+lease decision, invalidation, or revocation barrier. Its receipt binds the
+exact released bytes and resulting typed v5 evidence.
 
 Released v3 state enters through `from_legacy_v3_evidence_json`. Its migration
 first applies the Runtime Host v2-to-v3 snapshot migration, adopts the exact v1
@@ -180,11 +245,12 @@ authority state and source application returns a wrapper that exposes the
 Runtime Host lease. The exact typed-JSON hashes are a versioned wire contract,
 not a claim of semantic JSON canonicalization.
 
-The adapter does not issue, renew, release, revoke, reinterpret, or silently
-expire a lease, and `ManifoldRuntimeHost::from_snapshot` remains restart
-machinery. Normal Broker construction/restart raw-lease inputs are now closed.
-Atomic owner-driven issue, renewal, release, and explicit expiry synchronization
-is the next sub-slice; dedicated authority revocation follows separately.
+The placement adapter does not issue, renew, release, revoke, reinterpret, or
+silently expire a lease, and `ManifoldRuntimeHost::from_snapshot` remains
+restart machinery. Normal Broker construction/restart raw-lease inputs are
+closed. The integrated runtime is the sole product mutation gate for atomic
+owner-driven issue, renewal, holder release, authority revocation, and explicit
+lease-only expiry synchronization.
 
 ## Integrated mutation gate
 
@@ -225,7 +291,7 @@ the consumed Broker use.
 
 This checkpoint is an intentional pre-1.0 Rust API and durable-evidence break:
 raw Runtime Host lease vectors are no longer accepted by Broker adapter/runtime
-constructors, and normal integrated restore accepts only runtime evidence v4.
+constructors, and normal integrated restore accepts only runtime evidence v5.
 Downstream callers must:
 
 1. obtain a caller-attested current Manifold authority snapshot and clock;
@@ -235,9 +301,11 @@ Downstream callers must:
 4. construct `ManifoldBrokerRuntime` with the same owner and admission state;
 5. route product mutations only through `ManifoldBrokerRuntime`.
 
-Released runtime evidence v1 and v2 remain separately discoverable in the
-schema catalog. They enter only through their explicitly named migration
-functions; no compatibility shim restores the removed raw-lease authority.
+Released runtime evidence v1 through v4 remains separately discoverable in the
+schema catalog. It enters only through explicitly named migration functions;
+v4-to-v5 additionally emits an exact revocation-migration receipt. No
+compatibility shim restores the removed raw-lease authority or fabricates a
+revocation barrier.
 
 `rusty.manifold.broker.mutation_receipt.v2` is the combined verdict. Its
 `applied` value is derived only from the preserved Runtime Host application
@@ -283,5 +351,8 @@ and admission revisions, replay, expiry, cross-client substitution, capability
 substitution, revocation, same-provider continuity, and fresh provider epochs.
 The suite also proves two clients keep independent bounded uses while the
 global admission revision advances, exact-token revocation/expiry invalidates
-only derived uses, and typed-parameter digest tamper/oversize cannot advance
-Runtime Host state.
+only derived uses, two retired token ids cannot substitute for exact committed
+provenance, every consumed non-command use retains one exact receipt, command
+capabilities cannot bypass Runtime Host through that path, rejected recovery
+attempts cannot exhaust the final convergence slot, and typed-parameter digest
+tamper/oversize cannot advance Runtime Host state.

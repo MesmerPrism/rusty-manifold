@@ -7,10 +7,13 @@ use rusty_manifold_admission::{
     ADMISSION_SNAPSHOT_SCHEMA, ADMISSION_USE_REQUEST_SCHEMA,
 };
 use rusty_manifold_broker_adapter::{
-    command_capability, packaged_product_lock_sha256, ManifoldBrokerAdapter,
-    ManifoldBrokerAdapterConfig, ManifoldBrokerAdapterMode, ManifoldBrokerControlLeaseAuthority,
-    ManifoldBrokerControlLeaseSource, ManifoldBrokerMutationRequest, ManifoldBrokerRuntime,
-    BROKER_ADAPTER_CONFIG_SCHEMA, BROKER_CONTROL_LEASE_SOURCE_SCHEMA,
+    command_capability, control_lease_lifecycle_capability, packaged_product_lock_sha256,
+    ManifoldBrokerAdapter, ManifoldBrokerAdapterConfig, ManifoldBrokerAdapterMode,
+    ManifoldBrokerControlLeaseAuthority, ManifoldBrokerControlLeaseLifecycleOperation,
+    ManifoldBrokerControlLeaseLifecycleOperationKind, ManifoldBrokerControlLeaseLifecycleReceipt,
+    ManifoldBrokerControlLeaseLifecycleRequest, ManifoldBrokerControlLeaseSource,
+    ManifoldBrokerMutationRequest, ManifoldBrokerRuntime, BROKER_ADAPTER_CONFIG_SCHEMA,
+    BROKER_CONTROL_LEASE_LIFECYCLE_REQUEST_SCHEMA, BROKER_CONTROL_LEASE_SOURCE_SCHEMA,
     BROKER_MUTATION_REQUEST_SCHEMA,
 };
 use rusty_manifold_broker_product::{
@@ -55,7 +58,8 @@ use rusty_manifold_peer::{
     SIGNED_RENDEZVOUS_EVIDENCE_SCHEMA,
 };
 use rusty_manifold_runtime_host::{
-    ManifoldRuntimeCommandDescriptor, ManifoldRuntimeLease, HOST_COMMAND_REQUEST_SCHEMA,
+    ManifoldRuntimeCommandDescriptor, ManifoldRuntimeLease, ManifoldRuntimeRejectionReason,
+    HOST_COMMAND_REQUEST_SCHEMA, LEGACY_HOST_AUDIT_EVENT_V3_SCHEMA, LEGACY_HOST_SNAPSHOT_V3_SCHEMA,
 };
 use sha2::{Digest, Sha256};
 
@@ -207,17 +211,20 @@ fn media_command_runtime() -> ManifoldRuntimeHostSnapshot {
                 scope: media_scope,
                 holder_id: id(TRUSTED_MEDIA_PROPOSER_ID),
                 expires_at_ms: 100_000,
+                derivative_binding: None,
             },
             ManifoldRuntimeLease {
                 lease_id: id("lease.runtime.direct-lane-test"),
                 scope: direct_scope,
                 holder_id: id(TRUSTED_MEDIA_PROPOSER_ID),
                 expires_at_ms: 100_000,
+                derivative_binding: None,
             },
         ],
         applied_request_ids: Vec::new(),
         reviewed_sweep_ids: Vec::new(),
         reviewed_control_lease_adoption_ids: Vec::new(),
+        reviewed_derivative_lease_revocation_ids: Vec::new(),
         audit_events: Vec::new(),
     }
 }
@@ -278,6 +285,81 @@ fn broker_media_mutation(
             expires_at_ms: now_ms.saturating_add(10_000),
         },
     }
+}
+
+fn revoke_broker_control_lease(
+    broker: &mut ManifoldBrokerRuntime,
+    grant: &ManifoldMediaSessionClientGrant,
+    suffix: &str,
+    entropy: u8,
+) -> ManifoldBrokerControlLeaseLifecycleReceipt {
+    let capability = control_lease_lifecycle_capability(
+        ManifoldBrokerControlLeaseLifecycleOperationKind::Revocation,
+    );
+    let now_ms = u64::try_from(
+        broker
+            .evidence()
+            .control_lease_authority
+            .current_clock
+            .wall_unix_ms,
+    )
+    .expect("positive Broker authority clock");
+    let issue = broker.issue_token(
+        &ManifoldAdmissionRequest {
+            schema_id: schema_id(ADMISSION_REQUEST_SCHEMA),
+            request_id: id(&format!("request.media.dynamic.{suffix}.revoke-token")),
+            expected_authority_revision: broker.admission_snapshot().authority_revision,
+            identity: grant.broker_client_identity.clone(),
+            requested_capabilities: vec![capability.clone()],
+            issued_at_ms: now_ms,
+            expires_at_ms: now_ms.saturating_add(25_000),
+            requested_token_ttl_ms: 20_000,
+        },
+        [entropy; 32],
+        now_ms,
+    );
+    assert!(issue.applied, "{issue:?}");
+    let token = issue.token.expect("revocation lifecycle token");
+    let use_request = ManifoldAdmissionUseRequest {
+        schema_id: schema_id(ADMISSION_USE_REQUEST_SCHEMA),
+        request_id: id(&format!("request.media.dynamic.{suffix}.revoke-use")),
+        expected_authority_revision: issue.resulting_authority_revision,
+        token_id: token.token_id.clone(),
+        identity: grant.broker_client_identity.clone(),
+        capability_id: capability,
+        issued_at_ms: now_ms,
+        expires_at_ms: now_ms.saturating_add(15_000),
+    };
+    let operation = ManifoldBrokerControlLeaseLifecycleOperation::Revocation {
+        request_id: id(&format!("request.media.dynamic.{suffix}.revocation")),
+        lease_id: grant.broker_runtime_lease_id.clone(),
+        expected_authority_revision: broker.control_lease_authority_snapshot().authority_revision,
+        revocation_reason: id("reason.operator.security-revocation"),
+        requested_at_ms: now_ms,
+    };
+    let lifecycle_request = ManifoldBrokerControlLeaseLifecycleRequest {
+        schema_id: schema_id(BROKER_CONTROL_LEASE_LIFECYCLE_REQUEST_SCHEMA),
+        provider_epoch_id: broker.provider_epoch_id().clone(),
+        admission_use_request_id: use_request.request_id.clone(),
+        token_id: token.token_id,
+        expected_admission_authority_revision: use_request.expected_authority_revision,
+        operation,
+    };
+    let authorization =
+        broker.authorize_control_lease_lifecycle_use(&use_request, &lifecycle_request, now_ms);
+    assert!(authorization.applied, "{authorization:?}");
+    let mut clock = broker.evidence().control_lease_authority.current_clock;
+    clock.sequence += 1;
+    clock.monotonic_elapsed_ns += 1_000_000;
+    clock.wall_unix_ms += 1;
+    broker
+        .commit_control_lease_lifecycle(
+            &lifecycle_request,
+            clock,
+            vec![id("evidence.peer-runtime.live-broker-revocation")],
+            |receipt, _| receipt.clone(),
+        )
+        .expect("Broker revocation lifecycle commit")
 }
 
 fn id(value: &str) -> DottedId {
@@ -1374,6 +1456,93 @@ fn restart_rejects_damaged_audit_and_cross_authority_provenance() {
 }
 
 #[test]
+fn released_v1_snapshot_migrates_explicitly_without_synthesizing_convergence() {
+    let host = fixture_host();
+    let mut legacy = serde_json::to_value(host.snapshot()).expect("snapshot value");
+    let object = legacy.as_object_mut().expect("snapshot object");
+    object.insert(
+        "$schema".to_owned(),
+        serde_json::Value::String(LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V1_SCHEMA.to_owned()),
+    );
+    object.remove("broker_lease_revocation_convergences");
+    object.remove("broker_lease_revocation_cleanup_completions");
+    object.remove("broker_epoch_rollovers");
+    legacy["media_command_runtime"]["$schema"] =
+        serde_json::Value::String(LEGACY_HOST_SNAPSHOT_V3_SCHEMA.to_owned());
+    legacy["media_command_runtime"]
+        .as_object_mut()
+        .expect("embedded Runtime Host")
+        .remove("reviewed_derivative_lease_revocation_ids");
+    for event in legacy["media_command_runtime"]["audit_events"]
+        .as_array_mut()
+        .expect("embedded Runtime Host audit")
+    {
+        event["$schema"] = serde_json::Value::String(LEGACY_HOST_AUDIT_EVENT_V3_SCHEMA.to_owned());
+        event
+            .as_object_mut()
+            .expect("Runtime Host audit event")
+            .remove("derivative_lease_revocation");
+    }
+    let legacy_json = serde_json::to_string_pretty(&legacy).expect("legacy snapshot JSON");
+    let (migrated, receipt) = ManifoldPeerRuntimeHost::restart_from_json_with_migration(
+        &legacy_json,
+        &host.snapshot().trust_policy,
+        &host.snapshot().provider_epoch_id,
+    )
+    .expect("explicit v1 migration");
+    assert!(receipt.migrated);
+    assert_eq!(
+        receipt.source_schema_id.as_str(),
+        LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V1_SCHEMA
+    );
+    assert_eq!(
+        receipt.resulting_schema_id.as_str(),
+        PEER_RUNTIME_HOST_SNAPSHOT_SCHEMA
+    );
+    assert_eq!(
+        receipt.preserved_event_sequence,
+        host.snapshot().event_sequence
+    );
+    assert!(migrated
+        .snapshot()
+        .broker_lease_revocation_convergences
+        .is_empty());
+    let mut expected = host.snapshot().clone();
+    expected.schema_id = schema_id(PEER_RUNTIME_HOST_SNAPSHOT_SCHEMA);
+    assert_eq!(migrated.snapshot(), &expected);
+
+    let (_, current_receipt) = ManifoldPeerRuntimeHost::restart_from_json_with_migration(
+        &migrated.snapshot_json().expect("current snapshot JSON"),
+        &host.snapshot().trust_policy,
+        &host.snapshot().provider_epoch_id,
+    )
+    .expect("current snapshot restart");
+    assert!(!current_receipt.migrated);
+
+    let mut legacy_v2 = serde_json::to_value(host.snapshot()).expect("snapshot value");
+    let object = legacy_v2.as_object_mut().expect("snapshot object");
+    object.insert(
+        "$schema".to_owned(),
+        serde_json::Value::String(LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V2_SCHEMA.to_owned()),
+    );
+    object.remove("broker_epoch_rollovers");
+    let legacy_v2_json = serde_json::to_string_pretty(&legacy_v2).expect("legacy v2 snapshot JSON");
+    let (migrated_v2, receipt_v2) = ManifoldPeerRuntimeHost::restart_from_json_with_migration(
+        &legacy_v2_json,
+        &host.snapshot().trust_policy,
+        &host.snapshot().provider_epoch_id,
+    )
+    .expect("explicit v2 migration");
+    assert!(receipt_v2.migrated);
+    assert_eq!(
+        receipt_v2.source_schema_id.as_str(),
+        LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V2_SCHEMA
+    );
+    assert!(migrated_v2.snapshot().broker_epoch_rollovers.is_empty());
+    assert_eq!(migrated_v2.snapshot(), host.snapshot());
+}
+
+#[test]
 fn trust_policy_is_canonical_external_restart_authority_not_mutation_input() {
     let mut unsorted = trust_policy();
     unsorted.trusted_operator_ids = vec![id("operator.z"), id("operator.a")];
@@ -1539,23 +1708,23 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
         product_lock.spec_fingerprint.clone();
     policy.media_client_grants[0].broker_product_lock_sha256 = product_lock_sha256.clone();
     let grant = policy.media_client_grants[0].clone();
-    let mut inner_runtime = media_command_runtime();
-    inner_runtime
+    let (ready, _, _) = ready_host();
+    let mut dynamic_snapshot = ready.snapshot().clone();
+    dynamic_snapshot.trust_policy = policy.clone();
+    dynamic_snapshot
+        .media_command_runtime
         .leases
         .retain(|lease| lease.scope.as_str() != MEDIA_RUNTIME_LEASE_SCOPE_ID);
-    let mut host = ManifoldPeerRuntimeHost::new(
-        id("host.peer-runtime.dynamic-media"),
-        policy.clone(),
-        id(PROVIDER_EPOCH_ID),
-        inner_runtime,
-    )
-    .expect("peer host without ambient media lease");
+    let mut host =
+        ManifoldPeerRuntimeHost::from_snapshot(dynamic_snapshot, &policy, &id(PROVIDER_EPOCH_ID))
+            .expect("peer host without ambient media lease");
 
     let broker_lease = ManifoldRuntimeLease {
         lease_id: grant.broker_runtime_lease_id.clone(),
         scope: id("lease.media.session"),
         holder_id: grant.client_id.clone(),
         expires_at_ms: 100_000,
+        derivative_binding: None,
     };
     let control_lease_authority = broker_control_lease_authority(&broker_lease);
     let broker_adapter = ManifoldBrokerAdapter::new(
@@ -1574,6 +1743,9 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
     )
     .expect("outer broker adapter");
     let outer_capability = command_capability(&grant.broker_command_id);
+    let revoke_capability = control_lease_lifecycle_capability(
+        ManifoldBrokerControlLeaseLifecycleOperationKind::Revocation,
+    );
     assert_eq!(outer_capability, grant.broker_capability_id);
     let admission_snapshot = ManifoldAdmissionSnapshot {
         schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
@@ -1584,8 +1756,8 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
             client_lock_id: grant.broker_client_lock_id.clone(),
             client_lock_fingerprint: grant.broker_client_lock_fingerprint.clone(),
             identity: grant.broker_client_identity.clone(),
-            capabilities: vec![outer_capability.clone()],
-            expires_at_ms: 100_000,
+            capabilities: vec![outer_capability.clone(), revoke_capability],
+            expires_at_ms: 2_000_000_000_000,
             revoked: false,
         }],
         active_tokens: Vec::new(),
@@ -1596,6 +1768,8 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
         audit_events: Vec::new(),
         max_token_ttl_ms: 30_000,
     };
+    let fresh_admission_snapshot = admission_snapshot.clone();
+    let second_fresh_admission_snapshot = admission_snapshot.clone();
     let mut broker = ManifoldBrokerRuntime::new(
         id(PROVIDER_EPOCH_ID),
         broker_adapter,
@@ -1663,6 +1837,99 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
     );
     let admission = attempt.lease_admission.expect("inner lease admission");
     assert_eq!(admission.runtime_lease.lease_id, grant.lease_id);
+    let derivative_binding = admission
+        .runtime_lease
+        .derivative_binding
+        .as_ref()
+        .expect("accepted derivative binding");
+    assert_eq!(derivative_binding.provider_epoch_id, id(PROVIDER_EPOCH_ID));
+    assert_eq!(
+        derivative_binding.upstream_control_lease_id,
+        grant.broker_runtime_lease_id
+    );
+    assert_eq!(
+        derivative_binding.source_authorization_id,
+        mutation.admission_use_request_id
+    );
+    let mut substituted_binding = host.snapshot().clone();
+    substituted_binding
+        .media_command_runtime
+        .leases
+        .iter_mut()
+        .find(|lease| lease.lease_id == grant.lease_id)
+        .expect("live derivative lease")
+        .derivative_binding
+        .as_mut()
+        .expect("live derivative binding")
+        .upstream_control_lease_id = id("lease.outer.substituted");
+    substituted_binding.broker_lease_admissions[0]
+        .runtime_lease
+        .derivative_binding
+        .as_mut()
+        .expect("retained derivative binding")
+        .upstream_control_lease_id = id("lease.outer.substituted");
+    assert!(ManifoldPeerRuntimeHost::from_snapshot(
+        substituted_binding,
+        &policy,
+        &id(PROVIDER_EPOCH_ID),
+    )
+    .is_err());
+    let mut legacy_active_admission =
+        serde_json::to_value(host.snapshot()).expect("active peer snapshot");
+    legacy_active_admission["$schema"] =
+        serde_json::Value::String(LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V1_SCHEMA.to_owned());
+    let legacy_object = legacy_active_admission
+        .as_object_mut()
+        .expect("legacy peer object");
+    legacy_object.remove("broker_lease_revocation_convergences");
+    legacy_object.remove("broker_lease_revocation_cleanup_completions");
+    legacy_object.remove("broker_epoch_rollovers");
+    legacy_active_admission["media_command_runtime"]["$schema"] =
+        serde_json::Value::String(LEGACY_HOST_SNAPSHOT_V3_SCHEMA.to_owned());
+    legacy_active_admission["media_command_runtime"]
+        .as_object_mut()
+        .expect("legacy embedded Runtime Host")
+        .remove("reviewed_derivative_lease_revocation_ids");
+    for lease in legacy_active_admission["media_command_runtime"]["leases"]
+        .as_array_mut()
+        .expect("legacy Runtime Host leases")
+    {
+        lease
+            .as_object_mut()
+            .expect("legacy Runtime Host lease")
+            .remove("derivative_binding");
+    }
+    for event in legacy_active_admission["media_command_runtime"]["audit_events"]
+        .as_array_mut()
+        .expect("legacy Runtime Host audit")
+    {
+        event["$schema"] = serde_json::Value::String(LEGACY_HOST_AUDIT_EVENT_V3_SCHEMA.to_owned());
+        event
+            .as_object_mut()
+            .expect("legacy Runtime Host audit event")
+            .remove("derivative_lease_revocation");
+    }
+    for retained in legacy_active_admission["broker_lease_admissions"]
+        .as_array_mut()
+        .expect("legacy Broker admissions")
+    {
+        retained["runtime_lease"]
+            .as_object_mut()
+            .expect("legacy admitted lease")
+            .remove("derivative_binding");
+    }
+    let legacy_active_admission =
+        serde_json::to_string(&legacy_active_admission).expect("legacy active admission");
+    let (migrated_active_admission, migration_receipt) =
+        ManifoldPeerRuntimeHost::restart_from_json_with_live_broker_runtime(
+            &legacy_active_admission,
+            &policy,
+            &id(PROVIDER_EPOCH_ID),
+            &broker,
+        )
+        .expect("legacy active derivative binding backfill");
+    assert!(migration_receipt.migrated);
+    assert_eq!(migrated_active_admission, host);
     assert!(broker
         .evidence()
         .consumed_bounded_use_ids
@@ -1683,8 +1950,18 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
         PROVIDER_EPOCH_ID,
     );
     let acceptance_command = media_accept_command(&host, &acceptance);
-    let accepted = host
+    let before_unjoined_acceptance = host.clone();
+    assert!(host
         .review_media_session_acceptance(&acceptance, &acceptance_command, 4_250)
+        .is_err());
+    assert_eq!(host, before_unjoined_acceptance);
+    let accepted = host
+        .review_media_session_acceptance_with_live_broker_runtime(
+            &broker,
+            &acceptance,
+            &acceptance_command,
+            4_250,
+        )
         .expect("inner media acceptance");
     assert!(accepted.accepted);
     let termination = ManifoldMediaSessionTerminationRequest {
@@ -1710,13 +1987,33 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
         issued_at_ms: 4_300,
         expires_at_ms: 10_000,
     };
+    let before_unjoined_termination = host.clone();
+    assert!(host
+        .review_media_session_termination(&termination, &termination_command, 4_300)
+        .is_err());
+    assert_eq!(host, before_unjoined_termination);
     assert!(
-        host.review_media_session_termination(&termination, &termination_command, 4_300)
-            .expect("media stop")
-            .applied
+        host.review_media_session_termination_with_live_broker_runtime(
+            &broker,
+            &termination,
+            &termination_command,
+            4_300,
+        )
+        .expect("media stop")
+        .applied
     );
-    host.release_media_runtime_lease(&grant.lease_id, id("request.media.dynamic.release"), 4_400)
-        .expect("inner lease release");
+    let before_unjoined_release = host.clone();
+    assert!(host
+        .release_media_runtime_lease(&grant.lease_id, id("request.media.dynamic.release"), 4_400,)
+        .is_err());
+    assert_eq!(host, before_unjoined_release);
+    host.release_media_runtime_lease_with_live_broker_runtime(
+        &broker,
+        &grant.lease_id,
+        id("request.media.dynamic.release"),
+        4_400,
+    )
+    .expect("inner lease release");
     assert!(!host
         .snapshot()
         .media_command_runtime
@@ -1748,25 +2045,324 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
         PROVIDER_EPOCH_ID,
     );
     let second_acceptance_command = media_accept_command(&host, &second_acceptance);
-    assert!(host
-        .review_media_session_acceptance(
+    let second_accepted = host
+        .review_media_session_acceptance_with_live_broker_runtime(
+            &broker,
             &second_acceptance,
             &second_acceptance_command,
             4_800,
         )
-        .expect("second media acceptance")
-        .accepted);
+        .expect("second media acceptance");
+    assert!(second_accepted.accepted);
+    let second_session = second_accepted
+        .accepted_session
+        .expect("second retained media session");
+    let mut media_lane = lease_request(
+        &host,
+        "request.direct-lane.dynamic-media.accepted",
+        "session.peer.host.001",
+    );
+    media_lane.scope = ManifoldDirectLaneLeaseScope::MediaSession;
+    media_lane.capability_id = id(DIRECT_LANE_MEDIA_SESSION_CAPABILITY);
+    media_lane.expected_media_session_authority_revision =
+        Some(second_session.session_authority_revision);
+    media_lane.expected_media_acceptance_authority_revision =
+        Some(host.snapshot().media_sessions.authority_revision);
+    media_lane.media_session_id = Some(second_session.session_id.clone());
+    media_lane.media_session_decision_id = Some(second_session.decision_id.clone());
+    media_lane.media_session_descriptor_canonical_sha256 =
+        Some(second_session.product_descriptor_canonical_sha256.clone());
+    media_lane.media_session_provider_epoch_id = Some(second_session.provider_epoch_id.clone());
+    media_lane.media_session_platform_runtime_spec_id =
+        Some(second_session.platform_runtime_spec_id.clone());
+    let media_lane_command = direct_command(
+        &host,
+        id(&format!("runtime.{}", media_lane.request_id.as_str())),
+        DIRECT_LANE_LEASE_ISSUE_COMMAND,
+        direct_lane_lease_issue_params_digest(&media_lane).expect("params"),
+        4_900,
+    );
+    let before_unjoined_lane = host.clone();
+    assert!(host
+        .review_direct_lane_lease(&media_lane, &media_lane_command, 4_900)
+        .is_err());
+    assert_eq!(host, before_unjoined_lane);
+    let media_lane = host
+        .review_direct_lane_lease_with_live_broker_runtime(
+            &broker,
+            &media_lane,
+            &media_lane_command,
+            4_900,
+        )
+        .expect("live Broker direct-lane review")
+        .lease
+        .expect("media-derived direct lane");
+    assert!(
+        !host
+            .validate_media_session(&second_session.decision_id, 4_950)
+            .current
+    );
+    assert!(
+        host.validate_media_session_with_live_broker_runtime(
+            &broker,
+            &second_session.decision_id,
+            4_950,
+        )
+        .expect("live Broker media validation")
+        .current
+    );
 
-    let restarted = ManifoldPeerRuntimeHost::restart_from_json(
-        &host.snapshot_json().expect("dynamic snapshot"),
-        &policy,
-        &id(PROVIDER_EPOCH_ID),
-    )
-    .expect("dynamic bridge restart");
+    let stale_old_peer_json = host.snapshot_json().expect("old peer snapshot");
+    let broker_revocation = revoke_broker_control_lease(&mut broker, &grant, "outer-lease", 41);
+    assert!(broker_revocation.applied, "{broker_revocation:?}");
+    let blocked_acceptance = media_acceptance_request(
+        &host,
+        "request.media.accept.dynamic.blocked",
+        8,
+        PROVIDER_EPOCH_ID,
+    );
+    let blocked_acceptance_command = media_accept_command(&host, &blocked_acceptance);
+    let before_pending_convergence = host.clone();
+    assert!(host
+        .review_media_session_acceptance_with_live_broker_runtime(
+            &broker,
+            &blocked_acceptance,
+            &blocked_acceptance_command,
+            4_975,
+        )
+        .is_err());
+    assert!(
+        !host
+            .validate_media_session(&second_session.decision_id, 4_975)
+            .current
+    );
+    assert!(host
+        .validate_media_session_with_live_broker_runtime(
+            &broker,
+            &second_session.decision_id,
+            4_975,
+        )
+        .is_err());
+    let lane_use = ManifoldDirectLaneLeaseUseRequest {
+        schema_id: schema_id(DIRECT_LANE_LEASE_USE_REQUEST_SCHEMA),
+        request_id: id("request.direct-lane.dynamic-media.blocked-use"),
+        expected_authority_revision: host.snapshot().direct_lane_leases.authority_revision,
+        lease_id: media_lane.lease_id.clone(),
+    };
+    let lane_use_command = direct_command(
+        &host,
+        lane_use.request_id.clone(),
+        DIRECT_LANE_LEASE_USE_COMMAND,
+        direct_lane_lease_use_params_digest(&lane_use).expect("params"),
+        4_975,
+    );
+    assert_eq!(
+        host.validate_direct_lane_lease(&lane_use, &lane_use_command, 4_975),
+        Err(ManifoldDirectLaneLeaseRejectionReason::ClientNotAuthorized)
+    );
+    assert_eq!(
+        host.validate_direct_lane_lease_with_live_broker_runtime(
+            &broker,
+            &lane_use,
+            &lane_use_command,
+            4_975,
+        ),
+        Err(ManifoldDirectLaneLeaseRejectionReason::ClientNotAuthorized)
+    );
+    assert_eq!(host, before_pending_convergence);
+    assert!(
+        ManifoldPeerRuntimeHost::restart_from_json_with_live_broker_runtime(
+            &stale_old_peer_json,
+            &policy,
+            &id(PROVIDER_EPOCH_ID),
+            &broker,
+        )
+        .is_err(),
+        "a pre-revocation peer snapshot cannot restore against revoked live Broker state"
+    );
+    let broker_evidence = broker.evidence();
+    let broker_revoked_at_ms = match &broker_revocation
+        .authority_transition
+        .as_ref()
+        .expect("revocation transition")
+        .application
+    {
+        ManifoldBrokerControlLeaseTransitionApplication::Revocation(application) => u64::try_from(
+            application
+                .tombstone
+                .as_ref()
+                .expect("revocation tombstone")
+                .recorded_clock
+                .wall_unix_ms,
+        )
+        .expect("positive Broker wall clock"),
+        _ => panic!("expected Broker revocation transition"),
+    };
+    let convergence_request = ManifoldPeerRuntimeBrokerLeaseRevocationConvergenceRequest {
+        schema_id: schema_id(PEER_RUNTIME_BROKER_LEASE_REVOCATION_CONVERGENCE_REQUEST_SCHEMA),
+        convergence_id: id("convergence.peer-runtime.outer-lease.001"),
+        expected_peer_event_sequence: host.snapshot().event_sequence,
+        expected_peer_provider_epoch_id: id(PROVIDER_EPOCH_ID),
+        expected_broker_provider_epoch_id: broker_evidence.provider_epoch_id.clone(),
+        broker_lifecycle_request_id: broker_revocation.lifecycle_request_id.clone(),
+        outer_control_lease_id: grant.broker_runtime_lease_id.clone(),
+        expected_broker_control_lease_authority_revision: broker_evidence
+            .control_lease_authority
+            .current_authority_snapshot
+            .authority_revision,
+        expected_broker_runtime_host_revision: broker_evidence.host_snapshot.authority_revision,
+        converged_at_ms: broker_revoked_at_ms,
+    };
+    let prior_inner_runtime_revision = host.snapshot().media_command_runtime.authority_revision;
+    let convergence = host
+        .converge_live_broker_control_lease_revocation(&broker, &convergence_request)
+        .expect("live Broker revocation convergence");
+    assert_eq!(
+        convergence.affected_broker_admission_use_ids,
+        vec![second_mutation.admission_use_request_id.clone()]
+    );
+    assert_eq!(
+        convergence.removed_inner_runtime_lease_ids,
+        vec![grant.lease_id.clone()]
+    );
+    assert_eq!(
+        convergence
+            .inner_runtime_lease_revocation_receipt
+            .prior_host_authority_revision,
+        prior_inner_runtime_revision
+    );
+    assert_eq!(
+        convergence
+            .inner_runtime_lease_revocation_receipt
+            .resulting_host_authority_revision,
+        prior_inner_runtime_revision
+            .next()
+            .expect("revision advances")
+    );
+    assert_eq!(
+        convergence
+            .inner_runtime_lease_revocation_receipt
+            .removed_lease_ids,
+        vec![grant.lease_id.clone()]
+    );
+    assert_eq!(
+        convergence.revoked_media_decision_ids,
+        vec![second_session.decision_id.clone()]
+    );
+    assert_eq!(
+        convergence.revoked_direct_lane_lease_ids,
+        vec![media_lane.lease_id.clone()]
+    );
+    assert_eq!(convergence.cleanup_obligations.len(), 1);
+    assert!(convergence.platform_cleanup_pending);
+    assert_eq!(
+        convergence.cleanup_obligations[0].stream_ids,
+        second_session.product_binding.descriptor.stream_ids
+    );
+    assert!(!host
+        .snapshot()
+        .media_command_runtime
+        .leases
+        .iter()
+        .any(|lease| lease.lease_id == grant.lease_id));
+    assert!(host
+        .snapshot()
+        .media_sessions
+        .sessions
+        .iter()
+        .any(|session| {
+            session.decision_id == second_session.decision_id
+                && session.lifecycle_status == ManifoldMediaSessionLifecycleStatus::Revoked
+                && session.ended_by_id.as_ref() == Some(&convergence_request.convergence_id)
+        }));
+    assert!(host
+        .snapshot()
+        .direct_lane_leases
+        .leases
+        .iter()
+        .any(|lease| lease.lease_id == media_lane.lease_id && lease.revoked));
+    let stale_inner_command_review =
+        ManifoldRuntimeHost::from_snapshot(host.snapshot().media_command_runtime.clone())
+            .expect("converged inner Runtime Host")
+            .review_command(&blocked_acceptance_command, 5_000);
+    assert_eq!(
+        stale_inner_command_review.rejection_reason,
+        Some(ManifoldRuntimeRejectionReason::StaleAuthorityRevision)
+    );
+    let converged_host = host.clone();
+    assert!(matches!(
+        host.converge_live_broker_control_lease_revocation(&broker, &convergence_request),
+        Err(ManifoldPeerRuntimeHostError::ReplayedMutation(_))
+    ));
+    assert_eq!(host, converged_host);
+    let mut stale_peer_request = convergence_request.clone();
+    stale_peer_request.convergence_id = id("convergence.peer-runtime.outer-lease.stale");
+    assert!(host
+        .converge_live_broker_control_lease_revocation(&broker, &stale_peer_request)
+        .is_err());
+    assert_eq!(host, converged_host);
+    assert!(host
+        .broker_revocation_consumer_acknowledgement(&broker, &convergence_request.convergence_id,)
+        .is_err());
+    let cleanup_request = ManifoldPeerRuntimeBrokerLeaseRevocationCleanupCompletionRequest {
+        schema_id: schema_id(
+            PEER_RUNTIME_BROKER_LEASE_REVOCATION_CLEANUP_COMPLETION_REQUEST_SCHEMA,
+        ),
+        completion_id: id("completion.peer-runtime.outer-lease.001"),
+        convergence_id: convergence_request.convergence_id.clone(),
+        expected_peer_event_sequence: host.snapshot().event_sequence,
+        completed_session_decision_ids: vec![second_session.decision_id.clone()],
+        platform_cleanup_receipt_sha256: format!("sha256:{}", "a".repeat(64)),
+    };
+    let cleanup = host
+        .complete_broker_lease_revocation_cleanup(&broker, &cleanup_request)
+        .expect("terminal platform cleanup completion");
+    assert!(cleanup.completed);
+    assert_eq!(
+        cleanup.completed_obligations,
+        convergence.cleanup_obligations
+    );
+    let consumer_acknowledgement = host
+        .broker_revocation_consumer_acknowledgement(&broker, &convergence_request.convergence_id)
+        .expect("peer consumer acknowledgement");
+    assert_eq!(
+        consumer_acknowledgement.consumer_kind,
+        ManifoldBrokerControlLeaseRevocationConsumerKind::PeerRuntimeHost
+    );
+    assert!(consumer_acknowledgement
+        .consumer_convergence_receipt_sha256
+        .starts_with("sha256:"));
+    assert!(consumer_acknowledgement
+        .terminal_cleanup_receipt_sha256
+        .starts_with("sha256:"));
+    broker
+        .acknowledge_control_lease_revocation_consumer(consumer_acknowledgement.clone())
+        .expect("Broker retains peer consumer acknowledgement");
+    assert!(broker
+        .evidence()
+        .control_lease_revocation_consumer_acknowledgements
+        .contains(&consumer_acknowledgement));
+    let cleanup_complete_host = host.clone();
+    assert!(matches!(
+        host.complete_broker_lease_revocation_cleanup(&broker, &cleanup_request),
+        Err(ManifoldPeerRuntimeHostError::ReplayedMutation(_))
+    ));
+    assert_eq!(host, cleanup_complete_host);
+
+    let (restarted, migration) =
+        ManifoldPeerRuntimeHost::restart_from_json_with_live_broker_runtime(
+            &host.snapshot_json().expect("dynamic snapshot"),
+            &policy,
+            &id(PROVIDER_EPOCH_ID),
+            &broker,
+        )
+        .expect("dynamic bridge restart");
+    assert!(!migration.migrated);
     assert_eq!(restarted, host);
     let stable = host.clone();
     assert!(matches!(
-        host.release_media_runtime_lease(
+        host.release_media_runtime_lease_with_live_broker_runtime(
+            &broker,
             &grant.lease_id,
             id("request.media.dynamic.release"),
             4_500,
@@ -1785,4 +2381,121 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
     assert!(
         ManifoldPeerRuntimeHost::from_snapshot(damaged, &policy, &id(PROVIDER_EPOCH_ID),).is_err()
     );
+
+    let old_peer_json = host.snapshot_json().expect("old-epoch peer snapshot");
+    let source_broker_evidence = broker.evidence();
+    let resulting_epoch = id("provider.epoch.quest-test.002");
+    let broker_rollover = broker
+        .rollover_drained_provider_epoch(resulting_epoch.clone(), fresh_admission_snapshot)
+        .expect("drained Broker epoch rollover");
+    assert!(
+        ManifoldPeerRuntimeHost::restart_from_json_with_live_broker_runtime(
+            &old_peer_json,
+            &policy,
+            &id(PROVIDER_EPOCH_ID),
+            &broker,
+        )
+        .is_err(),
+        "old peer epoch cannot silently join the fresh Broker epoch"
+    );
+    let mut forged_broker_rollover = broker_rollover.clone();
+    forged_broker_rollover.resulting_evidence_sha256 = format!("sha256:{}", "c".repeat(64));
+    let before_forged_rollover = host.clone();
+    assert!(host
+        .rollover_drained_broker_provider_epoch(
+            &source_broker_evidence,
+            &forged_broker_rollover,
+            &broker,
+        )
+        .is_err());
+    assert_eq!(host, before_forged_rollover);
+    let peer_rollover = host
+        .rollover_drained_broker_provider_epoch(&source_broker_evidence, &broker_rollover, &broker)
+        .expect("peer joins exact Broker rollover");
+    assert_eq!(
+        peer_rollover.source_provider_epoch_id,
+        id(PROVIDER_EPOCH_ID)
+    );
+    assert_eq!(peer_rollover.resulting_provider_epoch_id, resulting_epoch);
+    assert_eq!(peer_rollover.broker_rollover_receipt, broker_rollover);
+    assert_eq!(peer_rollover.checkpointed_revocation_convergence_count, 1);
+    assert_eq!(peer_rollover.checkpointed_cleanup_completion_count, 1);
+    assert_eq!(host.snapshot().provider_epoch_id, resulting_epoch);
+    assert_eq!(host.snapshot().broker_epoch_rollovers.len(), 1);
+    assert_eq!(
+        host.snapshot().broker_lease_revocation_convergences,
+        vec![convergence.clone()]
+    );
+    assert_eq!(
+        host.snapshot()
+            .audit_events
+            .last()
+            .expect("rollover audit")
+            .event_kind,
+        ManifoldPeerRuntimeAuditKind::BrokerEpochRollover
+    );
+
+    let restarted_after_rollover =
+        ManifoldPeerRuntimeHost::restart_from_json_with_live_broker_runtime(
+            &host.snapshot_json().expect("rolled peer snapshot"),
+            &policy,
+            &resulting_epoch,
+            &broker,
+        )
+        .expect("checkpointed old-epoch joins restore against fresh Broker");
+    assert_eq!(restarted_after_rollover.0, host);
+    assert!(matches!(
+        host.converge_live_broker_control_lease_revocation(&broker, &convergence_request),
+        Err(ManifoldPeerRuntimeHostError::ReplayedMutation(_))
+    ));
+
+    let mut damaged_checkpoint = host.snapshot().clone();
+    damaged_checkpoint.broker_epoch_rollovers[0].checkpointed_peer_broker_state_sha256 =
+        format!("sha256:{}", "b".repeat(64));
+    assert!(
+        ManifoldPeerRuntimeHost::from_snapshot_with_live_broker_runtime(
+            damaged_checkpoint,
+            &policy,
+            &resulting_epoch,
+            &broker,
+        )
+        .is_err()
+    );
+
+    let second_source_broker_evidence = broker.evidence();
+    let third_epoch = id("provider.epoch.quest-test.003");
+    let second_broker_rollover = broker
+        .rollover_drained_provider_epoch(third_epoch.clone(), second_fresh_admission_snapshot)
+        .expect("second drained Broker epoch rollover");
+    let second_peer_rollover = host
+        .rollover_drained_broker_provider_epoch(
+            &second_source_broker_evidence,
+            &second_broker_rollover,
+            &broker,
+        )
+        .expect("peer joins second exact Broker rollover");
+    assert_eq!(
+        second_peer_rollover.source_provider_epoch_id,
+        resulting_epoch
+    );
+    assert_eq!(
+        second_peer_rollover.resulting_provider_epoch_id,
+        third_epoch
+    );
+    assert_eq!(
+        second_peer_rollover.checkpointed_revocation_convergence_count,
+        0
+    );
+    assert_eq!(host.snapshot().broker_epoch_rollovers.len(), 2);
+    assert_eq!(
+        host.snapshot().broker_lease_revocation_convergences,
+        vec![convergence]
+    );
+    ManifoldPeerRuntimeHost::restart_from_json_with_live_broker_runtime(
+        &host.snapshot_json().expect("twice-rolled peer snapshot"),
+        &policy,
+        &third_epoch,
+        &broker,
+    )
+    .expect("ordered checkpoint chain restores historical joins");
 }

@@ -9,18 +9,30 @@ use rusty_manifold_runtime_host::ManifoldRuntimeControlLeaseAdoptionReceipt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-/// Broker control-lease lifecycle request schema.
-pub const BROKER_CONTROL_LEASE_LIFECYCLE_REQUEST_SCHEMA: &str =
+/// Released Broker control-lease lifecycle request schema.
+pub const LEGACY_BROKER_CONTROL_LEASE_LIFECYCLE_REQUEST_V1_SCHEMA: &str =
     "rusty.manifold.broker.control_lease_lifecycle_request.v1";
-/// Exact one-use lifecycle binding schema.
-pub const BROKER_CONTROL_LEASE_LIFECYCLE_USE_SCHEMA: &str =
+/// Broker control-lease lifecycle request schema with administrative revocation.
+pub const BROKER_CONTROL_LEASE_LIFECYCLE_REQUEST_SCHEMA: &str =
+    "rusty.manifold.broker.control_lease_lifecycle_request.v2";
+/// Released exact one-use lifecycle binding schema.
+pub const LEGACY_BROKER_CONTROL_LEASE_LIFECYCLE_USE_V1_SCHEMA: &str =
     "rusty.manifold.broker.control_lease_lifecycle_use.v1";
-/// Broker lifecycle-use authorization receipt schema.
-pub const BROKER_CONTROL_LEASE_LIFECYCLE_AUTHORIZATION_RECEIPT_SCHEMA: &str =
+/// Exact one-use lifecycle binding schema with administrative revocation.
+pub const BROKER_CONTROL_LEASE_LIFECYCLE_USE_SCHEMA: &str =
+    "rusty.manifold.broker.control_lease_lifecycle_use.v2";
+/// Released Broker lifecycle-use authorization receipt schema.
+pub const LEGACY_BROKER_CONTROL_LEASE_LIFECYCLE_AUTHORIZATION_RECEIPT_V1_SCHEMA: &str =
     "rusty.manifold.broker.control_lease_lifecycle_authorization_receipt.v1";
-/// Broker control-lease lifecycle receipt schema.
-pub const BROKER_CONTROL_LEASE_LIFECYCLE_RECEIPT_SCHEMA: &str =
+/// Broker lifecycle-use authorization receipt schema with revocation vocabulary.
+pub const BROKER_CONTROL_LEASE_LIFECYCLE_AUTHORIZATION_RECEIPT_SCHEMA: &str =
+    "rusty.manifold.broker.control_lease_lifecycle_authorization_receipt.v2";
+/// Released Broker control-lease lifecycle receipt schema.
+pub const LEGACY_BROKER_CONTROL_LEASE_LIFECYCLE_RECEIPT_V1_SCHEMA: &str =
     "rusty.manifold.broker.control_lease_lifecycle_receipt.v1";
+/// Broker control-lease lifecycle receipt schema with revocation vocabulary.
+pub const BROKER_CONTROL_LEASE_LIFECYCLE_RECEIPT_SCHEMA: &str =
+    "rusty.manifold.broker.control_lease_lifecycle_receipt.v2";
 /// Domain for an exact compact lifecycle request digest.
 pub const BROKER_CONTROL_LEASE_LIFECYCLE_REQUEST_DIGEST_DOMAIN: &str =
     "rusty.manifold.broker.control_lease_lifecycle_request.v1";
@@ -72,6 +84,23 @@ pub enum ManifoldBrokerControlLeaseLifecycleOperation {
         /// Caller-observed request time.
         requested_at_ms: u64,
     },
+    /// Administratively revoke one current Broker-owned lease.
+    ///
+    /// The caller supplies no holder, scope, or revoker identity. The Broker
+    /// derives the exact lease object and Manifold authority identity after
+    /// admission has authorized the dedicated revoke capability.
+    Revocation {
+        /// Idempotency identity.
+        request_id: DottedId,
+        /// Exact current lease identity.
+        lease_id: DottedId,
+        /// Manifold authority revision observed by the caller.
+        expected_authority_revision: Revision,
+        /// Stable administrative revocation reason.
+        revocation_reason: DottedId,
+        /// Caller-observed request time.
+        requested_at_ms: u64,
+    },
     /// Explicitly apply eligible control-lease expiry.
     Expiry {
         /// Idempotency identity.
@@ -95,6 +124,7 @@ impl ManifoldBrokerControlLeaseLifecycleOperation {
             Self::Issue { .. } => ManifoldBrokerControlLeaseLifecycleOperationKind::Issue,
             Self::Renewal { .. } => ManifoldBrokerControlLeaseLifecycleOperationKind::Renewal,
             Self::Release { .. } => ManifoldBrokerControlLeaseLifecycleOperationKind::Release,
+            Self::Revocation { .. } => ManifoldBrokerControlLeaseLifecycleOperationKind::Revocation,
             Self::Expiry { .. } => ManifoldBrokerControlLeaseLifecycleOperationKind::Expiry,
         }
     }
@@ -106,6 +136,7 @@ impl ManifoldBrokerControlLeaseLifecycleOperation {
             Self::Issue { request_id, .. }
             | Self::Renewal { request_id, .. }
             | Self::Release { request_id, .. }
+            | Self::Revocation { request_id, .. }
             | Self::Expiry { request_id, .. } => request_id,
         }
     }
@@ -126,6 +157,10 @@ impl ManifoldBrokerControlLeaseLifecycleOperation {
                 expected_authority_revision,
                 ..
             }
+            | Self::Revocation {
+                expected_authority_revision,
+                ..
+            }
             | Self::Expiry {
                 expected_authority_revision,
                 ..
@@ -133,11 +168,13 @@ impl ManifoldBrokerControlLeaseLifecycleOperation {
         }
     }
 
-    /// Returns a targeted lease identity for renewal or release.
+    /// Returns a targeted lease identity for renewal, release, or revocation.
     #[must_use]
     pub const fn lease_id(&self) -> Option<&DottedId> {
         match self {
-            Self::Renewal { lease_id, .. } | Self::Release { lease_id, .. } => Some(lease_id),
+            Self::Renewal { lease_id, .. }
+            | Self::Release { lease_id, .. }
+            | Self::Revocation { lease_id, .. } => Some(lease_id),
             Self::Issue { .. } | Self::Expiry { .. } => None,
         }
     }
@@ -147,7 +184,10 @@ impl ManifoldBrokerControlLeaseLifecycleOperation {
     pub const fn issue_scope(&self) -> Option<&DottedId> {
         match self {
             Self::Issue { scope, .. } => Some(scope),
-            Self::Renewal { .. } | Self::Release { .. } | Self::Expiry { .. } => None,
+            Self::Renewal { .. }
+            | Self::Release { .. }
+            | Self::Revocation { .. }
+            | Self::Expiry { .. } => None,
         }
     }
 
@@ -156,7 +196,10 @@ impl ManifoldBrokerControlLeaseLifecycleOperation {
     pub fn expiry_lease_ids(&self) -> Option<&[DottedId]> {
         match self {
             Self::Expiry { lease_ids, .. } => Some(lease_ids),
-            Self::Issue { .. } | Self::Renewal { .. } | Self::Release { .. } => None,
+            Self::Issue { .. }
+            | Self::Renewal { .. }
+            | Self::Release { .. }
+            | Self::Revocation { .. } => None,
         }
     }
 }
@@ -171,6 +214,8 @@ pub enum ManifoldBrokerControlLeaseLifecycleOperationKind {
     Renewal,
     /// Holder release.
     Release,
+    /// Administrative authority revocation.
+    Revocation,
     /// Explicit eligible expiry.
     Expiry,
 }
@@ -290,6 +335,10 @@ pub enum ManifoldBrokerControlLeaseLifecycleRejectionReason {
     StaleControlLeaseAuthorityRevision,
     /// Renewal or release targeted a lease outside this Broker product.
     UnrelatedLease,
+    /// Operation targets a lease behind an administrative revocation barrier.
+    RevokedLease,
+    /// A prior accepted revocation must converge before any owner transition.
+    PendingRevocationConvergence,
     /// Request identity was already retained by lifecycle authority.
     ReplayedLifecycleRequest,
     /// Strict authority clock lineage, health, or uncertainty validation failed.
@@ -363,6 +412,9 @@ pub fn control_lease_lifecycle_capability(
         }
         ManifoldBrokerControlLeaseLifecycleOperationKind::Release => {
             "capability.manifold.control_lease.release"
+        }
+        ManifoldBrokerControlLeaseLifecycleOperationKind::Revocation => {
+            "capability.manifold.control_lease.revoke"
         }
         ManifoldBrokerControlLeaseLifecycleOperationKind::Expiry => {
             "capability.manifold.control_lease.expire"

@@ -8,7 +8,9 @@ use rusty_manifold_model::{
     ManifoldControlLeaseReleaseAuthorityApplication,
     ManifoldControlLeaseReleaseAuthorityApplicationOutcome,
     ManifoldControlLeaseRenewalAuthorityApplication,
-    ManifoldControlLeaseRenewalAuthorityApplicationOutcome, Revision, SchemaId,
+    ManifoldControlLeaseRenewalAuthorityApplicationOutcome,
+    ManifoldControlLeaseRevocationAuthorityApplication,
+    ManifoldControlLeaseRevocationAuthorityApplicationOutcome, Revision, SchemaId,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -18,8 +20,10 @@ use std::fmt;
 pub const LEGACY_HOST_SNAPSHOT_V1_SCHEMA: &str = "rusty.manifold.runtime_host.snapshot.v1";
 /// Legacy Runtime Host snapshot schema accepted only by the migration API.
 pub const LEGACY_HOST_SNAPSHOT_V2_SCHEMA: &str = "rusty.manifold.runtime_host.snapshot.v2";
-/// Runtime Host snapshot schema with closed command, sweep, and lease-adoption lineage.
-pub const HOST_SNAPSHOT_SCHEMA: &str = "rusty.manifold.runtime_host.snapshot.v3";
+/// Legacy Runtime Host snapshot schema accepted only by the migration API.
+pub const LEGACY_HOST_SNAPSHOT_V3_SCHEMA: &str = "rusty.manifold.runtime_host.snapshot.v3";
+/// Runtime Host snapshot schema with derivative-lease convergence lineage.
+pub const HOST_SNAPSHOT_SCHEMA: &str = "rusty.manifold.runtime_host.snapshot.v4";
 /// Runtime host command request schema.
 pub const HOST_COMMAND_REQUEST_SCHEMA: &str = "rusty.manifold.runtime_host.command_request.v1";
 /// Runtime host typed-parameter digest schema.
@@ -39,18 +43,48 @@ pub const HOST_APPLICATION_RECEIPT_SCHEMA: &str =
 /// Runtime Host lease-expiry receipt schema.
 pub const HOST_LEASE_EXPIRY_RECEIPT_SCHEMA: &str =
     "rusty.manifold.runtime_host.lease_expiry_receipt.v2";
+/// Legacy Runtime Host control-lease adoption request schema.
+///
+/// Requests are transient and are not retained in a Runtime Host snapshot.
+/// Broker evidence that persisted a v1 receipt owns its explicit evidence
+/// migration rather than treating Runtime Host restart as a lease decision.
+pub const LEGACY_HOST_CONTROL_LEASE_ADOPTION_REQUEST_V1_SCHEMA: &str =
+    "rusty.manifold.runtime_host.control_lease_adoption_request.v1";
 /// Runtime Host request to adopt a validated Manifold control-lease application.
 pub const HOST_CONTROL_LEASE_ADOPTION_REQUEST_SCHEMA: &str =
-    "rusty.manifold.runtime_host.control_lease_adoption_request.v1";
+    "rusty.manifold.runtime_host.control_lease_adoption_request.v2";
+/// Legacy Runtime Host control-lease adoption receipt schema.
+///
+/// Adoption receipts are returned to and retained by their composing owner;
+/// they are not embedded in the Runtime Host snapshot.
+pub const LEGACY_HOST_CONTROL_LEASE_ADOPTION_RECEIPT_V1_SCHEMA: &str =
+    "rusty.manifold.runtime_host.control_lease_adoption_receipt.v1";
 /// Runtime Host receipt for adopting a validated Manifold control-lease application.
 pub const HOST_CONTROL_LEASE_ADOPTION_RECEIPT_SCHEMA: &str =
-    "rusty.manifold.runtime_host.control_lease_adoption_receipt.v1";
+    "rusty.manifold.runtime_host.control_lease_adoption_receipt.v2";
+/// Runtime Host derivative-lease revocation convergence request schema.
+pub const HOST_DERIVATIVE_LEASE_REVOCATION_REQUEST_SCHEMA: &str =
+    "rusty.manifold.runtime_host.derivative_lease_revocation_request.v1";
+/// Revalidated upstream authority proof for derivative-lease revocation.
+pub const HOST_UPSTREAM_REVOCATION_PROOF_SCHEMA: &str =
+    "rusty.manifold.runtime_host.upstream_revocation_proof.v1";
+/// Accepted coordinator binding from one derivative lease to its upstream lease.
+pub const HOST_DERIVATIVE_LEASE_BINDING_SCHEMA: &str =
+    "rusty.manifold.runtime_host.derivative_lease_binding.v1";
+/// Runtime Host derivative-lease revocation convergence receipt schema.
+pub const HOST_DERIVATIVE_LEASE_REVOCATION_RECEIPT_SCHEMA: &str =
+    "rusty.manifold.runtime_host.derivative_lease_revocation_receipt.v1";
+/// Runtime Host derivative-lease revocation audit binding schema.
+pub const HOST_DERIVATIVE_LEASE_REVOCATION_AUDIT_BINDING_SCHEMA: &str =
+    "rusty.manifold.runtime_host.derivative_lease_revocation_audit_binding.v1";
 /// Legacy Runtime Host audit schema accepted only during snapshot migration.
 pub const LEGACY_HOST_AUDIT_EVENT_V1_SCHEMA: &str = "rusty.manifold.runtime_host.audit_event.v1";
 /// Legacy Runtime Host audit schema accepted only during snapshot migration.
 pub const LEGACY_HOST_AUDIT_EVENT_V2_SCHEMA: &str = "rusty.manifold.runtime_host.audit_event.v2";
-/// Runtime Host audit-event schema with canonical sequence and lease-adoption identities.
-pub const HOST_AUDIT_EVENT_SCHEMA: &str = "rusty.manifold.runtime_host.audit_event.v3";
+/// Legacy Runtime Host audit schema accepted only during snapshot migration.
+pub const LEGACY_HOST_AUDIT_EVENT_V3_SCHEMA: &str = "rusty.manifold.runtime_host.audit_event.v3";
+/// Runtime Host audit-event schema with derivative-lease convergence bindings.
+pub const HOST_AUDIT_EVENT_SCHEMA: &str = "rusty.manifold.runtime_host.audit_event.v4";
 /// Explicit Runtime Host snapshot migration receipt schema.
 pub const HOST_MIGRATION_RECEIPT_SCHEMA: &str =
     "rusty.manifold.runtime_host.snapshot_migration_receipt.v1";
@@ -60,6 +94,8 @@ pub const MAX_TYPED_PARAMS_CANONICAL_BYTES: u32 = 4_096;
 pub const MAX_RUNTIME_AUDIT_EVENTS: usize = 8_192;
 /// Maximum entries in static and replay collections.
 pub const MAX_RUNTIME_SNAPSHOT_RECORDS: usize = 4_096;
+/// Maximum exact leases removed by one derivative convergence operation.
+pub const MAX_RUNTIME_DERIVATIVE_LEASE_REVOCATION_LEASES: usize = 64;
 
 /// Registered low-rate command descriptor.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -69,6 +105,23 @@ pub struct ManifoldRuntimeCommandDescriptor {
     pub command_id: DottedId,
     /// Required lease scope, when the command mutates scoped state.
     pub required_lease_scope: Option<DottedId>,
+}
+
+/// Accepted coordinator lineage for one derivative Runtime Host lease.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldRuntimeDerivativeLeaseBinding {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Stable binding identity retained with accepted Runtime Host state.
+    pub binding_id: DottedId,
+    /// Exact upstream provider epoch that admitted the derivative lease.
+    pub provider_epoch_id: DottedId,
+    /// Exact upstream control lease from which this lease was derived.
+    pub upstream_control_lease_id: DottedId,
+    /// Exact accepted authorization that caused derivative lease admission.
+    pub source_authorization_id: DottedId,
 }
 
 /// Accepted runtime-host lease.
@@ -83,6 +136,9 @@ pub struct ManifoldRuntimeLease {
     pub holder_id: DottedId,
     /// Absolute expiry in the review time domain.
     pub expires_at_ms: u64,
+    /// Accepted coordinator lineage when this lease derives from an upstream lease.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub derivative_binding: Option<ManifoldRuntimeDerivativeLeaseBinding>,
 }
 
 /// Canonical typed-parameter identity bound through review and application.
@@ -123,6 +179,9 @@ pub struct ManifoldRuntimeHostSnapshot {
     /// First-seen control-lease adoption identities retained against replay.
     #[serde(default)]
     pub reviewed_control_lease_adoption_ids: Vec<DottedId>,
+    /// First-seen derivative-lease revocation identities retained against replay.
+    #[serde(default)]
+    pub reviewed_derivative_lease_revocation_ids: Vec<DottedId>,
     /// Append-only runtime-host audit records.
     pub audit_events: Vec<ManifoldRuntimeAuditEvent>,
 }
@@ -201,6 +260,12 @@ pub enum ManifoldRuntimeRejectionReason {
     ReplayedSweep,
     /// Control-lease adoption identity was already reviewed.
     ReplayedControlLeaseAdoption,
+    /// Derivative-lease revocation identity was already reviewed.
+    ReplayedDerivativeLeaseRevocation,
+    /// Derivative-lease revocation request shape or canonical order is invalid.
+    InvalidDerivativeLeaseRevocationRequest,
+    /// One or more supplied derivative leases differ from current Host state.
+    DerivativeLeaseDeltaMismatch,
     /// Supplied Manifold authority application is damaged or does not match its exact prior state.
     InvalidControlLeaseAuthorityApplication,
     /// Supplied Manifold authority application records a rejected state transition.
@@ -288,6 +353,170 @@ pub struct ManifoldRuntimeLeaseExpiryReceipt {
     pub rejection_reason: Option<ManifoldRuntimeRejectionReason>,
 }
 
+/// Exact upstream authority transition admitted to derivative cleanup.
+///
+/// Fields are private so callers must use [`Self::from_accepted_application`].
+/// Runtime Host revalidates the proof again immediately before mutation and
+/// retains it in audit state; construction alone is not an acceptance bypass.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldRuntimeUpstreamRevocationProof {
+    #[serde(rename = "$schema")]
+    schema_id: SchemaId,
+    provider_epoch_id: DottedId,
+    prior_authority_snapshot: Box<ManifoldAuthoritySnapshot>,
+    accepted_application: Box<ManifoldControlLeaseRevocationAuthorityApplication>,
+}
+
+impl ManifoldRuntimeUpstreamRevocationProof {
+    /// Builds a proof only from one exact, applied generic authority transition.
+    ///
+    /// # Errors
+    ///
+    /// Returns when the application, review, tombstone, or next-state lineage
+    /// does not validate against the supplied prior authority snapshot.
+    pub fn from_accepted_application(
+        provider_epoch_id: DottedId,
+        prior_authority_snapshot: ManifoldAuthoritySnapshot,
+        accepted_application: ManifoldControlLeaseRevocationAuthorityApplication,
+    ) -> Result<Self, ManifoldRuntimeHostError> {
+        let proof = Self {
+            schema_id: schema_id(HOST_UPSTREAM_REVOCATION_PROOF_SCHEMA),
+            provider_epoch_id,
+            prior_authority_snapshot: Box::new(prior_authority_snapshot),
+            accepted_application: Box::new(accepted_application),
+        };
+        proof.validate()?;
+        Ok(proof)
+    }
+
+    /// Exact Broker/provider epoch authenticated by the convergence coordinator.
+    #[must_use]
+    pub const fn provider_epoch_id(&self) -> &DottedId {
+        &self.provider_epoch_id
+    }
+
+    /// Exact accepted upstream application identity.
+    #[must_use]
+    pub const fn application_id(&self) -> &DottedId {
+        &self.accepted_application.application_id
+    }
+
+    /// Exact upstream control lease removed by the accepted application.
+    #[must_use]
+    pub const fn revoked_control_lease_id(&self) -> &DottedId {
+        &self.accepted_application.lease_id
+    }
+
+    fn validate(&self) -> Result<(), ManifoldRuntimeHostError> {
+        if self.schema_id.as_str() != HOST_UPSTREAM_REVOCATION_PROOF_SCHEMA
+            || self.accepted_application.outcome
+                != ManifoldControlLeaseRevocationAuthorityApplicationOutcome::LeaseRevocationApplied
+            || self.accepted_application.tombstone.is_none()
+            || self.accepted_application.applied_snapshot.is_none()
+        {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "upstream_revocation_proof_shape",
+            ));
+        }
+        self.accepted_application
+            .validate_against_snapshot(&self.prior_authority_snapshot)
+            .map_err(|_| {
+                ManifoldRuntimeHostError::InvalidSnapshot("upstream_revocation_proof_application")
+            })
+    }
+}
+
+fn derivative_lease_binding_matches_proof(
+    lease: &ManifoldRuntimeLease,
+    proof: &ManifoldRuntimeUpstreamRevocationProof,
+) -> bool {
+    lease.derivative_binding.as_ref().is_some_and(|binding| {
+        binding.schema_id.as_str() == HOST_DERIVATIVE_LEASE_BINDING_SCHEMA
+            && binding.provider_epoch_id == *proof.provider_epoch_id()
+            && binding.upstream_control_lease_id == *proof.revoked_control_lease_id()
+    })
+}
+
+/// Exact derivative leases to revoke after an upstream authority revocation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldRuntimeDerivativeLeaseRevocationRequest {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// One-shot Runtime Host recovery/adoption identity.
+    pub revocation_id: DottedId,
+    /// Upstream convergence transaction identity.
+    pub convergence_id: DottedId,
+    /// Runtime Host revision expected by the convergence coordinator.
+    pub expected_host_authority_revision: Revision,
+    /// Revalidated exact upstream provider/application/tombstone lineage.
+    pub upstream_revocation_proof: ManifoldRuntimeUpstreamRevocationProof,
+    /// Nonempty, lease-id-ordered exact current Runtime Host lease objects.
+    pub exact_leases: Vec<ManifoldRuntimeLease>,
+}
+
+/// Typed audit binding retained with a derivative-lease revocation attempt.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldRuntimeDerivativeLeaseRevocationAuditBinding {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// One-shot Runtime Host recovery/adoption identity.
+    pub revocation_id: DottedId,
+    /// Upstream convergence transaction identity.
+    pub convergence_id: DottedId,
+    /// Upstream provider epoch.
+    pub provider_epoch_id: DottedId,
+    /// Exact accepted upstream revocation application.
+    pub upstream_revocation_application_id: DottedId,
+    /// Revalidated exact upstream provider/application/tombstone lineage.
+    pub upstream_revocation_proof: ManifoldRuntimeUpstreamRevocationProof,
+    /// Exact request lease objects, including rejected malformed or substituted attempts.
+    pub exact_leases: Vec<ManifoldRuntimeLease>,
+}
+
+/// Runtime Host derivative-lease revocation convergence receipt.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldRuntimeDerivativeLeaseRevocationReceipt {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Exact Runtime Host.
+    pub authority_host_id: DottedId,
+    /// One-shot Runtime Host recovery/adoption identity.
+    pub revocation_id: DottedId,
+    /// Upstream convergence transaction identity.
+    pub convergence_id: DottedId,
+    /// Upstream provider epoch.
+    pub provider_epoch_id: DottedId,
+    /// Exact accepted upstream revocation application.
+    pub upstream_revocation_application_id: DottedId,
+    /// Revalidated exact upstream provider/application/tombstone lineage.
+    pub upstream_revocation_proof: ManifoldRuntimeUpstreamRevocationProof,
+    /// Whether all exact derivative leases were removed atomically.
+    pub applied: bool,
+    /// Complete exact leases supplied by the convergence coordinator.
+    pub requested_leases: Vec<ManifoldRuntimeLease>,
+    /// Canonical identities of the exact removed leases.
+    pub removed_lease_ids: Vec<DottedId>,
+    /// Complete exact removed lease objects.
+    pub removed_leases: Vec<ManifoldRuntimeLease>,
+    /// Runtime Host revision before convergence.
+    pub prior_host_authority_revision: Revision,
+    /// Runtime Host revision after convergence.
+    pub resulting_host_authority_revision: Revision,
+    /// Stable rejection when convergence was not applied.
+    pub rejection_reason: Option<ManifoldRuntimeRejectionReason>,
+    /// Canonical audit sequence, absent only when capacity rejected before audit.
+    pub audit_sequence: Option<u64>,
+    /// Canonical audit identity, absent only when capacity rejected before audit.
+    pub audit_event_id: Option<DottedId>,
+}
+
 /// Kind of validated Manifold control-lease transition adopted by Runtime Host.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -298,6 +527,8 @@ pub enum ManifoldRuntimeControlLeaseAdoptionOperation {
     Renewal,
     /// Adopt an accepted control-lease release application.
     Release,
+    /// Adopt an accepted authority-owned control-lease revocation application.
+    Revocation,
     /// Adopt an accepted authority expiry application containing lease removals only.
     Expiry,
 }
@@ -312,6 +543,8 @@ pub enum ManifoldRuntimeControlLeaseAuthorityApplication {
     Renewal(ManifoldControlLeaseRenewalAuthorityApplication),
     /// Control-lease release application.
     Release(ManifoldControlLeaseReleaseAuthorityApplication),
+    /// Authority-owned control-lease revocation application.
+    Revocation(Box<ManifoldControlLeaseRevocationAuthorityApplication>),
     /// Authority expiry application.
     Expiry(ManifoldAuthorityExpirySweepAuthorityApplication),
 }
@@ -322,6 +555,7 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
             Self::Issue(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Issue,
             Self::Renewal(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Renewal,
             Self::Release(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Release,
+            Self::Revocation(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Revocation,
             Self::Expiry(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Expiry,
         }
     }
@@ -331,6 +565,7 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
             Self::Issue(application) => &application.authority_id,
             Self::Renewal(application) => &application.authority_id,
             Self::Release(application) => &application.authority_id,
+            Self::Revocation(application) => &application.authority_id,
             Self::Expiry(application) => &application.authority_id,
         }
     }
@@ -340,6 +575,7 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
             Self::Issue(application) => &application.application_id,
             Self::Renewal(application) => &application.application_id,
             Self::Release(application) => &application.application_id,
+            Self::Revocation(application) => &application.application_id,
             Self::Expiry(application) => &application.application_id,
         }
     }
@@ -349,6 +585,7 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
             Self::Issue(application) => application.from_authority_revision,
             Self::Renewal(application) => application.from_authority_revision,
             Self::Release(application) => application.from_authority_revision,
+            Self::Revocation(application) => application.from_authority_revision,
             Self::Expiry(application) => application.from_authority_revision,
         }
     }
@@ -368,6 +605,12 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
                     snapshot.authority_revision
                 }),
             Self::Release(application) => application
+                .applied_snapshot
+                .as_ref()
+                .map_or(application.from_authority_revision, |snapshot| {
+                    snapshot.authority_revision
+                }),
+            Self::Revocation(application) => application
                 .applied_snapshot
                 .as_ref()
                 .map_or(application.from_authority_revision, |snapshot| {
@@ -460,6 +703,9 @@ pub struct ManifoldRuntimeAuditEvent {
     pub applied: bool,
     /// Rejection reason when applicable.
     pub rejection_reason: Option<ManifoldRuntimeRejectionReason>,
+    /// Exact derivative-lease revocation input when this is that event kind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub derivative_lease_revocation: Option<ManifoldRuntimeDerivativeLeaseRevocationAuditBinding>,
 }
 
 /// Runtime-host audit event kind.
@@ -472,10 +718,12 @@ pub enum ManifoldRuntimeAuditKind {
     LeaseExpiry,
     /// Validated Manifold control-lease application adoption result.
     ControlLeaseAdoption,
+    /// Upstream-revocation-driven derivative lease convergence result.
+    DerivativeLeaseRevocation,
 }
 
-/// Durable evidence that a Runtime Host restart either consumed current v3
-/// state directly or migrated a validated legacy v1/v2 snapshot.
+/// Durable evidence that a Runtime Host restart either consumed current v4
+/// state directly or migrated a validated legacy v1/v2/v3 snapshot.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ManifoldRuntimeHostMigrationReceipt {
@@ -492,7 +740,7 @@ pub struct ManifoldRuntimeHostMigrationReceipt {
     pub authority_host_id: DottedId,
     /// Resulting accepted authority revision.
     pub resulting_authority_revision: Revision,
-    /// Number of legacy audit records assigned or rewritten to canonical v3 form.
+    /// Number of legacy audit records assigned or rewritten to canonical v4 form.
     pub migrated_audit_event_count: usize,
     /// First-seen legacy sweep ids retained against replay.
     pub reviewed_sweep_ids: Vec<DottedId>,
@@ -623,6 +871,21 @@ struct LegacyRuntimeHostSnapshotV2 {
     audit_events: Vec<LegacyRuntimeAuditEventV2>,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct LegacyRuntimeHostSnapshotV3 {
+    #[serde(rename = "$schema")]
+    schema_id: SchemaId,
+    host_id: DottedId,
+    authority_revision: Revision,
+    commands: Vec<ManifoldRuntimeCommandDescriptor>,
+    leases: Vec<ManifoldRuntimeLease>,
+    applied_request_ids: Vec<DottedId>,
+    reviewed_sweep_ids: Vec<DottedId>,
+    reviewed_control_lease_adoption_ids: Vec<DottedId>,
+    audit_events: Vec<ManifoldRuntimeAuditEvent>,
+}
+
 #[derive(Deserialize)]
 struct SchemaProbe {
     #[serde(rename = "$schema")]
@@ -649,12 +912,12 @@ impl ManifoldRuntimeHost {
         Self::restart_from_json_with_migration(json).map(|(host, _)| host)
     }
 
-    /// Restarts current v3 state or migrates a validated v1/v2 snapshot while
+    /// Restarts current v4 state or migrates a validated v1/v2/v3 snapshot while
     /// returning explicit schema/audit migration evidence.
     ///
     /// # Errors
     ///
-    /// Returns an error when source JSON, legacy lineage, or resulting v3
+    /// Returns an error when source JSON, legacy lineage, or resulting v4
     /// snapshot invariants fail.
     pub fn restart_from_json_with_migration(
         json: &str,
@@ -668,6 +931,11 @@ impl ManifoldRuntimeHost {
             let receipt =
                 runtime_host_migration_receipt(probe.schema_id, host.snapshot(), false, 0);
             return Ok((host, receipt));
+        }
+        if probe.schema_id.as_str() == LEGACY_HOST_SNAPSHOT_V3_SCHEMA {
+            let legacy: LegacyRuntimeHostSnapshotV3 =
+                serde_json::from_str(json).map_err(ManifoldRuntimeHostError::Deserialize)?;
+            return migrate_legacy_runtime_host_snapshot_v3(legacy);
         }
         if probe.schema_id.as_str() == LEGACY_HOST_SNAPSHOT_V2_SCHEMA {
             let legacy: LegacyRuntimeHostSnapshotV2 =
@@ -878,6 +1146,166 @@ impl ManifoldRuntimeHost {
         )
     }
 
+    /// Atomically removes exact derivative leases after accepted upstream revocation.
+    ///
+    /// The upstream coordinator supplies complete current lease objects, never
+    /// replacement state. Runtime Host compares every object byte-for-byte,
+    /// removes the complete set in one revision, and retains the first-seen
+    /// recovery identity and exact upstream convergence binding across restart.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if an accepted Host revision is already at the maximum
+    /// representable revision after all capacity checks have passed.
+    #[allow(clippy::too_many_lines)]
+    pub fn apply_derivative_lease_revocation(
+        &mut self,
+        request: &ManifoldRuntimeDerivativeLeaseRevocationRequest,
+    ) -> ManifoldRuntimeDerivativeLeaseRevocationReceipt {
+        let prior = self.snapshot.authority_revision;
+        if self.snapshot.audit_events.len() >= MAX_RUNTIME_AUDIT_EVENTS
+            || request.exact_leases.len() > MAX_RUNTIME_DERIVATIVE_LEASE_REVOCATION_LEASES
+        {
+            return derivative_lease_revocation_receipt(
+                &self.snapshot,
+                request,
+                prior,
+                prior,
+                false,
+                Vec::new(),
+                Some(ManifoldRuntimeRejectionReason::AuthorityCapacityExhausted),
+                None,
+            );
+        }
+        let replayed = self
+            .snapshot
+            .reviewed_derivative_lease_revocation_ids
+            .contains(&request.revocation_id);
+        if !replayed
+            && self.snapshot.reviewed_derivative_lease_revocation_ids.len()
+                >= MAX_RUNTIME_SNAPSHOT_RECORDS
+        {
+            return derivative_lease_revocation_receipt(
+                &self.snapshot,
+                request,
+                prior,
+                prior,
+                false,
+                Vec::new(),
+                Some(ManifoldRuntimeRejectionReason::AuthorityCapacityExhausted),
+                None,
+            );
+        }
+
+        let canonical = !request.exact_leases.is_empty()
+            && request
+                .exact_leases
+                .windows(2)
+                .all(|pair| pair[0].lease_id < pair[1].lease_id);
+        let mut accepted_derivative_leases = self
+            .snapshot
+            .leases
+            .iter()
+            .filter(|lease| {
+                derivative_lease_binding_matches_proof(lease, &request.upstream_revocation_proof)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        accepted_derivative_leases.sort_by(|left, right| left.lease_id.cmp(&right.lease_id));
+        let result = if replayed {
+            Err(ManifoldRuntimeRejectionReason::ReplayedDerivativeLeaseRevocation)
+        } else if request.schema_id.as_str() != HOST_DERIVATIVE_LEASE_REVOCATION_REQUEST_SCHEMA {
+            Err(ManifoldRuntimeRejectionReason::SchemaMismatch)
+        } else if request.expected_host_authority_revision != prior {
+            Err(ManifoldRuntimeRejectionReason::StaleAuthorityRevision)
+        } else if request.upstream_revocation_proof.validate().is_err()
+            || request.revocation_id == request.convergence_id
+            || !canonical
+        {
+            Err(ManifoldRuntimeRejectionReason::InvalidDerivativeLeaseRevocationRequest)
+        } else if accepted_derivative_leases.is_empty()
+            || request.exact_leases != accepted_derivative_leases
+        {
+            Err(ManifoldRuntimeRejectionReason::DerivativeLeaseDeltaMismatch)
+        } else if request.exact_leases.iter().any(|expected| {
+            self.snapshot
+                .leases
+                .iter()
+                .find(|current| current.lease_id == expected.lease_id)
+                != Some(expected)
+        }) {
+            Err(ManifoldRuntimeRejectionReason::DerivativeLeaseDeltaMismatch)
+        } else {
+            Ok(request.exact_leases.clone())
+        };
+
+        if !replayed {
+            self.snapshot
+                .reviewed_derivative_lease_revocation_ids
+                .push(request.revocation_id.clone());
+            self.snapshot
+                .reviewed_derivative_lease_revocation_ids
+                .sort();
+        }
+        let (removed_leases, rejection) = match result {
+            Ok(leases) => (leases, None),
+            Err(rejection) => (Vec::new(), Some(rejection)),
+        };
+        let applied = rejection.is_none();
+        if applied {
+            let removed_ids = removed_leases
+                .iter()
+                .map(|lease| lease.lease_id.clone())
+                .collect::<BTreeSet<_>>();
+            self.snapshot
+                .leases
+                .retain(|lease| !removed_ids.contains(&lease.lease_id));
+            self.snapshot.authority_revision =
+                prior.next().expect("authority revision must advance");
+        }
+        let resulting = self.snapshot.authority_revision;
+        let sequence = (self.snapshot.audit_events.len() as u64) + 1;
+        let event_id = runtime_audit_id(sequence);
+        self.snapshot.audit_events.push(ManifoldRuntimeAuditEvent {
+            schema_id: schema_id(HOST_AUDIT_EVENT_SCHEMA),
+            sequence,
+            event_id: event_id.clone(),
+            event_kind: ManifoldRuntimeAuditKind::DerivativeLeaseRevocation,
+            source_id: request.revocation_id.clone(),
+            prior_authority_revision: prior,
+            resulting_authority_revision: resulting,
+            applied,
+            rejection_reason: rejection.clone(),
+            derivative_lease_revocation: Some(
+                ManifoldRuntimeDerivativeLeaseRevocationAuditBinding {
+                    schema_id: schema_id(HOST_DERIVATIVE_LEASE_REVOCATION_AUDIT_BINDING_SCHEMA),
+                    revocation_id: request.revocation_id.clone(),
+                    convergence_id: request.convergence_id.clone(),
+                    provider_epoch_id: request
+                        .upstream_revocation_proof
+                        .provider_epoch_id()
+                        .clone(),
+                    upstream_revocation_application_id: request
+                        .upstream_revocation_proof
+                        .application_id()
+                        .clone(),
+                    upstream_revocation_proof: request.upstream_revocation_proof.clone(),
+                    exact_leases: request.exact_leases.clone(),
+                },
+            ),
+        });
+        derivative_lease_revocation_receipt(
+            &self.snapshot,
+            request,
+            prior,
+            resulting,
+            applied,
+            removed_leases,
+            rejection,
+            Some((sequence, event_id)),
+        )
+    }
+
     /// Performs an explicit revision-guarded lease expiry sweep.
     pub fn expire_leases(
         &mut self,
@@ -977,6 +1405,7 @@ fn runtime_lease(lease: &ManifoldControlLease) -> ManifoldRuntimeLease {
         scope: lease.scope.clone(),
         holder_id: lease.holder_id.clone(),
         expires_at_ms: lease.expires_at_ms,
+        derivative_binding: None,
     }
 }
 
@@ -1059,6 +1488,29 @@ fn derive_control_lease_delta(
                 return Err(mismatch);
             }
             Ok(ControlLeaseDelta::Remove(vec![released]))
+        }
+        ManifoldRuntimeControlLeaseAuthorityApplication::Revocation(application) => {
+            application
+                .validate_against_snapshot(&request.prior_authority_snapshot)
+                .map_err(|_| invalid.clone())?;
+            if application.outcome
+                != ManifoldControlLeaseRevocationAuthorityApplicationOutcome::LeaseRevocationApplied
+            {
+                return Err(
+                    ManifoldRuntimeRejectionReason::RejectedControlLeaseAuthorityApplication,
+                );
+            }
+            let revoked = runtime_lease(application.review.revoked.as_ref().ok_or(invalid)?);
+            if application.lease_id != revoked.lease_id
+                || snapshot
+                    .leases
+                    .iter()
+                    .find(|lease| lease.lease_id == revoked.lease_id)
+                    != Some(&revoked)
+            {
+                return Err(mismatch);
+            }
+            Ok(ControlLeaseDelta::Remove(vec![revoked]))
         }
         ManifoldRuntimeControlLeaseAuthorityApplication::Expiry(application) => {
             application
@@ -1150,6 +1602,147 @@ fn control_lease_adoption_receipt(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+fn derivative_lease_revocation_receipt(
+    snapshot: &ManifoldRuntimeHostSnapshot,
+    request: &ManifoldRuntimeDerivativeLeaseRevocationRequest,
+    prior: Revision,
+    resulting: Revision,
+    applied: bool,
+    removed_leases: Vec<ManifoldRuntimeLease>,
+    rejection_reason: Option<ManifoldRuntimeRejectionReason>,
+    audit: Option<(u64, DottedId)>,
+) -> ManifoldRuntimeDerivativeLeaseRevocationReceipt {
+    let removed_lease_ids = removed_leases
+        .iter()
+        .map(|lease| lease.lease_id.clone())
+        .collect();
+    let (audit_sequence, audit_event_id) = audit.map_or((None, None), |(sequence, event_id)| {
+        (Some(sequence), Some(event_id))
+    });
+    ManifoldRuntimeDerivativeLeaseRevocationReceipt {
+        schema_id: schema_id(HOST_DERIVATIVE_LEASE_REVOCATION_RECEIPT_SCHEMA),
+        authority_host_id: snapshot.host_id.clone(),
+        revocation_id: request.revocation_id.clone(),
+        convergence_id: request.convergence_id.clone(),
+        provider_epoch_id: request
+            .upstream_revocation_proof
+            .provider_epoch_id()
+            .clone(),
+        upstream_revocation_application_id: request
+            .upstream_revocation_proof
+            .application_id()
+            .clone(),
+        upstream_revocation_proof: request.upstream_revocation_proof.clone(),
+        applied,
+        requested_leases: request.exact_leases.clone(),
+        removed_lease_ids,
+        removed_leases,
+        prior_host_authority_revision: prior,
+        resulting_host_authority_revision: resulting,
+        rejection_reason,
+        audit_sequence,
+        audit_event_id,
+    }
+}
+
+impl ManifoldRuntimeDerivativeLeaseRevocationReceipt {
+    /// Validates this receipt against durable restarted Runtime Host state.
+    ///
+    /// # Errors
+    ///
+    /// Returns when snapshot lineage or any Host/upstream/request/lease/audit
+    /// binding differs from this receipt.
+    pub fn validate_against_snapshot(
+        &self,
+        snapshot: &ManifoldRuntimeHostSnapshot,
+    ) -> Result<(), ManifoldRuntimeHostError> {
+        validate_snapshot(snapshot)?;
+        let canonical_requested = !self.requested_leases.is_empty()
+            && self.requested_leases.len() <= MAX_RUNTIME_DERIVATIVE_LEASE_REVOCATION_LEASES
+            && self
+                .requested_leases
+                .windows(2)
+                .all(|pair| pair[0].lease_id < pair[1].lease_id);
+        let expected_removed_ids = self
+            .removed_leases
+            .iter()
+            .map(|lease| lease.lease_id.clone())
+            .collect::<Vec<_>>();
+        let (Some(audit_sequence), Some(audit_event_id)) =
+            (self.audit_sequence, self.audit_event_id.as_ref())
+        else {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "derivative_revocation_receipt_missing_audit",
+            ));
+        };
+        let Some(event) = snapshot
+            .audit_events
+            .iter()
+            .find(|event| event.sequence == audit_sequence && &event.event_id == audit_event_id)
+        else {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "derivative_revocation_receipt_unknown_audit",
+            ));
+        };
+        let expected_binding = ManifoldRuntimeDerivativeLeaseRevocationAuditBinding {
+            schema_id: schema_id(HOST_DERIVATIVE_LEASE_REVOCATION_AUDIT_BINDING_SCHEMA),
+            revocation_id: self.revocation_id.clone(),
+            convergence_id: self.convergence_id.clone(),
+            provider_epoch_id: self.provider_epoch_id.clone(),
+            upstream_revocation_application_id: self.upstream_revocation_application_id.clone(),
+            upstream_revocation_proof: self.upstream_revocation_proof.clone(),
+            exact_leases: self.requested_leases.clone(),
+        };
+        let applied_shape = self.applied
+            && self.rejection_reason.is_none()
+            && self.upstream_revocation_proof.validate().is_ok()
+            && canonical_requested
+            && self.requested_leases.iter().all(|lease| {
+                derivative_lease_binding_matches_proof(lease, &self.upstream_revocation_proof)
+            })
+            && self.removed_leases == self.requested_leases
+            && self.removed_lease_ids == expected_removed_ids
+            && self
+                .prior_host_authority_revision
+                .next()
+                .is_some_and(|revision| revision == self.resulting_host_authority_revision)
+            && self.removed_lease_ids.iter().all(|removed_id| {
+                !snapshot
+                    .leases
+                    .iter()
+                    .any(|lease| &lease.lease_id == removed_id)
+            });
+        let rejected_shape = !self.applied
+            && self.rejection_reason.is_some()
+            && self.removed_leases.is_empty()
+            && self.removed_lease_ids.is_empty()
+            && self.prior_host_authority_revision == self.resulting_host_authority_revision;
+        if self.schema_id.as_str() != HOST_DERIVATIVE_LEASE_REVOCATION_RECEIPT_SCHEMA
+            || self.authority_host_id != snapshot.host_id
+            || self.provider_epoch_id != *self.upstream_revocation_proof.provider_epoch_id()
+            || self.upstream_revocation_application_id
+                != *self.upstream_revocation_proof.application_id()
+            || !snapshot
+                .reviewed_derivative_lease_revocation_ids
+                .contains(&self.revocation_id)
+            || event.event_kind != ManifoldRuntimeAuditKind::DerivativeLeaseRevocation
+            || event.source_id != self.revocation_id
+            || event.prior_authority_revision != self.prior_host_authority_revision
+            || event.resulting_authority_revision != self.resulting_host_authority_revision
+            || event.applied != self.applied
+            || event.rejection_reason != self.rejection_reason
+            || event.derivative_lease_revocation.as_ref() != Some(&expected_binding)
+            || (!applied_shape && !rejected_shape)
+        {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "derivative_revocation_receipt_mismatch",
+            ));
+        }
+        Ok(())
+    }
+}
+
 fn migrate_legacy_runtime_host_snapshot_v1(
     legacy: LegacyRuntimeHostSnapshotV1,
 ) -> Result<(ManifoldRuntimeHost, ManifoldRuntimeHostMigrationReceipt), ManifoldRuntimeHostError> {
@@ -1178,6 +1771,7 @@ fn migrate_legacy_runtime_host_snapshot_v1(
                 resulting_authority_revision: event.resulting_authority_revision,
                 applied: event.applied,
                 rejection_reason: event.rejection_reason.clone().map(Into::into),
+                derivative_lease_revocation: None,
             }
         })
         .collect::<Vec<_>>();
@@ -1192,6 +1786,7 @@ fn migrate_legacy_runtime_host_snapshot_v1(
         applied_request_ids: legacy.applied_request_ids,
         reviewed_sweep_ids,
         reviewed_control_lease_adoption_ids: Vec::new(),
+        reviewed_derivative_lease_revocation_ids: Vec::new(),
         audit_events,
     };
     let host = ManifoldRuntimeHost::from_snapshot(snapshot)?;
@@ -1228,6 +1823,7 @@ fn migrate_legacy_runtime_host_snapshot_v2(
         applied_request_ids: legacy.applied_request_ids,
         reviewed_sweep_ids: legacy.reviewed_sweep_ids,
         reviewed_control_lease_adoption_ids: Vec::new(),
+        reviewed_derivative_lease_revocation_ids: Vec::new(),
         audit_events: legacy
             .audit_events
             .into_iter()
@@ -1241,6 +1837,61 @@ fn migrate_legacy_runtime_host_snapshot_v2(
                 resulting_authority_revision: event.resulting_authority_revision,
                 applied: event.applied,
                 rejection_reason: event.rejection_reason.map(Into::into),
+                derivative_lease_revocation: None,
+            })
+            .collect(),
+    };
+    let host = ManifoldRuntimeHost::from_snapshot(snapshot)?;
+    let receipt = runtime_host_migration_receipt(
+        source_schema_id,
+        host.snapshot(),
+        true,
+        migrated_audit_event_count,
+    );
+    Ok((host, receipt))
+}
+
+fn migrate_legacy_runtime_host_snapshot_v3(
+    legacy: LegacyRuntimeHostSnapshotV3,
+) -> Result<(ManifoldRuntimeHost, ManifoldRuntimeHostMigrationReceipt), ManifoldRuntimeHostError> {
+    if legacy.schema_id.as_str() != LEGACY_HOST_SNAPSHOT_V3_SCHEMA
+        || legacy.audit_events.iter().any(|event| {
+            event.schema_id.as_str() != LEGACY_HOST_AUDIT_EVENT_V3_SCHEMA
+                || event.event_kind == ManifoldRuntimeAuditKind::DerivativeLeaseRevocation
+                || event.derivative_lease_revocation.is_some()
+                || event.rejection_reason.as_ref().is_some_and(|reason| {
+                    matches!(
+                        reason,
+                        ManifoldRuntimeRejectionReason::ReplayedDerivativeLeaseRevocation
+                            | ManifoldRuntimeRejectionReason::
+                                InvalidDerivativeLeaseRevocationRequest
+                            | ManifoldRuntimeRejectionReason::DerivativeLeaseDeltaMismatch
+                    )
+                })
+        })
+    {
+        return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+            "legacy_v3_schema_mismatch",
+        ));
+    }
+    let source_schema_id = legacy.schema_id;
+    let migrated_audit_event_count = legacy.audit_events.len();
+    let snapshot = ManifoldRuntimeHostSnapshot {
+        schema_id: schema_id(HOST_SNAPSHOT_SCHEMA),
+        host_id: legacy.host_id,
+        authority_revision: legacy.authority_revision,
+        commands: legacy.commands,
+        leases: legacy.leases,
+        applied_request_ids: legacy.applied_request_ids,
+        reviewed_sweep_ids: legacy.reviewed_sweep_ids,
+        reviewed_control_lease_adoption_ids: legacy.reviewed_control_lease_adoption_ids,
+        reviewed_derivative_lease_revocation_ids: Vec::new(),
+        audit_events: legacy
+            .audit_events
+            .into_iter()
+            .map(|mut event| {
+                event.schema_id = schema_id(HOST_AUDIT_EVENT_SCHEMA);
+                event
             })
             .collect(),
     };
@@ -1391,6 +2042,7 @@ fn validate_snapshot(
         || snapshot.applied_request_ids.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
         || snapshot.reviewed_sweep_ids.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
         || snapshot.reviewed_control_lease_adoption_ids.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
+        || snapshot.reviewed_derivative_lease_revocation_ids.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
         || snapshot.audit_events.len() > MAX_RUNTIME_AUDIT_EVENTS
     {
         return Err(ManifoldRuntimeHostError::InvalidSnapshot(
@@ -1415,6 +2067,29 @@ fn validate_snapshot(
     if lease_ids.len() != snapshot.leases.len() {
         return Err(ManifoldRuntimeHostError::InvalidSnapshot("duplicate_lease"));
     }
+    let derivative_bindings = snapshot
+        .leases
+        .iter()
+        .filter_map(|lease| lease.derivative_binding.as_ref())
+        .collect::<Vec<_>>();
+    let derivative_binding_ids = derivative_bindings
+        .iter()
+        .map(|binding| &binding.binding_id)
+        .collect::<BTreeSet<_>>();
+    let derivative_binding_sources = derivative_bindings
+        .iter()
+        .map(|binding| (&binding.provider_epoch_id, &binding.source_authorization_id))
+        .collect::<BTreeSet<_>>();
+    if derivative_binding_ids.len() != derivative_bindings.len()
+        || derivative_binding_sources.len() != derivative_bindings.len()
+        || derivative_bindings
+            .iter()
+            .any(|binding| binding.schema_id.as_str() != HOST_DERIVATIVE_LEASE_BINDING_SCHEMA)
+    {
+        return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+            "invalid_derivative_lease_binding",
+        ));
+    }
     let request_ids = snapshot.applied_request_ids.iter().collect::<BTreeSet<_>>();
     if request_ids.len() != snapshot.applied_request_ids.len() {
         return Err(ManifoldRuntimeHostError::InvalidSnapshot(
@@ -1434,6 +2109,15 @@ fn validate_snapshot(
     if adoption_ids.len() != snapshot.reviewed_control_lease_adoption_ids.len() {
         return Err(ManifoldRuntimeHostError::InvalidSnapshot(
             "duplicate_reviewed_control_lease_adoption",
+        ));
+    }
+    let derivative_revocation_ids = snapshot
+        .reviewed_derivative_lease_revocation_ids
+        .iter()
+        .collect::<BTreeSet<_>>();
+    if derivative_revocation_ids.len() != snapshot.reviewed_derivative_lease_revocation_ids.len() {
+        return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+            "duplicate_reviewed_derivative_lease_revocation",
         ));
     }
     let audit_ids = snapshot
@@ -1481,9 +2165,21 @@ fn validate_snapshot(
         .iter()
         .cloned()
         .collect::<BTreeSet<_>>();
+    let reviewed_derivative_revocation_sources = snapshot
+        .audit_events
+        .iter()
+        .filter(|event| event.event_kind == ManifoldRuntimeAuditKind::DerivativeLeaseRevocation)
+        .map(|event| event.source_id.clone())
+        .collect::<BTreeSet<_>>();
+    let retained_derivative_revocation_sources = snapshot
+        .reviewed_derivative_lease_revocation_ids
+        .iter()
+        .cloned()
+        .collect::<BTreeSet<_>>();
     if applied_command_sources != retained_applied_sources
         || reviewed_sweep_sources != retained_sweep_sources
         || reviewed_adoption_sources != retained_adoption_sources
+        || reviewed_derivative_revocation_sources != retained_derivative_revocation_sources
     {
         return Err(ManifoldRuntimeHostError::InvalidSnapshot(
             "audit_replay_set_mismatch",
@@ -1493,6 +2189,7 @@ fn validate_snapshot(
     let mut seen_applied_commands = BTreeSet::new();
     let mut seen_sweeps = BTreeSet::new();
     let mut seen_adoptions = BTreeSet::new();
+    let mut seen_derivative_revocations = BTreeSet::new();
     for (index, event) in snapshot.audit_events.iter().enumerate() {
         let sequence = (index as u64) + 1;
         let semantic_valid = match event.event_kind {
@@ -1525,6 +2222,52 @@ fn validate_snapshot(
                     && event.rejection_reason
                         == Some(ManifoldRuntimeRejectionReason::ReplayedControlLeaseAdoption)
             }
+            ManifoldRuntimeAuditKind::DerivativeLeaseRevocation
+                if seen_derivative_revocations.insert(event.source_id.clone()) =>
+            {
+                event.applied == event.rejection_reason.is_none()
+            }
+            ManifoldRuntimeAuditKind::DerivativeLeaseRevocation => {
+                !event.applied
+                    && event.rejection_reason
+                        == Some(ManifoldRuntimeRejectionReason::ReplayedDerivativeLeaseRevocation)
+            }
+        };
+        let derivative_binding_valid = match (
+            &event.event_kind,
+            event.derivative_lease_revocation.as_ref(),
+        ) {
+            (ManifoldRuntimeAuditKind::DerivativeLeaseRevocation, Some(binding)) => {
+                binding.schema_id.as_str() == HOST_DERIVATIVE_LEASE_REVOCATION_AUDIT_BINDING_SCHEMA
+                    && binding.revocation_id == event.source_id
+                    && binding.provider_epoch_id
+                        == *binding.upstream_revocation_proof.provider_epoch_id()
+                    && binding.upstream_revocation_application_id
+                        == *binding.upstream_revocation_proof.application_id()
+                    && binding.exact_leases.len() <= MAX_RUNTIME_DERIVATIVE_LEASE_REVOCATION_LEASES
+                    && (!event.applied
+                        || (binding.upstream_revocation_proof.validate().is_ok()
+                            && binding.revocation_id != binding.convergence_id
+                            && !binding.exact_leases.is_empty()
+                            && binding.exact_leases.iter().all(|lease| {
+                                derivative_lease_binding_matches_proof(
+                                    lease,
+                                    &binding.upstream_revocation_proof,
+                                )
+                            })
+                            && binding
+                                .exact_leases
+                                .windows(2)
+                                .all(|pair| pair[0].lease_id < pair[1].lease_id)
+                            && binding.exact_leases.iter().all(|removed| {
+                                !snapshot
+                                    .leases
+                                    .iter()
+                                    .any(|lease| lease.lease_id == removed.lease_id)
+                            })))
+            }
+            (ManifoldRuntimeAuditKind::DerivativeLeaseRevocation, None) | (_, Some(_)) => false,
+            (_, None) => true,
         };
         if event.schema_id.as_str() != HOST_AUDIT_EVENT_SCHEMA
             || event.sequence != sequence
@@ -1542,6 +2285,11 @@ fn validate_snapshot(
                 && !snapshot
                     .reviewed_control_lease_adoption_ids
                     .contains(&event.source_id))
+            || (event.event_kind == ManifoldRuntimeAuditKind::DerivativeLeaseRevocation
+                && !snapshot
+                    .reviewed_derivative_lease_revocation_ids
+                    .contains(&event.source_id))
+            || !derivative_binding_valid
             || !semantic_valid
         {
             return Err(ManifoldRuntimeHostError::InvalidSnapshot("audit_lineage"));
@@ -1640,6 +2388,7 @@ fn audit_event(
         resulting_authority_revision: resulting,
         applied,
         rejection_reason: rejection,
+        derivative_lease_revocation: None,
     }
 }
 
@@ -1710,6 +2459,7 @@ impl std::error::Error for ManifoldRuntimeHostError {}
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rusty_manifold_model::ManifoldControlLeaseRevocationRequest;
 
     fn fixture<T: serde::de::DeserializeOwned>(path: &str) -> T {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -1738,6 +2488,118 @@ mod tests {
             canonical_sha256: format!("sha256:{}", "ab".repeat(32)),
             canonical_size_bytes: size,
         }
+    }
+
+    fn control_lease_revocation_application(
+        prior: &ManifoldAuthoritySnapshot,
+        request_id: &str,
+        lease_id: &DottedId,
+        scope: &DottedId,
+    ) -> ManifoldControlLeaseRevocationAuthorityApplication {
+        let request = ManifoldControlLeaseRevocationRequest {
+            schema_id: schema_id("rusty.manifold.command.lease_revocation_request.v1"),
+            request_id: DottedId::new(request_id).expect("request id"),
+            authority_id: prior.authority_id.clone(),
+            lease_id: lease_id.clone(),
+            expected_authority_revision: prior.authority_revision,
+            scope: scope.clone(),
+            revocation_reason: DottedId::new("reason.security.revoke").expect("reason"),
+            requested_at_ms: 1,
+        };
+        let review = prior
+            .review_control_lease_revocation(
+                request,
+                prior.clock_snapshot.clone(),
+                vec![DottedId::new("evidence.runtime.revoke").expect("evidence")],
+            )
+            .expect("revocation review");
+        prior
+            .apply_control_lease_revocation_authority_review(review)
+            .expect("revocation application")
+    }
+
+    fn revocation_host_and_request(
+        request_id: &str,
+        adoption_id: &str,
+    ) -> (
+        ManifoldRuntimeHost,
+        ManifoldRuntimeControlLeaseAdoptionRequest,
+    ) {
+        let prior: ManifoldAuthoritySnapshot =
+            fixture("fixtures/authority/synthetic-authority-snapshot.json");
+        let target = prior.active_leases[0].clone();
+        let application = control_lease_revocation_application(
+            &prior,
+            request_id,
+            &target.lease_id,
+            &target.scope,
+        );
+        let mut snapshot =
+            host_fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        snapshot.leases = vec![runtime_lease(&target)];
+        let host = ManifoldRuntimeHost::from_snapshot(snapshot).expect("revocation host");
+        let request = ManifoldRuntimeControlLeaseAdoptionRequest {
+            schema_id: schema_id(HOST_CONTROL_LEASE_ADOPTION_REQUEST_SCHEMA),
+            adoption_id: DottedId::new(adoption_id).expect("adoption id"),
+            expected_host_authority_revision: host.snapshot().authority_revision,
+            prior_authority_snapshot: prior,
+            application: ManifoldRuntimeControlLeaseAuthorityApplication::Revocation(Box::new(
+                application,
+            )),
+        };
+        (host, request)
+    }
+
+    fn derivative_lease_revocation_request(
+        host: &ManifoldRuntimeHost,
+        revocation_id: &str,
+        exact_leases: Vec<ManifoldRuntimeLease>,
+    ) -> ManifoldRuntimeDerivativeLeaseRevocationRequest {
+        let prior: ManifoldAuthoritySnapshot =
+            fixture("fixtures/authority/synthetic-authority-snapshot.json");
+        let target = prior.active_leases[0].clone();
+        let application = control_lease_revocation_application(
+            &prior,
+            "request.peer.derivative_revocation",
+            &target.lease_id,
+            &target.scope,
+        );
+        ManifoldRuntimeDerivativeLeaseRevocationRequest {
+            schema_id: schema_id(HOST_DERIVATIVE_LEASE_REVOCATION_REQUEST_SCHEMA),
+            revocation_id: DottedId::new(revocation_id).expect("revocation id"),
+            convergence_id: DottedId::new(format!("convergence.{revocation_id}"))
+                .expect("convergence id"),
+            expected_host_authority_revision: host.snapshot().authority_revision,
+            upstream_revocation_proof:
+                ManifoldRuntimeUpstreamRevocationProof::from_accepted_application(
+                    DottedId::new("epoch.peer.provider.001").expect("epoch"),
+                    prior,
+                    application,
+                )
+                .expect("accepted upstream revocation proof"),
+            exact_leases,
+        }
+    }
+
+    fn derivative_host(mut snapshot: ManifoldRuntimeHostSnapshot) -> ManifoldRuntimeHost {
+        let prior: ManifoldAuthoritySnapshot =
+            fixture("fixtures/authority/synthetic-authority-snapshot.json");
+        let upstream_control_lease_id = prior.active_leases[0].lease_id.clone();
+        for lease in &mut snapshot.leases {
+            lease.derivative_binding = Some(ManifoldRuntimeDerivativeLeaseBinding {
+                schema_id: schema_id(HOST_DERIVATIVE_LEASE_BINDING_SCHEMA),
+                binding_id: DottedId::new(format!("binding.derivative.{}", lease.lease_id))
+                    .expect("binding id"),
+                provider_epoch_id: DottedId::new("epoch.peer.provider.001").expect("epoch"),
+                upstream_control_lease_id: upstream_control_lease_id.clone(),
+                source_authorization_id: DottedId::new(format!(
+                    "authorization.derivative.{}",
+                    lease.lease_id
+                ))
+                .expect("source authorization"),
+            });
+        }
+        ManifoldRuntimeHost::from_snapshot(snapshot).expect("derivative host")
     }
 
     #[test]
@@ -1891,6 +2753,453 @@ mod tests {
         assert_eq!(host.snapshot().authority_revision, Revision::INITIAL);
         assert_eq!(host.snapshot().leases, leases);
         assert_eq!(host.snapshot().audit_events.len(), 1);
+    }
+
+    #[test]
+    fn validated_revocation_adoption_removes_exact_lease_and_restarts() {
+        let (mut host, request) = revocation_host_and_request(
+            "request.runtime.lease.revoke.accepted.001",
+            "adoption.runtime.lease.revoke.accepted.001",
+        );
+        let target_id = host.snapshot().leases[0].lease_id.clone();
+        let receipt = host.apply_control_lease_adoption(&request);
+
+        assert!(receipt.applied);
+        assert_eq!(
+            receipt.operation,
+            ManifoldRuntimeControlLeaseAdoptionOperation::Revocation
+        );
+        assert_eq!(receipt.removed_lease_ids, vec![target_id]);
+        assert!(receipt.added_lease_ids.is_empty());
+        assert!(receipt.renewed_lease_ids.is_empty());
+        assert!(host.snapshot().leases.is_empty());
+        assert_eq!(host.snapshot().authority_revision.get(), 2);
+        assert_eq!(host.snapshot().audit_events.len(), 1);
+
+        let restarted =
+            ManifoldRuntimeHost::restart_from_json(&host.snapshot_json().expect("snapshot"))
+                .expect("revocation restart");
+        assert_eq!(restarted.snapshot(), host.snapshot());
+    }
+
+    #[test]
+    fn damaged_or_substituted_revocation_rejects_without_state_change() {
+        let (mut damaged_host, mut damaged_request) = revocation_host_and_request(
+            "request.runtime.lease.revoke.damaged.001",
+            "adoption.runtime.lease.revoke.damaged.001",
+        );
+        let ManifoldRuntimeControlLeaseAuthorityApplication::Revocation(application) =
+            &mut damaged_request.application
+        else {
+            panic!("revocation application expected");
+        };
+        application.authority_id = DottedId::new("authority.substituted").expect("authority");
+        let prior_damaged = damaged_host.snapshot().clone();
+        let damaged = damaged_host.apply_control_lease_adoption(&damaged_request);
+        assert_eq!(
+            damaged.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::InvalidControlLeaseAuthorityApplication)
+        );
+        assert_eq!(damaged_host.snapshot().leases, prior_damaged.leases);
+        assert_eq!(
+            damaged_host.snapshot().authority_revision,
+            prior_damaged.authority_revision
+        );
+
+        let (mut substituted_host, substituted_request) = revocation_host_and_request(
+            "request.runtime.lease.revoke.substituted.001",
+            "adoption.runtime.lease.revoke.substituted.001",
+        );
+        substituted_host.snapshot.leases[0].holder_id =
+            DottedId::new("holder.substituted").expect("holder");
+        let prior_substituted = substituted_host.snapshot().clone();
+        let substituted = substituted_host.apply_control_lease_adoption(&substituted_request);
+        assert_eq!(
+            substituted.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::ControlLeaseDeltaMismatch)
+        );
+        assert_eq!(substituted_host.snapshot().leases, prior_substituted.leases);
+        assert_eq!(
+            substituted_host.snapshot().authority_revision,
+            prior_substituted.authority_revision
+        );
+    }
+
+    #[test]
+    fn revocation_adoption_replay_is_retained_across_restart() {
+        let (mut host, request) = revocation_host_and_request(
+            "request.runtime.lease.revoke.replay.001",
+            "adoption.runtime.lease.revoke.replay.001",
+        );
+        assert!(host.apply_control_lease_adoption(&request).applied);
+        let replay = host.apply_control_lease_adoption(&request);
+        assert_eq!(
+            replay.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::ReplayedControlLeaseAdoption)
+        );
+        assert_eq!(host.snapshot().authority_revision.get(), 2);
+
+        let mut restarted =
+            ManifoldRuntimeHost::restart_from_json(&host.snapshot_json().expect("snapshot"))
+                .expect("restart");
+        let replay_after_restart = restarted.apply_control_lease_adoption(&request);
+        assert_eq!(
+            replay_after_restart.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::ReplayedControlLeaseAdoption)
+        );
+        assert_eq!(restarted.snapshot().authority_revision.get(), 2);
+    }
+
+    #[test]
+    fn stale_host_revision_rejects_revocation_before_removal() {
+        let (mut host, mut request) = revocation_host_and_request(
+            "request.runtime.lease.revoke.stale.001",
+            "adoption.runtime.lease.revoke.stale.001",
+        );
+        request.expected_host_authority_revision = request
+            .expected_host_authority_revision
+            .next()
+            .expect("revision");
+        let prior = host.snapshot().clone();
+        let receipt = host.apply_control_lease_adoption(&request);
+        assert_eq!(
+            receipt.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::StaleAuthorityRevision)
+        );
+        assert_eq!(host.snapshot().leases, prior.leases);
+        assert_eq!(host.snapshot().authority_revision, prior.authority_revision);
+        assert!(host
+            .snapshot()
+            .reviewed_control_lease_adoption_ids
+            .contains(&request.adoption_id));
+    }
+
+    #[test]
+    fn rejected_generic_revocation_application_is_not_adopted() {
+        let prior: ManifoldAuthoritySnapshot =
+            fixture("fixtures/authority/synthetic-authority-snapshot.json");
+        let unknown_lease = DottedId::new("lease.unknown").expect("lease");
+        let unknown_scope = DottedId::new("scope.unknown").expect("scope");
+        let application = control_lease_revocation_application(
+            &prior,
+            "request.runtime.lease.revoke.rejected.001",
+            &unknown_lease,
+            &unknown_scope,
+        );
+        assert_eq!(
+            application.outcome,
+            ManifoldControlLeaseRevocationAuthorityApplicationOutcome::
+                LeaseRevocationApplicationRejected
+        );
+        let mut snapshot =
+            host_fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        snapshot.leases = vec![runtime_lease(&prior.active_leases[0])];
+        let mut host = ManifoldRuntimeHost::from_snapshot(snapshot).expect("host");
+        let request = ManifoldRuntimeControlLeaseAdoptionRequest {
+            schema_id: schema_id(HOST_CONTROL_LEASE_ADOPTION_REQUEST_SCHEMA),
+            adoption_id: DottedId::new("adoption.runtime.lease.revoke.rejected.001")
+                .expect("adoption"),
+            expected_host_authority_revision: host.snapshot().authority_revision,
+            prior_authority_snapshot: prior,
+            application: ManifoldRuntimeControlLeaseAuthorityApplication::Revocation(Box::new(
+                application,
+            )),
+        };
+        let prior_host = host.snapshot().clone();
+        let receipt = host.apply_control_lease_adoption(&request);
+        assert_eq!(
+            receipt.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::RejectedControlLeaseAuthorityApplication)
+        );
+        assert_eq!(host.snapshot().leases, prior_host.leases);
+        assert_eq!(
+            host.snapshot().authority_revision,
+            prior_host.authority_revision
+        );
+    }
+
+    #[test]
+    fn derivative_lease_revocation_applies_atomically_and_validates_after_restart() {
+        let snapshot = host_fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        let mut host = derivative_host(snapshot);
+        let request = derivative_lease_revocation_request(
+            &host,
+            "revoke.derivative.accepted.001",
+            host.snapshot().leases.clone(),
+        );
+        let removed = request.exact_leases.clone();
+        let receipt = host.apply_derivative_lease_revocation(&request);
+
+        assert!(receipt.applied);
+        assert_eq!(receipt.removed_leases, removed);
+        assert!(host.snapshot().leases.is_empty());
+        assert_eq!(host.snapshot().authority_revision.get(), 2);
+        assert_eq!(
+            host.snapshot().audit_events[0].event_kind,
+            ManifoldRuntimeAuditKind::DerivativeLeaseRevocation
+        );
+        receipt
+            .validate_against_snapshot(host.snapshot())
+            .expect("live receipt closure");
+
+        let restarted =
+            ManifoldRuntimeHost::restart_from_json(&host.snapshot_json().expect("snapshot"))
+                .expect("restart");
+        receipt
+            .validate_against_snapshot(restarted.snapshot())
+            .expect("restarted receipt closure");
+    }
+
+    #[test]
+    fn derivative_lease_revocation_stale_revision_is_audited_without_removal() {
+        let snapshot = host_fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        let mut host = derivative_host(snapshot);
+        let mut request = derivative_lease_revocation_request(
+            &host,
+            "revoke.derivative.stale.001",
+            host.snapshot().leases.clone(),
+        );
+        request.expected_host_authority_revision = request
+            .expected_host_authority_revision
+            .next()
+            .expect("revision");
+        let prior = host.snapshot().clone();
+        let receipt = host.apply_derivative_lease_revocation(&request);
+
+        assert_eq!(
+            receipt.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::StaleAuthorityRevision)
+        );
+        assert_eq!(host.snapshot().leases, prior.leases);
+        assert_eq!(host.snapshot().authority_revision, prior.authority_revision);
+        receipt
+            .validate_against_snapshot(host.snapshot())
+            .expect("stale receipt closure");
+    }
+
+    #[test]
+    fn derivative_lease_revocation_replay_is_retained_across_restart() {
+        let snapshot = host_fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        let mut host = derivative_host(snapshot);
+        let request = derivative_lease_revocation_request(
+            &host,
+            "revoke.derivative.replay.001",
+            host.snapshot().leases.clone(),
+        );
+        let accepted = host.apply_derivative_lease_revocation(&request);
+        assert!(accepted.applied);
+        let replay = host.apply_derivative_lease_revocation(&request);
+        assert_eq!(
+            replay.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::ReplayedDerivativeLeaseRevocation)
+        );
+        replay
+            .validate_against_snapshot(host.snapshot())
+            .expect("replay receipt closure");
+
+        let restarted =
+            ManifoldRuntimeHost::restart_from_json(&host.snapshot_json().expect("snapshot"))
+                .expect("restart");
+        replay
+            .validate_against_snapshot(restarted.snapshot())
+            .expect("restarted replay closure");
+    }
+
+    #[test]
+    fn derivative_lease_revocation_rejects_exact_object_substitution() {
+        let snapshot = host_fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        let mut host = derivative_host(snapshot);
+        let mut substituted = host.snapshot().leases.clone();
+        substituted[0].holder_id = DottedId::new("client.substituted").expect("holder");
+        let request = derivative_lease_revocation_request(
+            &host,
+            "revoke.derivative.substituted.001",
+            substituted,
+        );
+        let prior = host.snapshot().clone();
+        let receipt = host.apply_derivative_lease_revocation(&request);
+
+        assert_eq!(
+            receipt.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::DerivativeLeaseDeltaMismatch)
+        );
+        assert_eq!(host.snapshot().leases, prior.leases);
+        assert_eq!(host.snapshot().authority_revision, prior.authority_revision);
+        receipt
+            .validate_against_snapshot(host.snapshot())
+            .expect("substitution receipt closure");
+    }
+
+    #[test]
+    fn derivative_lease_revocation_rejects_fabricated_upstream_lineage() {
+        let snapshot = host_fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        let mut host = derivative_host(snapshot);
+        let mut request = derivative_lease_revocation_request(
+            &host,
+            "revoke.derivative.fabricated_upstream.001",
+            host.snapshot().leases.clone(),
+        );
+        request
+            .upstream_revocation_proof
+            .accepted_application
+            .application_id =
+            DottedId::new("lease_revocation_application.fabricated").expect("application");
+        let prior = host.snapshot().clone();
+        let receipt = host.apply_derivative_lease_revocation(&request);
+
+        assert_eq!(
+            receipt.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::InvalidDerivativeLeaseRevocationRequest)
+        );
+        assert_eq!(host.snapshot().leases, prior.leases);
+        assert_eq!(host.snapshot().authority_revision, prior.authority_revision);
+        receipt
+            .validate_against_snapshot(host.snapshot())
+            .expect("fabricated proof rejection remains exact");
+        ManifoldRuntimeHost::restart_from_json(&host.snapshot_json().expect("snapshot"))
+            .expect("fabricated proof rejection restart");
+    }
+
+    #[test]
+    fn derivative_lease_revocation_rejects_unrelated_exact_accepted_lease() {
+        let mut snapshot =
+            host_fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        let mut unrelated = snapshot.leases[0].clone();
+        unrelated.lease_id = DottedId::new("lease.peer.unrelated").expect("lease");
+        snapshot.leases.push(unrelated);
+        snapshot
+            .leases
+            .sort_by(|left, right| left.lease_id.cmp(&right.lease_id));
+        let bound = derivative_host(snapshot);
+        let mut differently_bound = bound.snapshot().clone();
+        let unrelated = differently_bound
+            .leases
+            .iter_mut()
+            .find(|lease| lease.lease_id.as_str() == "lease.peer.unrelated")
+            .expect("unrelated lease");
+        unrelated
+            .derivative_binding
+            .as_mut()
+            .expect("derivative binding")
+            .upstream_control_lease_id =
+            DottedId::new("lease.outer.unrelated").expect("outer lease");
+        let mut host =
+            ManifoldRuntimeHost::from_snapshot(differently_bound).expect("mixed lineage host");
+        let unrelated = host
+            .snapshot()
+            .leases
+            .iter()
+            .find(|lease| lease.lease_id.as_str() == "lease.peer.unrelated")
+            .expect("unrelated lease")
+            .clone();
+        let request = derivative_lease_revocation_request(
+            &host,
+            "revoke.derivative.unrelated.001",
+            vec![unrelated],
+        );
+        let prior = host.snapshot().clone();
+        let receipt = host.apply_derivative_lease_revocation(&request);
+
+        assert_eq!(
+            receipt.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::DerivativeLeaseDeltaMismatch)
+        );
+        assert_eq!(host.snapshot().leases, prior.leases);
+        receipt
+            .validate_against_snapshot(host.snapshot())
+            .expect("unrelated exact lease rejection closure");
+    }
+
+    #[test]
+    fn derivative_lease_revocation_rejects_partial_matching_lineage_set() {
+        let mut snapshot =
+            host_fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        let mut second = snapshot.leases[0].clone();
+        second.lease_id = DottedId::new("lease.peer.beta").expect("lease");
+        snapshot.leases.push(second);
+        snapshot
+            .leases
+            .sort_by(|left, right| left.lease_id.cmp(&right.lease_id));
+        let mut host = derivative_host(snapshot);
+        let request = derivative_lease_revocation_request(
+            &host,
+            "revoke.derivative.partial.001",
+            vec![host.snapshot().leases[0].clone()],
+        );
+        let prior = host.snapshot().clone();
+        let receipt = host.apply_derivative_lease_revocation(&request);
+
+        assert_eq!(
+            receipt.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::DerivativeLeaseDeltaMismatch)
+        );
+        assert_eq!(host.snapshot().leases, prior.leases);
+        assert_eq!(host.snapshot().authority_revision, prior.authority_revision);
+        receipt
+            .validate_against_snapshot(host.snapshot())
+            .expect("partial matching lineage rejection closure");
+    }
+
+    #[test]
+    fn derivative_lease_revocation_rejects_noncanonical_order_and_restarts() {
+        let mut snapshot =
+            host_fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        let mut second = snapshot.leases[0].clone();
+        second.lease_id = DottedId::new("lease.peer.beta").expect("lease");
+        snapshot.leases.push(second);
+        snapshot
+            .leases
+            .sort_by(|left, right| left.lease_id.cmp(&right.lease_id));
+        let mut host = derivative_host(snapshot);
+        let mut reversed = host.snapshot().leases.clone();
+        reversed.reverse();
+        let request =
+            derivative_lease_revocation_request(&host, "revoke.derivative.order.001", reversed);
+        let prior = host.snapshot().clone();
+        let receipt = host.apply_derivative_lease_revocation(&request);
+
+        assert_eq!(
+            receipt.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::InvalidDerivativeLeaseRevocationRequest)
+        );
+        assert_eq!(host.snapshot().leases, prior.leases);
+        receipt
+            .validate_against_snapshot(host.snapshot())
+            .expect("order rejection closure");
+        let restarted =
+            ManifoldRuntimeHost::restart_from_json(&host.snapshot_json().expect("snapshot"))
+                .expect("rejected restart");
+        receipt
+            .validate_against_snapshot(restarted.snapshot())
+            .expect("restarted order closure");
+    }
+
+    #[test]
+    fn legacy_v3_snapshot_migrates_explicitly_to_v4() {
+        let snapshot = host_fixture("fixtures/runtime-host/synthetic-runtime-host-snapshot.json");
+        let mut value = serde_json::to_value(snapshot).expect("snapshot value");
+        value["$schema"] = serde_json::Value::String(LEGACY_HOST_SNAPSHOT_V3_SCHEMA.to_owned());
+        value
+            .as_object_mut()
+            .expect("snapshot object")
+            .remove("reviewed_derivative_lease_revocation_ids");
+        for event in value["audit_events"].as_array_mut().expect("audit array") {
+            event["$schema"] =
+                serde_json::Value::String(LEGACY_HOST_AUDIT_EVENT_V3_SCHEMA.to_owned());
+        }
+        let json = serde_json::to_string(&value).expect("legacy json");
+        let (migrated, receipt) =
+            ManifoldRuntimeHost::restart_from_json_with_migration(&json).expect("v3 migration");
+        assert!(receipt.migrated);
+        assert_eq!(
+            receipt.source_schema_id.as_str(),
+            LEGACY_HOST_SNAPSHOT_V3_SCHEMA
+        );
+        assert_eq!(migrated.snapshot().schema_id.as_str(), HOST_SNAPSHOT_SCHEMA);
+        assert!(migrated
+            .snapshot()
+            .reviewed_derivative_lease_revocation_ids
+            .is_empty());
     }
 
     #[test]

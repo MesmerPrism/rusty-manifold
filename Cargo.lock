@@ -640,6 +640,7 @@ name = "rusty-manifold-fixtures"
 version = "0.1.0"
 dependencies = [
  "rusty-manifold-model",
+ "rusty-manifold-runtime-host",
  "serde",
  "serde_json",
 ]

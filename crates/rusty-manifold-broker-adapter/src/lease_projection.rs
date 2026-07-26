@@ -261,6 +261,7 @@ impl<'owner> ManifoldBrokerRuntimeLeaseProjector<'owner> {
             scope: source_lease.scope.clone(),
             holder_id: source_lease.holder_id.clone(),
             expires_at_ms: source_lease.expires_at_ms,
+            derivative_binding: None,
         };
         let projection_id = derived_projection_id(
             application,

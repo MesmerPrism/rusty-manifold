@@ -22,6 +22,9 @@ status, enrollment, signed rendezvous, peer session/mesh, topology, and real
 direct-lane lease plus product-bound media-session authorities into one restartable snapshot and audit
 sequence. It is a source-only compile-time extension; platform, sidecar,
 transport, and media-payload behavior remain outside Manifold authority.
+Snapshot v2 also joins exact Broker revocation barriers, removes dependent
+peer/media state and derivative Runtime Host leases, and retains terminal
+cleanup completion before the Broker may checkpoint consumer convergence.
 
 [Media-session authority](docs/MEDIA_SESSION_AUTHORITY.md) binds accepted
 source, processor, route, sink, stream, and platform-runtime references while
@@ -45,26 +48,29 @@ packaged lock bytes are intentionally separate provenance fields.
 placements to that exact lock and route every command through the same Runtime
 Host review/application implementation. Their receipts preserve the host
 decision and identify the process layer as an adapter, not authority.
-The adapter also exposes a source-only lease-provenance projection. At the
-authority-owning trust boundary, a borrowed non-cloneable one-shot projector
-is constructed from the retained current authority snapshot and current
-healthy clock. It revalidates the exact
-prior snapshot, review/application/audit identities, current lease, bounded
-clock uncertainty, and conservative expiry before mapping that same lease
-identity for Runtime Host consumption. Raw serialized receipts are evidence,
-not portable authenticity: the retained state must revalidate them before the
-Runtime Host lease is exposed. This slice does not yet make the projection the
-only source of generic lease decisions or prove freshness outside the
-authority-owning trust boundary. Normal adapter construction and restart now
-accept no raw Runtime Host lease collection: they require a non-cloneable
-Broker control-lease owner that reprojects exact source applications against a
-supplied retained authority/clock view. Integrated runtime evidence v3 persists
-that owner state beside host and admission state; restart requires a separately
-supplied non-regressing owner view, and released v2 evidence uses an explicit
-digest-bound authority-adoption migration. Per-product owner evidence is capped
-at 256 projected leases and 8 MiB; integrated evidence JSON is capped at 16 MiB
-before decode. Lifecycle mutation transport remains the next slice. This code
-does not issue, renew, release, revoke, or expire leases.
+Generic control-lease issue, renewal, holder release, authority-owned
+revocation, and lease-only expiry are review/application decisions. Revocation
+is bound to the exact authority identity, emits a terminal tombstone in
+authority snapshot v2, and cannot be reused as a holder release. Runtime Host
+adoption v2 revalidates the complete generic application against its exact
+prior snapshot and applies the same lease delta once.
+
+Normal Broker construction and restart accept no raw Runtime Host lease
+collection. The synchronized Broker owner retains exact generic transitions,
+and runtime evidence v5 joins owner evidence v3, Runtime Host state, admission,
+lifecycle authorization/disposition, receipts, and fail-closed administrative
+revocation barriers. Once generic revocation is accepted, commands and later
+lifecycle work for that lease reject even if Host composition still needs
+convergence. Any pending Host-convergence barrier globally freezes lifecycle
+authorization and commit until its CAS-bound recovery succeeds. Retaining
+consumers acknowledge terminal cleanup before rollover can compact their
+evidence, while rollover carries accumulated control-lease request identities
+forward so a provider-epoch boundary cannot reopen replay.
+Released v4 remains an immutable migration input; its explicit
+digest-bound v4-to-v5 migration changes schema vocabulary without creating a
+lease decision or barrier. One product is capped at 64 projected leases,
+4,096 owner transitions, 48 MiB of owner evidence, and 64 MiB of integrated
+evidence JSON.
 The integrated broker runtime additionally requires a current, client-bound,
 capability-scoped one-use admission before any product mutation can reach that
 host path. Each bounded use retains the revision that created that use, so an

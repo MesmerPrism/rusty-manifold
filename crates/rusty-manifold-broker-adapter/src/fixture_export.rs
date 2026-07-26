@@ -149,46 +149,41 @@ fn export_runtime_evidence(out: &Path) -> Result<(), Box<dyn std::error::Error>>
         admission,
     )?;
     let current_evidence = runtime.evidence();
-    write_json(out.join("runtime-evidence-v4.json"), &current_evidence)?;
 
-    let mut legacy_host = serde_json::to_value(&current_evidence.host_snapshot)?;
-    let legacy_host_object = legacy_host
-        .as_object_mut()
-        .ok_or("Runtime Host fixture must serialize as an object")?;
-    legacy_host_object.insert(
-        "$schema".to_owned(),
-        serde_json::Value::String("rusty.manifold.runtime_host.snapshot.v2".to_owned()),
-    );
-    legacy_host_object.remove("reviewed_control_lease_adoption_ids");
-    let legacy_v3 = serde_json::json!({
-        "$schema": crate::LEGACY_BROKER_RUNTIME_EVIDENCE_V3_SCHEMA,
-        "provider_epoch_id": current_evidence.provider_epoch_id.clone(),
-        "host_snapshot": legacy_host.clone(),
-        "control_lease_authority": current_evidence.control_lease_authority.baseline.clone(),
-        "admission_snapshot": current_evidence.admission_snapshot.clone(),
-        "pending_bounded_uses": current_evidence.pending_bounded_uses.clone(),
-        "consumed_bounded_use_ids": current_evidence.consumed_bounded_use_ids.clone(),
-    });
-    write_json(out.join("runtime-evidence-v3.json"), &legacy_v3)?;
+    // Keep the released v4 bytes immutable: they are the exact migration
+    // input whose byte digest is bound by the v4-to-v5 receipt.
+    let legacy_v4_json = include_str!("../../../fixtures/broker-adapter/runtime-evidence-v4.json");
+    let revocation_migration_authority = lease_authority()?;
+    let revocation_migration_adapter = ManifoldBrokerAdapter::new(
+        config.clone(),
+        &packaged_lock,
+        &revocation_migration_authority,
+    )?;
+    let (migrated_runtime, revocation_migration_receipt) =
+        ManifoldBrokerRuntime::migrate_v4_evidence_json(
+            revocation_migration_adapter,
+            legacy_v4_json,
+        )?;
+    let migrated_evidence = migrated_runtime.evidence();
+    if migrated_evidence != current_evidence {
+        return Err("fresh v5 evidence must equal the decision-free v4 migration result".into());
+    }
+    write_json(out.join("runtime-evidence-v5.json"), &migrated_evidence)?;
+    write_json(
+        out.join("runtime-evidence-v4-revocation-migration-receipt.json"),
+        &revocation_migration_receipt,
+    )?;
 
-    let legacy_v2 = serde_json::json!({
-        "$schema": crate::LEGACY_BROKER_RUNTIME_EVIDENCE_V2_SCHEMA,
-        "provider_epoch_id": current_evidence.provider_epoch_id,
-        "host_snapshot": legacy_host,
-        "admission_snapshot": current_evidence.admission_snapshot,
-        "pending_bounded_uses": current_evidence.pending_bounded_uses,
-        "consumed_bounded_use_ids": current_evidence.consumed_bounded_use_ids,
-    });
-    let legacy_json = format!("{}\n", serde_json::to_string_pretty(&legacy_v2)?);
-    fs::write(out.join("runtime-evidence-v2.json"), &legacy_json)?;
-
+    // Released v2/v3/v4 fixture bytes are immutable migration inputs. Only
+    // current evidence and migration receipts may be regenerated here.
+    let legacy_v2_json = include_str!("../../../fixtures/broker-adapter/runtime-evidence-v2.json");
     let migration_authority = lease_authority()?;
     let migration_adapter =
         ManifoldBrokerAdapter::new(config, &packaged_lock, &migration_authority)?;
     let (_, migration_receipt) = ManifoldBrokerRuntime::from_legacy_v2_evidence_json(
         migration_adapter,
         migration_authority,
-        &legacy_json,
+        legacy_v2_json,
     )?;
     write_json(
         out.join("runtime-evidence-v2-authority-migration-receipt.json"),
@@ -246,6 +241,7 @@ fn lease() -> ManifoldRuntimeLease {
         scope: id("lease.media.session"),
         holder_id: id("client.parity"),
         expires_at_ms: 60_000,
+        derivative_binding: None,
     }
 }
 

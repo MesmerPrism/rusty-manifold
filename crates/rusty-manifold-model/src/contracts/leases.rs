@@ -2,9 +2,11 @@ use super::*;
 
 mod release;
 mod renewal;
+mod revocation;
 
 pub use self::release::*;
 pub use self::renewal::*;
+pub use self::revocation::*;
 
 /// Lease request descriptor used by tests and fixtures.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -409,6 +411,8 @@ impl ManifoldControlLeaseAuthorityApplication {
                     || applied.module_runtime_states != snapshot.module_runtime_states
                     || applied.command_ids != snapshot.command_ids
                     || applied.command_descriptors != snapshot.command_descriptors
+                    || applied.revoked_control_lease_tombstones
+                        != snapshot.revoked_control_lease_tombstones
                     || applied.active_stream_subscriptions != snapshot.active_stream_subscriptions
                 {
                     return Err(ManifoldAuthorityValidationError::new(
@@ -883,6 +887,22 @@ impl ManifoldAuthoritySnapshot {
                     .to_owned(),
                 retryable: true,
                 conflicting_lease_id: None,
+            };
+        }
+
+        let derived_lease_id = control_lease_id(&request.request_id);
+        if self
+            .revoked_control_lease_tombstones
+            .iter()
+            .any(|tombstone| tombstone.revoked_lease.lease_id == derived_lease_id)
+        {
+            return LeaseAuthorityDecision::Rejected {
+                rejection_code: "revoked_lease_id",
+                message:
+                    "lease request derives an identity retained by a terminal revocation tombstone"
+                        .to_owned(),
+                retryable: false,
+                conflicting_lease_id: Some(derived_lease_id),
             };
         }
 

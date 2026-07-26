@@ -110,6 +110,7 @@ fn schema_entries() -> Vec<SchemaEntry> {
     entries.extend(command_entries());
     entries.extend(coordination_entries());
     entries.extend(peer_entries());
+    entries.extend(peer_runtime_host_entries());
     entries.extend(runtime_host_entries());
     entries.extend(broker_product_entries());
     entries.extend(broker_adapter_entries());
@@ -255,8 +256,13 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
         ),
         entry(
             "rusty.manifold.broker.runtime_evidence.v4",
-            "ManifoldBrokerRuntimeEvidence",
+            "LegacyManifoldBrokerRuntimeEvidenceV4",
             &["fixtures/broker-adapter/runtime-evidence-v4.json"],
+        ),
+        entry(
+            "rusty.manifold.broker.runtime_evidence.v5",
+            "ManifoldBrokerRuntimeEvidence",
+            &["fixtures/broker-adapter/runtime-evidence-v5.json"],
         ),
         entry(
             "rusty.manifold.broker.control_lease_source.v1",
@@ -274,7 +280,17 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
             &[],
         ),
         entry(
+            "rusty.manifold.broker.control_lease_authority_evidence.v3",
+            "ManifoldBrokerControlLeaseAuthorityEvidenceV3",
+            &[],
+        ),
+        entry(
             "rusty.manifold.broker.control_lease_transition.v1",
+            "ManifoldBrokerControlLeaseTransition",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_transition.v2",
             "ManifoldBrokerControlLeaseTransition",
             &[],
         ),
@@ -284,7 +300,17 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
             &[],
         ),
         entry(
+            "rusty.manifold.broker.control_lease_lifecycle_request.v2",
+            "ManifoldBrokerControlLeaseLifecycleRequest",
+            &[],
+        ),
+        entry(
             "rusty.manifold.broker.control_lease_lifecycle_use.v1",
+            "ManifoldBrokerControlLeaseLifecycleUse",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_lifecycle_use.v2",
             "ManifoldBrokerControlLeaseLifecycleUse",
             &[],
         ),
@@ -294,7 +320,17 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
             &[],
         ),
         entry(
+            "rusty.manifold.broker.control_lease_lifecycle_authorization_receipt.v2",
+            "ManifoldBrokerControlLeaseLifecycleAuthorizationReceipt",
+            &[],
+        ),
+        entry(
             "rusty.manifold.broker.control_lease_lifecycle_receipt.v1",
+            "ManifoldBrokerControlLeaseLifecycleReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_lifecycle_receipt.v2",
             "ManifoldBrokerControlLeaseLifecycleReceipt",
             &[],
         ),
@@ -314,7 +350,42 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
             &[],
         ),
         entry(
+            "rusty.manifold.broker.runtime_evidence_revocation_migration_receipt.v1",
+            "ManifoldBrokerRuntimeRevocationMigrationReceipt",
+            &["fixtures/broker-adapter/runtime-evidence-v4-revocation-migration-receipt.json"],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_revocation_barrier.v1",
+            "ManifoldBrokerControlLeaseRevocationBarrier",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_revocation_use_invalidation.v1",
+            "ManifoldBrokerControlLeaseRevocationUseInvalidation",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_revocation_recovery_request.v1",
+            "ManifoldBrokerControlLeaseRevocationRecoveryRequest",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_revocation_recovery_receipt.v1",
+            "ManifoldBrokerControlLeaseRevocationRecoveryReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.control_lease_revocation_consumer_acknowledgement.v1",
+            "ManifoldBrokerControlLeaseRevocationConsumerAcknowledgement",
+            &[],
+        ),
+        entry(
             "rusty.manifold.broker.runtime_epoch_rollover_receipt.v1",
+            "ManifoldBrokerRuntimeEpochRolloverReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.broker.runtime_epoch_rollover_receipt.v2",
             "ManifoldBrokerRuntimeEpochRolloverReceipt",
             &[],
         ),
@@ -379,6 +450,14 @@ fn runtime_host_entries() -> Vec<SchemaEntry> {
             &[],
         ),
         entry(
+            "rusty.manifold.runtime_host.snapshot.v4",
+            "ManifoldRuntimeHostSnapshot",
+            &[
+                "fixtures/runtime-host/synthetic-control-lease-revocation-applied-snapshot.json",
+                "fixtures/runtime-host/synthetic-derivative-lease-revocation-applied-snapshot.json",
+            ],
+        ),
+        entry(
             "rusty.manifold.runtime_host.command_request.v1",
             "ManifoldRuntimeCommandRequest",
             &[
@@ -396,15 +475,30 @@ fn runtime_host_entries() -> Vec<SchemaEntry> {
         entry(
             "rusty.manifold.runtime_host.dispatch_receipt.v1",
             "ManifoldRuntimeDispatchReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.dispatch_receipt.v2",
+            "ManifoldRuntimeDispatchReceipt",
             &["fixtures/runtime-host/synthetic-runtime-dispatch-receipt.json"],
         ),
         entry(
             "rusty.manifold.runtime_host.application_receipt.v1",
             "ManifoldRuntimeApplicationReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.application_receipt.v2",
+            "ManifoldRuntimeApplicationReceipt",
             &["fixtures/runtime-host/synthetic-runtime-application-receipt.json"],
         ),
         entry(
             "rusty.manifold.runtime_host.lease_expiry_receipt.v1",
+            "ManifoldRuntimeLeaseExpiryReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.lease_expiry_receipt.v2",
             "ManifoldRuntimeLeaseExpiryReceipt",
             &["fixtures/runtime-host/synthetic-runtime-lease-expiry-receipt.json"],
         ),
@@ -414,14 +508,167 @@ fn runtime_host_entries() -> Vec<SchemaEntry> {
             &[],
         ),
         entry(
+            "rusty.manifold.runtime_host.control_lease_adoption_request.v2",
+            "ManifoldRuntimeControlLeaseAdoptionRequest",
+            &[
+                "fixtures/runtime-host/synthetic-control-lease-revocation-adoption-request.json",
+                "fixtures/damaged/runtime-host-control-lease-revocation-adoption-request.json",
+            ],
+        ),
+        entry(
             "rusty.manifold.runtime_host.control_lease_adoption_receipt.v1",
             "ManifoldRuntimeControlLeaseAdoptionReceipt",
             &[],
         ),
         entry(
+            "rusty.manifold.runtime_host.control_lease_adoption_receipt.v2",
+            "ManifoldRuntimeControlLeaseAdoptionReceipt",
+            &[
+                "fixtures/runtime-host/synthetic-control-lease-revocation-adoption-receipt.json",
+                "fixtures/runtime-host/synthetic-control-lease-revocation-adoption-rejected-receipt.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.derivative_lease_binding.v1",
+            "ManifoldRuntimeDerivativeLeaseBinding",
+            &[
+                "fixtures/runtime-host/synthetic-derivative-lease-revocation-request.json",
+                "fixtures/runtime-host/synthetic-derivative-lease-revocation-audit-binding.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.upstream_revocation_proof.v1",
+            "ManifoldRuntimeUpstreamRevocationProof",
+            &[
+                "fixtures/runtime-host/synthetic-derivative-lease-revocation-request.json",
+                "fixtures/runtime-host/synthetic-derivative-lease-revocation-audit-binding.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.derivative_lease_revocation_request.v1",
+            "ManifoldRuntimeDerivativeLeaseRevocationRequest",
+            &[
+                "fixtures/runtime-host/synthetic-derivative-lease-revocation-request.json",
+                "fixtures/damaged/runtime-host-derivative-lease-revocation-substituted-request.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.derivative_lease_revocation_receipt.v1",
+            "ManifoldRuntimeDerivativeLeaseRevocationReceipt",
+            &[
+                "fixtures/runtime-host/synthetic-derivative-lease-revocation-receipt.json",
+                "fixtures/runtime-host/synthetic-derivative-lease-revocation-rejected-receipt.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.derivative_lease_revocation_audit_binding.v1",
+            "ManifoldRuntimeDerivativeLeaseRevocationAuditBinding",
+            &["fixtures/runtime-host/synthetic-derivative-lease-revocation-audit-binding.json"],
+        ),
+        entry(
             "rusty.manifold.runtime_host.audit_event.v1",
             "ManifoldRuntimeAuditEvent",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.audit_event.v2",
+            "ManifoldRuntimeAuditEvent",
             &["fixtures/runtime-host/synthetic-runtime-audit-event.json"],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.audit_event.v3",
+            "ManifoldRuntimeAuditEvent",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.audit_event.v4",
+            "ManifoldRuntimeAuditEvent",
+            &[
+                "fixtures/runtime-host/synthetic-derivative-lease-revocation-audit-event.json",
+                "fixtures/runtime-host/synthetic-derivative-lease-revocation-rejected-audit-event.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.runtime_host.snapshot_migration_receipt.v1",
+            "ManifoldRuntimeHostMigrationReceipt",
+            &[
+                "fixtures/runtime-host/synthetic-runtime-host-v3-to-v4-migration-receipt.json",
+            ],
+        ),
+    ]
+}
+
+fn peer_runtime_host_entries() -> Vec<SchemaEntry> {
+    vec![
+        entry(
+            "rusty.manifold.peer.runtime_host.snapshot.v1",
+            "ManifoldPeerRuntimeHostSnapshot",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.peer.runtime_host.snapshot.v2",
+            "ManifoldPeerRuntimeHostSnapshot",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.peer.runtime_host.snapshot.v3",
+            "ManifoldPeerRuntimeHostSnapshot",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.peer.runtime_host.audit_event.v1",
+            "ManifoldPeerRuntimeAuditEvent",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.peer.runtime_host.trust_policy.v1",
+            "ManifoldPeerRuntimeTrustPolicy",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.peer.runtime_host.broker_lease_admission.v1",
+            "ManifoldPeerRuntimeBrokerLeaseAdmission",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.peer.runtime_host.broker_lease_attempt.v1",
+            "ManifoldPeerRuntimeBrokerLeaseAttempt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.peer.runtime_host.broker_lease_revocation_convergence_request.v1",
+            "ManifoldPeerRuntimeBrokerLeaseRevocationConvergenceRequest",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.peer.runtime_host.media_cleanup_obligation.v1",
+            "ManifoldPeerRuntimeMediaCleanupObligation",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.peer.runtime_host.broker_lease_revocation_convergence_receipt.v1",
+            "ManifoldPeerRuntimeBrokerLeaseRevocationConvergenceReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.peer.runtime_host.broker_lease_revocation_cleanup_completion_request.v1",
+            "ManifoldPeerRuntimeBrokerLeaseRevocationCleanupCompletionRequest",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.peer.runtime_host.broker_lease_revocation_cleanup_completion_receipt.v1",
+            "ManifoldPeerRuntimeBrokerLeaseRevocationCleanupCompletionReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.peer.runtime_host.broker_epoch_rollover_receipt.v1",
+            "ManifoldPeerRuntimeBrokerEpochRolloverReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.peer.runtime_host.snapshot_migration_receipt.v1",
+            "ManifoldPeerRuntimeHostSnapshotMigrationReceipt",
+            &[],
         ),
     ]
 }
@@ -758,6 +1005,19 @@ fn command_entries() -> Vec<SchemaEntry> {
             &["fixtures/command/synthetic-lease-release-rejection.json"],
         ),
         entry(
+            "rusty.manifold.command.lease_revocation_request.v1",
+            "ManifoldControlLeaseRevocationRequest",
+            &[
+                "fixtures/command/synthetic-lease-revocation-request.json",
+                "fixtures/damaged/lease-revocation-request-authority-mismatch.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.command.lease_revocation_rejection.v1",
+            "ManifoldControlLeaseRevocationRejection",
+            &["fixtures/command/synthetic-lease-revocation-rejection.json"],
+        ),
+        entry(
             "rusty.manifold.command.lease_renewal_request.v1",
             "ManifoldControlLeaseRenewalRequest",
             &[
@@ -836,6 +1096,11 @@ fn authority_entries() -> Vec<SchemaEntry> {
             ],
         ),
         entry(
+            "rusty.manifold.authority.snapshot.v2",
+            "ManifoldAuthoritySnapshot",
+            &["fixtures/authority/synthetic-authority-revoked-lease-snapshot.json"],
+        ),
+        entry(
             "rusty.manifold.authority.expiry_sweep_request.v1",
             "ManifoldAuthorityExpirySweepRequest",
             &[
@@ -866,6 +1131,14 @@ fn authority_entries() -> Vec<SchemaEntry> {
             "rusty.manifold.authority.lease_release_audit_event.v1",
             "ManifoldControlLeaseReleaseAuthorityAuditEvent",
             &["fixtures/audit/synthetic-lease-release-accepted-event.json"],
+        ),
+        entry(
+            "rusty.manifold.authority.lease_revocation_audit_event.v1",
+            "ManifoldControlLeaseRevocationAuthorityAuditEvent",
+            &[
+                "fixtures/audit/synthetic-lease-revocation-accepted-event.json",
+                "fixtures/audit/synthetic-lease-revocation-rejected-event.json",
+            ],
         ),
         entry(
             "rusty.manifold.authority.lease_renewal_audit_event.v1",
@@ -984,6 +1257,27 @@ fn authority_entries() -> Vec<SchemaEntry> {
                 "fixtures/authority-application/synthetic-lease-release-accepted-application.json",
                 "fixtures/authority-application/synthetic-lease-release-rejected-application.json",
             ],
+        ),
+        entry(
+            "rusty.manifold.authority.lease_revocation_review.v1",
+            "ManifoldControlLeaseRevocationAuthorityReview",
+            &[
+                "fixtures/lease-revocation-review/synthetic-lease-revocation-accepted-review.json",
+                "fixtures/lease-revocation-review/synthetic-lease-revocation-rejected-review.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.authority.lease_revocation_application.v1",
+            "ManifoldControlLeaseRevocationAuthorityApplication",
+            &[
+                "fixtures/authority-application/synthetic-lease-revocation-accepted-application.json",
+                "fixtures/authority-application/synthetic-lease-revocation-rejected-application.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.authority.lease_revocation_tombstone.v1",
+            "ManifoldControlLeaseRevocationTombstone",
+            &["fixtures/authority/synthetic-lease-revocation-tombstone.json"],
         ),
         entry(
             "rusty.manifold.authority.lease_renewal_review.v1",
@@ -1130,6 +1424,7 @@ fn authority_entries() -> Vec<SchemaEntry> {
                 "fixtures/authority-application/synthetic-clock-application-rejection.json",
                 "fixtures/authority-application/synthetic-lease-application-rejection.json",
                 "fixtures/authority-application/synthetic-lease-release-application-rejection.json",
+                "fixtures/authority-application/synthetic-lease-revocation-application-rejection.json",
                 "fixtures/authority-application/synthetic-lease-renewal-application-rejection.json",
                 "fixtures/authority-application/synthetic-authority-expiry-sweep-application-rejection.json",
             ],

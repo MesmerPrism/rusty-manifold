@@ -1,0 +1,42 @@
+{
+  "$schema": "rusty.manifold.authority.lease_revocation_audit_event.v1",
+  "event_id": "audit.lease_revocation.request.synthetic.lease_revocation.authority_mismatch.rejected",
+  "authority_id": "authority.synthetic",
+  "prior_authority_revision": 1,
+  "active_lease_count": 4,
+  "event_kind": "lease_revocation_rejected",
+  "request": {
+    "$schema": "rusty.manifold.command.lease_revocation_request.v1",
+    "request_id": "request.synthetic.lease_revocation.authority_mismatch",
+    "authority_id": "authority.substituted",
+    "lease_id": "lease.synthetic_module",
+    "expected_authority_revision": 1,
+    "scope": "module.synthetic_wave_provider",
+    "revocation_reason": "reason.security.policy_revocation",
+    "requested_at_ms": 1765000000000
+  },
+  "revoked": null,
+  "rejection": {
+    "$schema": "rusty.manifold.command.lease_revocation_rejection.v1",
+    "request_id": "request.synthetic.lease_revocation.authority_mismatch",
+    "rejection_code": "authority_id_mismatch",
+    "message": "control lease revocation request authority does not own this snapshot",
+    "retryable": false,
+    "current_revision": 1,
+    "active_lease_count": 4
+  },
+  "recorded_clock": {
+    "$schema": "rusty.manifold.clock.snapshot.v1",
+    "clock_domain": "clock.host_monotonic",
+    "clock_epoch_id": "clock_epoch.synthetic_1",
+    "sequence": 42,
+    "monotonic_elapsed_ns": 1234567890,
+    "wall_unix_ms": 1765000000000,
+    "read_uncertainty_ns": 250000,
+    "health": "healthy",
+    "wall_clock_adjustment_count": 0
+  },
+  "evidence_refs": [
+    "evidence.synthetic.lease_revocation.rejected"
+  ]
+}

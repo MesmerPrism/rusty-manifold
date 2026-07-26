@@ -1,6 +1,7 @@
 //! First-slice contract models for Manifold manifests and snapshots.
 
 use core::fmt;
+use std::collections::BTreeSet;
 
 use crate::{DottedId, Revision, SchemaId};
 
@@ -660,6 +661,15 @@ pub struct ManifoldAuthoritySnapshot {
     pub command_descriptors: Vec<ManifoldCommandDescriptor>,
     /// Active control leases considered by the authority.
     pub active_leases: Vec<ManifoldControlLease>,
+    /// Canonically lease-id-ordered terminal control-lease revocations.
+    ///
+    /// This field is absent from legacy v1 JSON and defaults empty while
+    /// deserializing it. A non-empty set requires snapshot schema v2.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Vec::is_empty")
+    )]
+    pub revoked_control_lease_tombstones: Vec<ManifoldControlLeaseRevocationTombstone>,
     /// Active stream subscriptions admitted by the authority.
     #[cfg_attr(
         feature = "serde",
@@ -676,7 +686,18 @@ impl ManifoldAuthoritySnapshot {
     /// Returns [`ManifoldAuthorityValidationError`] when any authority input
     /// points outside the snapshot or advertises an unsafe host/clock/lease pairing.
     pub fn validate_authority_links(&self) -> Result<(), ManifoldAuthorityValidationError> {
-        if self.schema_id.as_str() != "rusty.manifold.authority.snapshot.v1" {
+        if self.schema_id.as_str() != "rusty.manifold.authority.snapshot.v1"
+            && self.schema_id.as_str() != "rusty.manifold.authority.snapshot.v2"
+        {
+            return Err(ManifoldAuthorityValidationError::new(
+                self.authority_id.clone(),
+                self.schema_id.to_string(),
+                ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+            ));
+        }
+        if self.schema_id.as_str() == "rusty.manifold.authority.snapshot.v1"
+            && !self.revoked_control_lease_tombstones.is_empty()
+        {
             return Err(ManifoldAuthorityValidationError::new(
                 self.authority_id.clone(),
                 self.schema_id.to_string(),
@@ -818,6 +839,50 @@ impl ManifoldAuthoritySnapshot {
                     ManifoldAuthorityValidationErrorKind::CapabilityNotAdvertised,
                 ));
             }
+        }
+
+        let mut previous_revoked_lease_id: Option<&DottedId> = None;
+        let mut tombstone_ids = BTreeSet::new();
+        let mut revocation_request_ids = BTreeSet::new();
+        for tombstone in &self.revoked_control_lease_tombstones {
+            if tombstone.schema_id.as_str()
+                != "rusty.manifold.authority.lease_revocation_tombstone.v1"
+                || tombstone.authority_id != self.authority_id
+                || tombstone.tombstone_id
+                    != control_lease_revocation_tombstone_id(&tombstone.revocation_request_id)
+                || tombstone.revoked_lease.schema_id.as_str()
+                    != "rusty.manifold.command.control_lease.v1"
+                || tombstone.revoked_lease.state != LeaseState::Active
+                || tombstone.revoked_lease.granted_revision > tombstone.prior_authority_revision
+                || tombstone.prior_authority_revision.next()
+                    != Some(tombstone.revoked_authority_revision)
+                || tombstone.revoked_authority_revision > self.authority_revision
+                || tombstone.recorded_clock.schema_id.as_str() != "rusty.manifold.clock.snapshot.v1"
+                || tombstone.recorded_clock.clock_domain != self.clock_snapshot.clock_domain
+                || tombstone.recorded_clock.clock_epoch_id != self.clock_snapshot.clock_epoch_id
+                || !tombstone_ids.insert(&tombstone.tombstone_id)
+                || !revocation_request_ids.insert(&tombstone.revocation_request_id)
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.authority_id.clone(),
+                    tombstone.tombstone_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+            if previous_revoked_lease_id
+                .is_some_and(|previous| previous >= &tombstone.revoked_lease.lease_id)
+                || self
+                    .active_leases
+                    .iter()
+                    .any(|lease| lease.lease_id == tombstone.revoked_lease.lease_id)
+            {
+                return Err(ManifoldAuthorityValidationError::new(
+                    self.authority_id.clone(),
+                    tombstone.revoked_lease.lease_id.to_string(),
+                    ManifoldAuthorityValidationErrorKind::LeaseMismatch,
+                ));
+            }
+            previous_revoked_lease_id = Some(&tombstone.revoked_lease.lease_id);
         }
 
         if let Some(subscription_id) = duplicate_subscription_id(&self.active_stream_subscriptions)

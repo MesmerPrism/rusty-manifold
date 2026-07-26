@@ -74,8 +74,11 @@ it must not define Lattice relation semantics or default to legacy
 - Products opt into `rusty-manifold-peer-runtime-host` at compile time when
   they need one restartable owner for accepted peer status, enrollment,
   signed rendezvous, session/mesh, signed topology, direct-lane lease, replay,
-  and audit state. The extension calls the pure peer authorities and must not
-  absorb Android, Termux, sidecar, socket, codec, or media-payload behavior.
+  Broker-revocation convergence, derivative-lease cleanup, and audit state.
+  Snapshot v2 retains cleanup obligations until a separate terminal completion
+  receipt; convergence alone is not a Broker consumer acknowledgement. The
+  extension calls the pure peer authorities and must not absorb Android,
+  Termux, sidecar, socket, codec, or media-payload behavior.
 - Generic media-session descriptors bind accepted Manifold session/stream
   state to source, processor, route, sink, and platform runtime references.
   They carry no media bytes or app-specific capture/codec/socket policy;
@@ -122,24 +125,35 @@ it must not define Lattice relation semantics or default to legacy
 - Normal Broker adapter construction and restart accept no raw Runtime Host
   lease collection. They require one private-field, non-cloneable
   `ManifoldBrokerControlLeaseAuthority` whose source applications reproduce
-  every product-relevant host lease. `rusty.manifold.broker.runtime_evidence.v4`
-  retains the v2 owner transition ledger beside host, admission, exact
-  lifecycle authorization/disposition records, consumption tombstones, and
-  integrated lifecycle receipts. Restore requires every successful lifecycle
-  authorization to be exactly pending, receipt-completed, or explicitly
-  invalidated by token revoke/expiry. Issue, renewal, release, and lease-only expiry serialize through
-  the same `&mut ManifoldBrokerRuntime` gate as commands. An accepted owner
-  transition commits only with matching Runtime Host adoption; adoption
-  failure commits only permit consumption and failure evidence. Restart
-  requires a separately supplied non-regressing retained authority/clock view.
-  V3 evidence enters only through explicit lifecycle migration, which preserves
+  every product-relevant host lease. `rusty.manifold.broker.runtime_evidence.v5`
+  retains owner evidence v3 and transition v2 beside host, admission, exact
+  lifecycle authorization/disposition records, consumption tombstones,
+  integrated lifecycle receipts, revocation-use invalidations, and fail-closed
+  administrative-revocation barriers. Restore requires every successful
+  lifecycle authorization to be exactly pending, receipt-completed, or
+  explicitly invalidated. Issue, renewal, holder release, authority-owned
+  revocation, and lease-only expiry serialize through the same
+  `&mut ManifoldBrokerRuntime` gate as commands. Ordinary transitions commit
+  only with matching Runtime Host adoption. Accepted revocation also installs a
+  barrier: it is converged when Host adoption succeeds and remains
+  fail-closed/pending when Host composition fails, so later command and
+  lifecycle work cannot reuse the lease. Any pending Host-convergence barrier
+  globally freezes lifecycle authorization and commit. Pending Host barriers
+  recover only through provider-epoch/barrier/revision-bound one-shot requests. Retaining
+  downstream consumers join converged barriers and return typed terminal
+  acknowledgement digests; products with a Peer Runtime Host require that
+  acknowledgement before rollover. Restart requires a separately supplied
+  non-regressing retained authority/clock view. Released v4 enters only through
+  decision-free schema migration; v3 enters only through explicit lifecycle
+  migration, which preserves
   generic pending uses without promoting them to lifecycle authority. One
   product is capped at 64 projected leases and owner evidence reserves one
   512 KiB transition per possible cleanup near its 4,096-transition/48 MiB
   limits; current/legacy integrated runtime evidence is capped at 64 MiB before
   JSON decode. Once drained, an in-band epoch rollover checkpoints the complete
   prior evidence by digest, preserves owner/Host lineage, compacts the empty
-  product owner baseline, and invalidates old admission state.
+  product owner baseline, invalidates old admission state, and accumulates every
+  prior control-lease request identity so an epoch boundary cannot reopen replay.
   Construction, evidence, and continuity restore are trusted deployment-owner
   APIs. Deployment must externally fence one writable runtime per provider
   epoch across processes/storage; library validation does not prove exclusive

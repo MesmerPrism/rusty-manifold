@@ -213,6 +213,7 @@ fn authority_snapshot() -> ManifoldAuthoritySnapshot {
             active_host_manifest_lease(),
             active_clock_lease(),
         ],
+        revoked_control_lease_tombstones: Vec::new(),
         active_stream_subscriptions: Vec::new(),
     }
 }
