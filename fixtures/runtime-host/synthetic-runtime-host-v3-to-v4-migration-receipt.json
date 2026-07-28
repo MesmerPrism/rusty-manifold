@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.runtime_host.snapshot_migration_receipt.v1",
+  "source_schema_id": "rusty.manifold.runtime_host.snapshot.v3",
+  "resulting_schema_id": "rusty.manifold.runtime_host.snapshot.v4",
+  "migrated": true,
+  "authority_host_id": "host.broker.parity",
+  "resulting_authority_revision": 1,
+  "migrated_audit_event_count": 0,
+  "reviewed_sweep_ids": []
+}

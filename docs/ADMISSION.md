@@ -26,8 +26,14 @@ exact client, one derived command capability, the admission revision produced
 when that bounded use was created, packaged client-lock id/SHA-256, expiry,
 and the live provider epoch. Later
 unrelated admission mutations may advance the global revision without changing
-that binding. Exact-token revocation or expiry removes only permits derived
-from the affected token. The permit is consumed before one
+that binding. Every newly accepted use audit event embeds the complete use
+request and the complete token object selected by that request. Broker retains
+that exact audit binding together with terminal token history, so two revoked
+or expired token ids cannot be substituted for one another during restart
+validation. Released admission snapshots without the additive binding remain
+readable only through their explicit compatibility path. Exact-token
+revocation or expiry removes only permits derived from the affected token. The
+permit is consumed before one
 Runtime Host review/application attempt. A WebSocket request id, localhost
 origin, shared secret, or transport acknowledgement cannot substitute for it.
 

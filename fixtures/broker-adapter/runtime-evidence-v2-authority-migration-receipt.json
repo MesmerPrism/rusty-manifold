@@ -1,0 +1,28 @@
+{
+  "$schema": "rusty.manifold.broker.runtime_evidence_authority_migration_receipt.v1",
+  "source_schema_id": "rusty.manifold.broker.runtime_evidence.v2",
+  "resulting_schema_id": "rusty.manifold.broker.runtime_evidence.v5",
+  "provider_epoch_id": "provider_epoch.broker.fixture",
+  "source_json_sha256": "sha256:dd04de80400efa96ef02a496ad36d36de1b65b8462a20945e99f5bcecb07bd3b",
+  "source_json_size_bytes": 1492,
+  "source_typed_evidence_sha256": "sha256:8403e1984a7f94b4f82902abd1c8bf59b5099b66b452ab30bb93aba8748fb873",
+  "resulting_evidence_json_sha256": "sha256:9eafbe5cc3d92cffbf1376d5dde467fab3d9261ce19f29a821c28193f1172dcf",
+  "resulting_evidence_json_size_bytes": 23908,
+  "adapter_id": "adapter.broker.standalone",
+  "product_lock_id": "lock.broker.camera.parity",
+  "product_lock_sha256": "sha256:2a89431f0fdd3375dd303ae03774bab0ea9a09d0e79d28c7b88c3c14b462a758",
+  "authority_host_id": "host.broker.parity",
+  "control_lease_authority_schema_id": "rusty.manifold.broker.control_lease_authority_evidence.v1",
+  "control_lease_authority_id": "authority.synthetic",
+  "control_lease_authority_revision": 2,
+  "control_lease_clock_domain": "clock.host_monotonic",
+  "control_lease_clock_epoch_id": "clock_epoch.synthetic_1",
+  "control_lease_clock_sequence": 43,
+  "source_lineage_sha256": "sha256:cba68140efd39690bca9bc0522ab15137531fced67215c5aca858528dbde6117",
+  "host_snapshot_sha256": "sha256:2e438e6f49260ab7b197b88fa1614b7807a3574d54b6f9790d28c9045dd78ea1",
+  "host_lease_set_sha256": "sha256:5016e0ea4a994a809147d8408b8857433cdb398db55db770eedefcbda4304910",
+  "migrated_lease_ids": [
+    "lease.media.session.client"
+  ],
+  "outcome": "existing_authority_adopted_without_new_lease_decision"
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "rusty.manifold.runtime_host.control_lease_adoption_receipt.v2",
+  "authority_host_id": "runtime.host.default",
+  "adoption_id": "adoption.runtime.lease_revocation.damaged",
+  "operation": "revocation",
+  "manifold_authority_id": "authority.substituted",
+  "manifold_application_id": "lease_revocation_application.lease_revocation_review.request.synthetic.lease_revocation.accepted",
+  "prior_manifold_authority_revision": 1,
+  "resulting_manifold_authority_revision": 2,
+  "applied": false,
+  "added_lease_ids": [],
+  "renewed_lease_ids": [],
+  "removed_lease_ids": [],
+  "prior_host_authority_revision": 1,
+  "resulting_host_authority_revision": 1,
+  "rejection_reason": "invalid_control_lease_authority_application"
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "rusty.manifold.authority.lease_revocation_tombstone.v1",
+  "tombstone_id": "lease_revocation_tombstone.request.synthetic.lease_revocation.accepted",
+  "authority_id": "authority.synthetic",
+  "revoked_lease": {
+    "$schema": "rusty.manifold.command.control_lease.v1",
+    "lease_id": "lease.synthetic_module",
+    "holder_id": "holder.test_agent",
+    "scope": "module.synthetic_wave_provider",
+    "state": "active",
+    "granted_revision": 1,
+    "expires_at_ms": 1765000030000,
+    "required_capability": "manifold.module.control"
+  },
+  "revocation_request_id": "request.synthetic.lease_revocation.accepted",
+  "prior_authority_revision": 1,
+  "revoked_authority_revision": 2,
+  "revocation_reason": "reason.security.policy_revocation",
+  "recorded_clock": {
+    "$schema": "rusty.manifold.clock.snapshot.v1",
+    "clock_domain": "clock.host_monotonic",
+    "clock_epoch_id": "clock_epoch.synthetic_1",
+    "sequence": 42,
+    "monotonic_elapsed_ns": 1234567890,
+    "wall_unix_ms": 1765000000000,
+    "read_uncertainty_ns": 250000,
+    "health": "healthy",
+    "wall_clock_adjustment_count": 0
+  }
+}

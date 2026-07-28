@@ -141,6 +141,59 @@ application receipt. The application advances the authority snapshot revision
 by one and appends the accepted active lease, or rejects application when the
 review itself was rejected.
 
+### Runtime Host lease projection
+
+Runtime Host lease state does not create a second lease authority.
+`rusty-manifold-broker-adapter` may project one already applied control lease
+for Runtime Host consumption only at an authority-owning trust boundary. The
+borrowed, non-cloneable, one-shot projector must receive that owner's retained
+current authority snapshot and current clock. It validates the complete application against its exact prior
+snapshot and requires the same accepted lease to remain exactly once,
+unchanged and active, in current retained state. The projection preserves the
+same lease id, holder, scope, and expiry and records authority revisions,
+review/application/audit identities, clock lineage and uncertainty, and
+versioned domain-separated SHA-256 over bounded exact typed-JSON serialization.
+
+The projection rejects arbitrary inserted leases, rejected or substituted
+review/application/audit lineage, a different clock domain or epoch, clock
+regression, unhealthy or excessively uncertain time, expiry at the conservative
+uncertainty bound, and a lease that was released, renewed, revoked, expired, or
+replaced in retained state. A deserialized receipt remains raw evidence until
+the retained state and source application freshly reproduce every field; the
+receipt is not a signature or portable proof. Projection does not issue,
+renew, release, revoke, expire, or execute a lease. Constructing or restoring
+a `ManifoldRuntimeHostSnapshot` is restart machinery and cannot substitute for
+the control-lease review/application path. The separate Broker adoption slice
+must enforce a synchronized authority-owner boundary around projector
+construction because the source-only constructor cannot authenticate arbitrary
+caller-supplied or cloned state.
+
+The first Broker-adoption checkpoint now closes construction and restart:
+normal adapter APIs require a `ManifoldBrokerControlLeaseAuthority`, accept no
+raw Runtime Host lease collection, and validate the exact projected set on
+both fresh construction and restart. Runtime evidence v5 retains owner evidence
+v3 and the chronological transition v2 ledger, Runtime Host/admission state,
+immutable lifecycle authorizations and their pending/receipt/invalidated
+disposition, integrated owner/Host receipts, revocation-use invalidations, and
+fail-closed revocation barriers. Restore requires a separately supplied
+same-authority, same-clock-lineage, non-regressing retained view and reprojects
+every source and transition before exposing the runtime. Released v2/v3
+evidence is accepted only by explicitly named migrations that cannot synthesize
+a lease decision. Released v4 has its own exact v4-to-v5 migration and receipt;
+it upgrades schema vocabulary without synthesizing a revocation barrier. The
+product owner is capped at 64
+projected leases, 4,096 transitions, and 48 MiB serialized evidence; runtime
+evidence JSON is capped at 64 MiB before decode. Issue, renewal, holder release,
+authority-owned revocation, and exact lease-only expiry serialize through the
+same Broker runtime gate. Accepted revocation installs a fail-closed barrier
+even when Host composition cannot converge immediately. Any pending
+Host-convergence barrier globally freezes lifecycle authorization and commit
+until recovery succeeds. Drained provider-epoch rollover accumulates the prior
+compacted requests plus source-application, transition-application,
+lifecycle-receipt, and authorized-use request identities, so cross-epoch replay
+still rejects. Transport and platform lifecycle adoption remain separate
+downstream slices.
+
 The fixture CLI route is:
 
 ```powershell
@@ -189,6 +242,18 @@ Accepted release application advances the authority revision by one and
 removes the reviewed lease from accepted active lease state. These routes do
 not renew leases, execute commands, mutate runtime state, contact a host, open
 transports, or start or stop lease timers.
+
+Authority-owned revocation is distinct from holder release. A
+`ManifoldControlLeaseRevocationRequest` binds the current authority identity,
+expected authority revision, exact lease id and scope, reason, and request
+time; it never impersonates or requires the holder. Accepted application
+removes the exact active lease, advances to authority snapshot v2, and retains
+a terminal `ManifoldControlLeaseRevocationTombstone` with the full lease,
+request, reason, trusted clock, and prior/resulting revisions. Expired but
+still-retained active leases may be revoked. Authority substitution, stale
+revision, unknown/inactive lease, and scope mismatch reject without accepted
+state movement. The tombstone prevents reconstruction of the same derived
+lease identity from old issuance evidence.
 
 Stream registry changes use the same authority pattern: request a scoped
 `manifold.stream_registry` lease, submit a revisioned

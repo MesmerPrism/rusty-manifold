@@ -139,6 +139,16 @@ pub struct ManifoldAdmissionUseRequest {
     pub expires_at_ms: u64,
 }
 
+/// Exact accepted token/use input retained by an authorization audit event.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldAdmissionUseAuthorizationBinding {
+    /// Complete caller request accepted by the admission authority.
+    pub request: ManifoldAdmissionUseRequest,
+    /// Complete exact token object selected by that request.
+    pub token: ManifoldAdmissionToken,
+}
+
 /// Explicit token revocation request.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -264,6 +274,9 @@ pub struct ManifoldAdmissionAuditEvent {
     pub resulting_authority_revision: Revision,
     /// Rejection when applicable.
     pub rejection_reason: Option<ManifoldAdmissionRejectionReason>,
+    /// Exact accepted use/token binding; absent for other operations and rejections.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub use_authorization: Option<ManifoldAdmissionUseAuthorizationBinding>,
 }
 
 /// Durable accepted admission state.
@@ -569,6 +582,7 @@ impl ManifoldAdmissionAuthority {
             token,
             Vec::new(),
             rejection,
+            None,
         )
     }
 
@@ -615,6 +629,13 @@ impl ManifoldAdmissionAuthority {
                 .is_none()
                 .then_some(ManifoldAdmissionRejectionReason::RevisionExhausted)
         });
+        let use_authorization =
+            rejection
+                .is_none()
+                .then(|| ManifoldAdmissionUseAuthorizationBinding {
+                    request: request.clone(),
+                    token: token.expect("validated token exists").clone(),
+                });
         if rejection.is_none() {
             self.snapshot
                 .consumed_use_request_ids
@@ -629,6 +650,7 @@ impl ManifoldAdmissionAuthority {
             None,
             Vec::new(),
             rejection,
+            use_authorization,
         )
     }
 
@@ -699,6 +721,7 @@ impl ManifoldAdmissionAuthority {
             None,
             removed,
             rejection,
+            None,
         )
     }
 
@@ -778,6 +801,7 @@ impl ManifoldAdmissionAuthority {
             None,
             removed,
             rejection,
+            None,
         )
     }
 
@@ -789,6 +813,7 @@ impl ManifoldAdmissionAuthority {
         token: Option<ManifoldAdmissionToken>,
         removed_token_ids: Vec<DottedId>,
         rejection: Option<ManifoldAdmissionRejectionReason>,
+        use_authorization: Option<ManifoldAdmissionUseAuthorizationBinding>,
     ) -> ManifoldAdmissionReceipt {
         let resulting = self.snapshot.authority_revision;
         let audit_sequence = self.snapshot.audit_events.len() + 1;
@@ -804,6 +829,7 @@ impl ManifoldAdmissionAuthority {
                 prior_authority_revision: prior,
                 resulting_authority_revision: resulting,
                 rejection_reason: rejection.clone(),
+                use_authorization,
             });
         ManifoldAdmissionReceipt {
             schema_id: schema_id(ADMISSION_RECEIPT_SCHEMA),
@@ -934,6 +960,7 @@ fn migrate_legacy_admission_snapshot(
                 prior_authority_revision: event.prior_authority_revision,
                 resulting_authority_revision: event.resulting_authority_revision,
                 rejection_reason: event.rejection_reason.clone(),
+                use_authorization: None,
             }
         })
         .collect::<Vec<_>>();
@@ -1410,6 +1437,46 @@ fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), Manifol
             }
             _ => true,
         };
+        let use_authorization_valid = match (
+            &event.operation,
+            event.applied,
+            event.use_authorization.as_ref(),
+        ) {
+            (
+                ManifoldAdmissionOperation::AuthorizeUse,
+                true,
+                Some(ManifoldAdmissionUseAuthorizationBinding { request, token }),
+            ) => {
+                let grant = snapshot
+                    .grants
+                    .iter()
+                    .find(|grant| grant.grant_id == token.grant_id);
+                request.schema_id.as_str() == ADMISSION_USE_REQUEST_SCHEMA
+                    && request.request_id == event.request_id
+                    && request.expected_authority_revision == event.prior_authority_revision
+                    && request.token_id == token.token_id
+                    && request.identity == token.identity
+                    && token.capabilities.contains(&request.capability_id)
+                    && request.issued_at_ms < request.expires_at_ms
+                    && token.issued_authority_revision <= event.prior_authority_revision
+                    && grant.is_some_and(|grant| {
+                        grant.identity == token.identity
+                            && grant.client_lock_id == token.client_lock_id
+                            && grant.client_lock_fingerprint == token.client_lock_fingerprint
+                            && token
+                                .capabilities
+                                .iter()
+                                .all(|capability| grant.capabilities.contains(capability))
+                    })
+                    && snapshot.audit_events.iter().any(|issue| {
+                        issue.operation == ManifoldAdmissionOperation::IssueToken
+                            && issue.applied
+                            && issue.resulting_authority_revision == token.issued_authority_revision
+                    })
+            }
+            (_, _, None) => true,
+            _ => false,
+        };
         if event.schema_id.as_str() != ADMISSION_AUDIT_SCHEMA
             || event.sequence != sequence
             || event.event_id != admission_audit_id(sequence)
@@ -1422,6 +1489,7 @@ fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), Manifol
             || event.resulting_authority_revision > snapshot.authority_revision
             || event.applied != event.rejection_reason.is_none()
             || !operation_valid
+            || !use_authorization_valid
         {
             return Err(ManifoldAdmissionError::InvalidSnapshot("audit_lineage"));
         }

@@ -489,6 +489,8 @@ impl ManifoldStreamSubscriptionAuthorityApplication {
                     || applied.command_ids != snapshot.command_ids
                     || applied.command_descriptors != snapshot.command_descriptors
                     || applied.active_leases != snapshot.active_leases
+                    || applied.revoked_control_lease_tombstones
+                        != snapshot.revoked_control_lease_tombstones
                 {
                     return Err(ManifoldAuthorityValidationError::new(
                         self.application_id.clone(),

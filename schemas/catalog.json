@@ -292,6 +292,21 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.command.lease_revocation_request.v1",
+      "rust_type": "ManifoldControlLeaseRevocationRequest",
+      "fixture_paths": [
+        "fixtures/command/synthetic-lease-revocation-request.json",
+        "fixtures/damaged/lease-revocation-request-authority-mismatch.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.command.lease_revocation_rejection.v1",
+      "rust_type": "ManifoldControlLeaseRevocationRejection",
+      "fixture_paths": [
+        "fixtures/command/synthetic-lease-revocation-rejection.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.command.lease_renewal_request.v1",
       "rust_type": "ManifoldControlLeaseRenewalRequest",
       "fixture_paths": [
@@ -419,6 +434,76 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.peer.runtime_host.snapshot.v1",
+      "rust_type": "ManifoldPeerRuntimeHostSnapshot",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.runtime_host.snapshot.v2",
+      "rust_type": "ManifoldPeerRuntimeHostSnapshot",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.runtime_host.snapshot.v3",
+      "rust_type": "ManifoldPeerRuntimeHostSnapshot",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.runtime_host.audit_event.v1",
+      "rust_type": "ManifoldPeerRuntimeAuditEvent",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.runtime_host.trust_policy.v1",
+      "rust_type": "ManifoldPeerRuntimeTrustPolicy",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.runtime_host.broker_lease_admission.v1",
+      "rust_type": "ManifoldPeerRuntimeBrokerLeaseAdmission",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.runtime_host.broker_lease_attempt.v1",
+      "rust_type": "ManifoldPeerRuntimeBrokerLeaseAttempt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.runtime_host.broker_lease_revocation_convergence_request.v1",
+      "rust_type": "ManifoldPeerRuntimeBrokerLeaseRevocationConvergenceRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.runtime_host.media_cleanup_obligation.v1",
+      "rust_type": "ManifoldPeerRuntimeMediaCleanupObligation",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.runtime_host.broker_lease_revocation_convergence_receipt.v1",
+      "rust_type": "ManifoldPeerRuntimeBrokerLeaseRevocationConvergenceReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.runtime_host.broker_lease_revocation_cleanup_completion_request.v1",
+      "rust_type": "ManifoldPeerRuntimeBrokerLeaseRevocationCleanupCompletionRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.runtime_host.broker_lease_revocation_cleanup_completion_receipt.v1",
+      "rust_type": "ManifoldPeerRuntimeBrokerLeaseRevocationCleanupCompletionReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.runtime_host.broker_epoch_rollover_receipt.v1",
+      "rust_type": "ManifoldPeerRuntimeBrokerEpochRolloverReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.runtime_host.snapshot_migration_receipt.v1",
+      "rust_type": "ManifoldPeerRuntimeHostSnapshotMigrationReceipt",
+      "fixture_paths": []
+    },
+    {
       "schema_id": "rusty.manifold.stream.observation.v1",
       "rust_type": "ManifoldStreamObservation",
       "fixture_paths": [
@@ -490,10 +575,28 @@
     },
     {
       "schema_id": "rusty.manifold.runtime_host.snapshot.v1",
-      "rust_type": "ManifoldRuntimeHostSnapshot",
+      "rust_type": "LegacyManifoldRuntimeHostSnapshotV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.snapshot.v2",
+      "rust_type": "LegacyManifoldRuntimeHostSnapshotV2",
       "fixture_paths": [
         "fixtures/runtime-host/synthetic-runtime-host-snapshot.json",
         "fixtures/runtime-host/synthetic-runtime-host-restarted-snapshot.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.snapshot.v3",
+      "rust_type": "ManifoldRuntimeHostSnapshot",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.snapshot.v4",
+      "rust_type": "ManifoldRuntimeHostSnapshot",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-control-lease-revocation-applied-snapshot.json",
+        "fixtures/runtime-host/synthetic-derivative-lease-revocation-applied-snapshot.json"
       ]
     },
     {
@@ -514,12 +617,22 @@
     {
       "schema_id": "rusty.manifold.runtime_host.dispatch_receipt.v1",
       "rust_type": "ManifoldRuntimeDispatchReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.dispatch_receipt.v2",
+      "rust_type": "ManifoldRuntimeDispatchReceipt",
       "fixture_paths": [
         "fixtures/runtime-host/synthetic-runtime-dispatch-receipt.json"
       ]
     },
     {
       "schema_id": "rusty.manifold.runtime_host.application_receipt.v1",
+      "rust_type": "ManifoldRuntimeApplicationReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.application_receipt.v2",
       "rust_type": "ManifoldRuntimeApplicationReceipt",
       "fixture_paths": [
         "fixtures/runtime-host/synthetic-runtime-application-receipt.json"
@@ -528,15 +641,110 @@
     {
       "schema_id": "rusty.manifold.runtime_host.lease_expiry_receipt.v1",
       "rust_type": "ManifoldRuntimeLeaseExpiryReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.lease_expiry_receipt.v2",
+      "rust_type": "ManifoldRuntimeLeaseExpiryReceipt",
       "fixture_paths": [
         "fixtures/runtime-host/synthetic-runtime-lease-expiry-receipt.json"
       ]
     },
     {
+      "schema_id": "rusty.manifold.runtime_host.control_lease_adoption_request.v1",
+      "rust_type": "ManifoldRuntimeControlLeaseAdoptionRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.control_lease_adoption_request.v2",
+      "rust_type": "ManifoldRuntimeControlLeaseAdoptionRequest",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-control-lease-revocation-adoption-request.json",
+        "fixtures/damaged/runtime-host-control-lease-revocation-adoption-request.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.control_lease_adoption_receipt.v1",
+      "rust_type": "ManifoldRuntimeControlLeaseAdoptionReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.control_lease_adoption_receipt.v2",
+      "rust_type": "ManifoldRuntimeControlLeaseAdoptionReceipt",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-control-lease-revocation-adoption-receipt.json",
+        "fixtures/runtime-host/synthetic-control-lease-revocation-adoption-rejected-receipt.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.derivative_lease_binding.v1",
+      "rust_type": "ManifoldRuntimeDerivativeLeaseBinding",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-derivative-lease-revocation-request.json",
+        "fixtures/runtime-host/synthetic-derivative-lease-revocation-audit-binding.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.upstream_revocation_proof.v1",
+      "rust_type": "ManifoldRuntimeUpstreamRevocationProof",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-derivative-lease-revocation-request.json",
+        "fixtures/runtime-host/synthetic-derivative-lease-revocation-audit-binding.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.derivative_lease_revocation_request.v1",
+      "rust_type": "ManifoldRuntimeDerivativeLeaseRevocationRequest",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-derivative-lease-revocation-request.json",
+        "fixtures/damaged/runtime-host-derivative-lease-revocation-substituted-request.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.derivative_lease_revocation_receipt.v1",
+      "rust_type": "ManifoldRuntimeDerivativeLeaseRevocationReceipt",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-derivative-lease-revocation-receipt.json",
+        "fixtures/runtime-host/synthetic-derivative-lease-revocation-rejected-receipt.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.derivative_lease_revocation_audit_binding.v1",
+      "rust_type": "ManifoldRuntimeDerivativeLeaseRevocationAuditBinding",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-derivative-lease-revocation-audit-binding.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.runtime_host.audit_event.v1",
+      "rust_type": "ManifoldRuntimeAuditEvent",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.audit_event.v2",
       "rust_type": "ManifoldRuntimeAuditEvent",
       "fixture_paths": [
         "fixtures/runtime-host/synthetic-runtime-audit-event.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.audit_event.v3",
+      "rust_type": "ManifoldRuntimeAuditEvent",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.audit_event.v4",
+      "rust_type": "ManifoldRuntimeAuditEvent",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-derivative-lease-revocation-audit-event.json",
+        "fixtures/runtime-host/synthetic-derivative-lease-revocation-rejected-audit-event.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.runtime_host.snapshot_migration_receipt.v1",
+      "rust_type": "ManifoldRuntimeHostMigrationReceipt",
+      "fixture_paths": [
+        "fixtures/runtime-host/synthetic-runtime-host-v3-to-v4-migration-receipt.json"
       ]
     },
     {
@@ -568,6 +776,13 @@
     },
     {
       "schema_id": "rusty.manifold.broker.adapter_config.v1",
+      "rust_type": "LegacyBrokerAdapterConfigV1",
+      "fixture_paths": [
+        "fixtures/broker-adapter/legacy-v1-standalone-config.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.adapter_config.v2",
       "rust_type": "ManifoldBrokerAdapterConfig",
       "fixture_paths": [
         "fixtures/broker-adapter/standalone-config.json",
@@ -576,6 +791,13 @@
     },
     {
       "schema_id": "rusty.manifold.broker.adapter_receipt.v1",
+      "rust_type": "LegacyBrokerAdapterReceiptV1",
+      "fixture_paths": [
+        "fixtures/broker-adapter/legacy-v1-standalone-applied.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.adapter_receipt.v2",
       "rust_type": "ManifoldBrokerAdapterReceipt",
       "fixture_paths": [
         "fixtures/broker-adapter/standalone-applied.json",
@@ -587,7 +809,17 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.broker.adapter_migration_receipt.v1",
+      "rust_type": "ManifoldBrokerAdapterMigrationReceipt",
+      "fixture_paths": []
+    },
+    {
       "schema_id": "rusty.manifold.broker.bounded_use.v1",
+      "rust_type": "LegacyBrokerBoundedUseV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.bounded_use.v2",
       "rust_type": "ManifoldBrokerBoundedUse",
       "fixture_paths": []
     },
@@ -598,13 +830,189 @@
     },
     {
       "schema_id": "rusty.manifold.broker.mutation_receipt.v1",
+      "rust_type": "LegacyManifoldBrokerMutationReceiptV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.mutation_receipt.v2",
       "rust_type": "ManifoldBrokerMutationReceipt",
       "fixture_paths": []
     },
     {
-      "schema_id": "rusty.manifold.broker.runtime_evidence.v1",
-      "rust_type": "ManifoldBrokerRuntimeEvidence",
+      "schema_id": "rusty.manifold.broker.capability_use_receipt.v1",
+      "rust_type": "ManifoldBrokerCapabilityUseReceipt",
       "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence.v1",
+      "rust_type": "LegacyBrokerRuntimeEvidenceV1",
+      "fixture_paths": [
+        "fixtures/broker-adapter/legacy-v1-runtime-evidence.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence.v2",
+      "rust_type": "LegacyBrokerRuntimeEvidenceV2",
+      "fixture_paths": [
+        "fixtures/broker-adapter/runtime-evidence-v2.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence.v3",
+      "rust_type": "LegacyManifoldBrokerRuntimeEvidenceV3",
+      "fixture_paths": [
+        "fixtures/broker-adapter/runtime-evidence-v3.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence.v4",
+      "rust_type": "LegacyManifoldBrokerRuntimeEvidenceV4",
+      "fixture_paths": [
+        "fixtures/broker-adapter/runtime-evidence-v4.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence.v5",
+      "rust_type": "ManifoldBrokerRuntimeEvidence",
+      "fixture_paths": [
+        "fixtures/broker-adapter/runtime-evidence-v5.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_source.v1",
+      "rust_type": "ManifoldBrokerControlLeaseSource",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_authority_evidence.v1",
+      "rust_type": "ManifoldBrokerControlLeaseAuthorityEvidence",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_authority_evidence.v2",
+      "rust_type": "ManifoldBrokerControlLeaseAuthorityEvidenceV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_authority_evidence.v3",
+      "rust_type": "ManifoldBrokerControlLeaseAuthorityEvidenceV3",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_transition.v1",
+      "rust_type": "ManifoldBrokerControlLeaseTransition",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_transition.v2",
+      "rust_type": "ManifoldBrokerControlLeaseTransition",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_lifecycle_request.v1",
+      "rust_type": "ManifoldBrokerControlLeaseLifecycleRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_lifecycle_request.v2",
+      "rust_type": "ManifoldBrokerControlLeaseLifecycleRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_lifecycle_use.v1",
+      "rust_type": "ManifoldBrokerControlLeaseLifecycleUse",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_lifecycle_use.v2",
+      "rust_type": "ManifoldBrokerControlLeaseLifecycleUse",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_lifecycle_authorization_receipt.v1",
+      "rust_type": "ManifoldBrokerControlLeaseLifecycleAuthorizationReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_lifecycle_authorization_receipt.v2",
+      "rust_type": "ManifoldBrokerControlLeaseLifecycleAuthorizationReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_lifecycle_receipt.v1",
+      "rust_type": "ManifoldBrokerControlLeaseLifecycleReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_lifecycle_receipt.v2",
+      "rust_type": "ManifoldBrokerControlLeaseLifecycleReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence_migration_receipt.v1",
+      "rust_type": "ManifoldBrokerRuntimeMigrationReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence_authority_migration_receipt.v1",
+      "rust_type": "ManifoldBrokerRuntimeAuthorityMigrationReceipt",
+      "fixture_paths": [
+        "fixtures/broker-adapter/runtime-evidence-v2-authority-migration-receipt.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence_lifecycle_migration_receipt.v1",
+      "rust_type": "ManifoldBrokerRuntimeLifecycleMigrationReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_evidence_revocation_migration_receipt.v1",
+      "rust_type": "ManifoldBrokerRuntimeRevocationMigrationReceipt",
+      "fixture_paths": [
+        "fixtures/broker-adapter/runtime-evidence-v4-revocation-migration-receipt.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_revocation_barrier.v1",
+      "rust_type": "ManifoldBrokerControlLeaseRevocationBarrier",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_revocation_use_invalidation.v1",
+      "rust_type": "ManifoldBrokerControlLeaseRevocationUseInvalidation",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_revocation_recovery_request.v1",
+      "rust_type": "ManifoldBrokerControlLeaseRevocationRecoveryRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_revocation_recovery_receipt.v1",
+      "rust_type": "ManifoldBrokerControlLeaseRevocationRecoveryReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.control_lease_revocation_consumer_acknowledgement.v1",
+      "rust_type": "ManifoldBrokerControlLeaseRevocationConsumerAcknowledgement",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_epoch_rollover_receipt.v1",
+      "rust_type": "ManifoldBrokerRuntimeEpochRolloverReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_epoch_rollover_receipt.v2",
+      "rust_type": "ManifoldBrokerRuntimeEpochRolloverReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.broker.runtime_lease_projection.v1",
+      "rust_type": "ManifoldBrokerRuntimeLeaseProjection",
+      "fixture_paths": [
+        "fixtures/broker-adapter/runtime-lease-projection.json"
+      ]
     },
     {
       "schema_id": "rusty.manifold.admission.snapshot.v1",
@@ -667,6 +1075,13 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.authority.snapshot.v2",
+      "rust_type": "ManifoldAuthoritySnapshot",
+      "fixture_paths": [
+        "fixtures/authority/synthetic-authority-revoked-lease-snapshot.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.authority.expiry_sweep_request.v1",
       "rust_type": "ManifoldAuthorityExpirySweepRequest",
       "fixture_paths": [
@@ -702,6 +1117,14 @@
       "rust_type": "ManifoldControlLeaseReleaseAuthorityAuditEvent",
       "fixture_paths": [
         "fixtures/audit/synthetic-lease-release-accepted-event.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.authority.lease_revocation_audit_event.v1",
+      "rust_type": "ManifoldControlLeaseRevocationAuthorityAuditEvent",
+      "fixture_paths": [
+        "fixtures/audit/synthetic-lease-revocation-accepted-event.json",
+        "fixtures/audit/synthetic-lease-revocation-rejected-event.json"
       ]
     },
     {
@@ -840,6 +1263,29 @@
       "fixture_paths": [
         "fixtures/authority-application/synthetic-lease-release-accepted-application.json",
         "fixtures/authority-application/synthetic-lease-release-rejected-application.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.authority.lease_revocation_review.v1",
+      "rust_type": "ManifoldControlLeaseRevocationAuthorityReview",
+      "fixture_paths": [
+        "fixtures/lease-revocation-review/synthetic-lease-revocation-accepted-review.json",
+        "fixtures/lease-revocation-review/synthetic-lease-revocation-rejected-review.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.authority.lease_revocation_application.v1",
+      "rust_type": "ManifoldControlLeaseRevocationAuthorityApplication",
+      "fixture_paths": [
+        "fixtures/authority-application/synthetic-lease-revocation-accepted-application.json",
+        "fixtures/authority-application/synthetic-lease-revocation-rejected-application.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.authority.lease_revocation_tombstone.v1",
+      "rust_type": "ManifoldControlLeaseRevocationTombstone",
+      "fixture_paths": [
+        "fixtures/authority/synthetic-lease-revocation-tombstone.json"
       ]
     },
     {
@@ -987,6 +1433,7 @@
         "fixtures/authority-application/synthetic-clock-application-rejection.json",
         "fixtures/authority-application/synthetic-lease-application-rejection.json",
         "fixtures/authority-application/synthetic-lease-release-application-rejection.json",
+        "fixtures/authority-application/synthetic-lease-revocation-application-rejection.json",
         "fixtures/authority-application/synthetic-lease-renewal-application-rejection.json",
         "fixtures/authority-application/synthetic-authority-expiry-sweep-application-rejection.json"
       ]

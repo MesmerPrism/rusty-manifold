@@ -8,8 +8,17 @@ license.workspace = true
 rust-version.workspace = true
 publish = false
 
+[features]
+fixture-export = ["dep:rusty-manifold-runtime-host"]
+
+[[bin]]
+name = "export_control_lease_revocation_fixtures"
+path = "src/bin/export_control_lease_revocation_fixtures.rs"
+required-features = ["fixture-export"]
+
 [dependencies]
 rusty-manifold-model = { path = "../rusty-manifold-model", features = ["serde"] }
+rusty-manifold-runtime-host = { path = "../rusty-manifold-runtime-host", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 

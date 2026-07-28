@@ -141,6 +141,7 @@ pub(super) fn authority_error_kind_for_lease_rejection_code(
             ManifoldAuthorityValidationErrorKind::CapabilityNotAdvertised
         }
         "lease_scope_busy" => ManifoldAuthorityValidationErrorKind::LeaseScopeBusy,
+        "revoked_lease_id" => ManifoldAuthorityValidationErrorKind::InactiveLease,
         _ => ManifoldAuthorityValidationErrorKind::LeaseRequestValidationFailed,
     }
 }
@@ -156,6 +157,20 @@ pub(super) fn authority_error_kind_for_lease_release_rejection_code(
         "lease_holder_mismatch" | "lease_scope_mismatch" => {
             ManifoldAuthorityValidationErrorKind::LeaseMismatch
         }
+        _ => ManifoldAuthorityValidationErrorKind::LeaseRequestValidationFailed,
+    }
+}
+
+pub(super) fn authority_error_kind_for_lease_revocation_rejection_code(
+    rejection_code: &str,
+) -> ManifoldAuthorityValidationErrorKind {
+    match rejection_code {
+        "unsupported_schema" => ManifoldAuthorityValidationErrorKind::UnsupportedSchema,
+        "stale_revision" => ManifoldAuthorityValidationErrorKind::AuthorityRevisionMismatch,
+        "authority_id_mismatch" => ManifoldAuthorityValidationErrorKind::AuthorityIdMismatch,
+        "unknown_lease" => ManifoldAuthorityValidationErrorKind::UnknownLease,
+        "inactive_lease" => ManifoldAuthorityValidationErrorKind::InactiveLease,
+        "lease_scope_mismatch" => ManifoldAuthorityValidationErrorKind::LeaseMismatch,
         _ => ManifoldAuthorityValidationErrorKind::LeaseRequestValidationFailed,
     }
 }

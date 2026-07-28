@@ -24,6 +24,25 @@ Manifold authority owns accepted mutable state:
 Clients observe or request through typed commands and descriptors. They do not
 mutate accepted state directly.
 
+Broker Runtime Host leases are derived state, not a second lease authority.
+Normal Broker construction and restart retain a synchronized
+`ManifoldBrokerControlLeaseAuthority` containing the current owner view and
+exact source applications; no raw Runtime Host lease collection enters those
+paths. Durable runtime evidence v5 closes owner evidence v3 and chronological
+transition v2 over Host/admission state, lifecycle authorization disposition,
+integrated owner/Host receipts, and fail-closed administrative-revocation
+barriers. Restart requires a separately supplied non-regressing owner view.
+Any pending Host-convergence barrier globally freezes lifecycle authorization
+and commit until exact recovery converges it. Provider-epoch rollover carries
+all compacted control-lease request identities forward, so an epoch boundary is
+not a replay boundary. Released v4 enters only through an explicit
+decision-free migration. Platform
+lifecycle transport remains a downstream adoption layer rather than a
+competing authority. Runtime Host derivative-revocation requests remove
+byte-equal downstream lease objects atomically and retain convergence identity,
+upstream application, replay, and audit binding; they do not reinterpret the
+upstream authority decision.
+
 Remote camera control follows the same rule. Manifold owns source-only command
 descriptors, envelopes, authority reviews, and dispatch receipts for receiver
 start, sender start, status, and stop. The remote-camera Q2Q fixture sequence

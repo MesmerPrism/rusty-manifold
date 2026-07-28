@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.authority.snapshot_application_rejection.v1",
+  "application_id": "lease_revocation_application.lease_revocation_review.request.synthetic.lease_revocation.authority_mismatch",
+  "rejection_code": "review_rejected",
+  "message": "control lease revocation review did not revoke a lease",
+  "retryable": false,
+  "current_authority_revision": 1
+}

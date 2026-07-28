@@ -541,6 +541,8 @@ impl ManifoldControlLeaseRenewalAuthorityApplication {
                     || applied.module_runtime_states != snapshot.module_runtime_states
                     || applied.command_ids != snapshot.command_ids
                     || applied.command_descriptors != snapshot.command_descriptors
+                    || applied.revoked_control_lease_tombstones
+                        != snapshot.revoked_control_lease_tombstones
                     || applied.active_stream_subscriptions != snapshot.active_stream_subscriptions
                 {
                     return Err(ManifoldAuthorityValidationError::new(

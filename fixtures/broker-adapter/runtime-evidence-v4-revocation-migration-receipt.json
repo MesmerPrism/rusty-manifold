@@ -1,0 +1,26 @@
+{
+  "$schema": "rusty.manifold.broker.runtime_evidence_revocation_migration_receipt.v1",
+  "source_schema_id": "rusty.manifold.broker.runtime_evidence.v4",
+  "resulting_schema_id": "rusty.manifold.broker.runtime_evidence.v5",
+  "provider_epoch_id": "provider_epoch.broker.fixture",
+  "runtime_host_migration": {
+    "$schema": "rusty.manifold.runtime_host.snapshot_migration_receipt.v1",
+    "source_schema_id": "rusty.manifold.runtime_host.snapshot.v3",
+    "resulting_schema_id": "rusty.manifold.runtime_host.snapshot.v4",
+    "migrated": true,
+    "authority_host_id": "host.broker.parity",
+    "resulting_authority_revision": 1,
+    "migrated_audit_event_count": 0,
+    "reviewed_sweep_ids": []
+  },
+  "source_json_sha256": "sha256:7109c18fbdbec77036fc31266777a3d1e50f8556c2cb0c564122033201cccb9b",
+  "source_json_size_bytes": 38373,
+  "resulting_evidence_sha256": "sha256:943ad8decb03e4d5e325a05d597b72f504d49ef82367f5867758f331d48a24cc",
+  "resulting_evidence_size_bytes": 23908,
+  "authority_host_id": "host.broker.parity",
+  "host_authority_revision": 1,
+  "preserved_owner_transition_request_ids": [],
+  "preserved_lifecycle_request_ids": [],
+  "preserved_authorized_lifecycle_use_ids": [],
+  "synthesized_revocation_barrier_ids": []
+}

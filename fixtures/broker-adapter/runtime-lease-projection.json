@@ -1,0 +1,37 @@
+{
+  "$schema": "rusty.manifold.broker.runtime_lease_projection.v1",
+  "projection_id": "projection.runtime_lease.a0e82fe853549924cf4f4caaab6639abac5fafbaca2ac1fe151ff6ecac7bb10c",
+  "authority_id": "authority.synthetic",
+  "from_authority_revision": 1,
+  "resulting_authority_revision": 2,
+  "current_authority_revision": 2,
+  "clock_domain": "clock.host_monotonic",
+  "clock_epoch_id": "clock_epoch.synthetic_1",
+  "projected_clock_sequence": 43,
+  "projected_at_ms": 1765000000100,
+  "expiry_check_at_ms": 1765000000101,
+  "clock_read_uncertainty_ns": 250000,
+  "lease_review_id": "lease_review.request.synthetic_lease_1",
+  "lease_application_id": "lease_application.lease_review.request.synthetic_lease_1",
+  "lease_audit_event_id": "audit.lease.request.synthetic_lease_1.accepted",
+  "prior_authority_snapshot_sha256": "sha256:27465914a30f78fc273ae166f36f61aa0fb3f52d1c59b2a0b9303eaa1d9e2072",
+  "resulting_authority_snapshot_sha256": "sha256:45755ee271ce78feb2f97a930cd6b4075cf7353eeb0c8c96ae3be4af038fc9e2",
+  "current_authority_snapshot_sha256": "sha256:81bfdfab9931ff5901ac1eb36d5034e066077b4aef7a525480205e4ca64ec8f5",
+  "lease_application_sha256": "sha256:bfb6a92e27ab0626a7b8f001a83e5ffbcc9548905d0074403a6efbd67d64622d",
+  "source_lease": {
+    "$schema": "rusty.manifold.command.control_lease.v1",
+    "lease_id": "lease.synthetic_lease_1",
+    "holder_id": "holder.test_agent",
+    "scope": "manifold.graph",
+    "state": "active",
+    "granted_revision": 1,
+    "expires_at_ms": 1765000030100,
+    "required_capability": "manifold.graph.run"
+  },
+  "runtime_lease": {
+    "lease_id": "lease.synthetic_lease_1",
+    "scope": "manifold.graph",
+    "holder_id": "holder.test_agent",
+    "expires_at_ms": 1765000030100
+  }
+}

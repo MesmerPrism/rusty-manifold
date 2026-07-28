@@ -30,6 +30,9 @@ status, enrollment, signed rendezvous, peer session/mesh, topology, and real
 direct-lane lease plus product-bound media-session authorities into one restartable snapshot and audit
 sequence. It is a source-only compile-time extension; platform, sidecar,
 transport, and media-payload behavior remain outside Manifold authority.
+Snapshot v2 also joins exact Broker revocation barriers, removes dependent
+peer/media state and derivative Runtime Host leases, and retains terminal
+cleanup completion before the Broker may checkpoint consumer convergence.
 
 [Media-session authority](docs/MEDIA_SESSION_AUTHORITY.md) binds accepted
 source, processor, route, sink, stream, and platform-runtime references while
@@ -53,12 +56,39 @@ packaged lock bytes are intentionally separate provenance fields.
 placements to that exact lock and route every command through the same Runtime
 Host review/application implementation. Their receipts preserve the host
 decision and identify the process layer as an adapter, not authority.
+Generic control-lease issue, renewal, holder release, authority-owned
+revocation, and lease-only expiry are review/application decisions. Revocation
+is bound to the exact authority identity, emits a terminal tombstone in
+authority snapshot v2, and cannot be reused as a holder release. Runtime Host
+adoption v2 revalidates the complete generic application against its exact
+prior snapshot and applies the same lease delta once.
+
+Normal Broker construction and restart accept no raw Runtime Host lease
+collection. The synchronized Broker owner retains exact generic transitions,
+and runtime evidence v5 joins owner evidence v3, Runtime Host state, admission,
+lifecycle authorization/disposition, receipts, and fail-closed administrative
+revocation barriers. Once generic revocation is accepted, commands and later
+lifecycle work for that lease reject even if Host composition still needs
+convergence. Any pending Host-convergence barrier globally freezes lifecycle
+authorization and commit until its CAS-bound recovery succeeds. Retaining
+consumers acknowledge terminal cleanup before rollover can compact their
+evidence, while rollover carries accumulated control-lease request identities
+forward so a provider-epoch boundary cannot reopen replay.
+Released v4 remains an immutable migration input; its explicit
+digest-bound v4-to-v5 migration changes schema vocabulary without creating a
+lease decision or barrier. One product is capped at 64 projected leases,
+4,096 owner transitions, 48 MiB of owner evidence, and 64 MiB of integrated
+evidence JSON.
 The integrated broker runtime additionally requires a current, client-bound,
 capability-scoped one-use admission before any product mutation can reach that
 host path. Each bounded use retains the revision that created that use, so an
 unrelated client's admission mutation does not invalidate it; exact-token
 revocation and expiry remove only derived pending uses. Grants, tokens, and
 bounded uses also retain the exact packaged client-lock id/SHA-256.
+Direct adapter mutation is crate-private, so external product work enters only
+through the integrated runtime gate.
+Construction and continuity restore are trusted deployment-owner APIs; the
+deployment must externally fence one writable runtime per provider epoch.
 
 [Cross-app admission](docs/ADMISSION.md) binds platform-verified client
 identity to explicit capability grants and Manifold-owned short-lived opaque

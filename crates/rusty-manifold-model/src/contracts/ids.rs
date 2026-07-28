@@ -165,6 +165,16 @@ pub(super) fn control_lease_release_rejection_schema_id() -> SchemaId {
         .expect("schema literal is valid")
 }
 
+pub(super) fn control_lease_revocation_request_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.command.lease_revocation_request.v1")
+        .expect("schema literal is valid")
+}
+
+pub(super) fn control_lease_revocation_rejection_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.command.lease_revocation_rejection.v1")
+        .expect("schema literal is valid")
+}
+
 pub(super) fn control_lease_renewal_request_schema_id() -> SchemaId {
     SchemaId::new("rusty.manifold.command.lease_renewal_request.v1")
         .expect("schema literal is valid")
@@ -228,6 +238,26 @@ pub(super) fn control_lease_release_authority_review_schema_id() -> SchemaId {
 
 pub(super) fn control_lease_release_authority_application_schema_id() -> SchemaId {
     SchemaId::new("rusty.manifold.authority.lease_release_application.v1")
+        .expect("schema literal is valid")
+}
+
+pub(super) fn control_lease_revocation_authority_audit_event_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.lease_revocation_audit_event.v1")
+        .expect("schema literal is valid")
+}
+
+pub(super) fn control_lease_revocation_authority_review_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.lease_revocation_review.v1")
+        .expect("schema literal is valid")
+}
+
+pub(super) fn control_lease_revocation_authority_application_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.lease_revocation_application.v1")
+        .expect("schema literal is valid")
+}
+
+pub(super) fn control_lease_revocation_tombstone_schema_id() -> SchemaId {
+    SchemaId::new("rusty.manifold.authority.lease_revocation_tombstone.v1")
         .expect("schema literal is valid")
 }
 
@@ -399,6 +429,27 @@ pub(super) fn control_lease_release_authority_review_id(request_id: &DottedId) -
 pub(super) fn control_lease_release_authority_application_id(review_id: &DottedId) -> DottedId {
     DottedId::new(format!("lease_release_application.{}", review_id.as_str()))
         .expect("derived lease release application id is valid")
+}
+
+pub(super) fn control_lease_revocation_authority_review_id(request_id: &DottedId) -> DottedId {
+    DottedId::new(format!("lease_revocation_review.{}", request_id.as_str()))
+        .expect("derived lease revocation review id is valid")
+}
+
+pub(super) fn control_lease_revocation_authority_application_id(review_id: &DottedId) -> DottedId {
+    DottedId::new(format!(
+        "lease_revocation_application.{}",
+        review_id.as_str()
+    ))
+    .expect("derived lease revocation application id is valid")
+}
+
+pub(super) fn control_lease_revocation_tombstone_id(request_id: &DottedId) -> DottedId {
+    DottedId::new(format!(
+        "lease_revocation_tombstone.{}",
+        request_id.as_str()
+    ))
+    .expect("derived lease revocation tombstone id is valid")
 }
 
 pub(super) fn control_lease_renewal_authority_review_id(request_id: &DottedId) -> DottedId {
@@ -588,6 +639,22 @@ pub(super) fn control_lease_release_authority_audit_event_id(
         suffix
     ))
     .expect("derived lease release audit event id is valid")
+}
+
+pub(super) fn control_lease_revocation_authority_audit_event_id(
+    request_id: &DottedId,
+    outcome: ManifoldControlLeaseRevocationAuthorityReviewOutcome,
+) -> DottedId {
+    let suffix = match outcome {
+        ManifoldControlLeaseRevocationAuthorityReviewOutcome::LeaseRevoked => "revoked",
+        ManifoldControlLeaseRevocationAuthorityReviewOutcome::LeaseRevocationRejected => "rejected",
+    };
+    DottedId::new(format!(
+        "audit.lease_revocation.{}.{}",
+        request_id.as_str(),
+        suffix
+    ))
+    .expect("derived lease revocation audit event id is valid")
 }
 
 pub(super) fn control_lease_renewal_authority_audit_event_id(
