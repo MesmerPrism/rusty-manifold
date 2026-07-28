@@ -1,5 +1,13 @@
 # Rusty Manifold
 
+External low-rate stream metadata enters through the
+[`rusty-manifold-stream-observation`](docs/STREAM_OBSERVATION_AUTHORITY.md)
+proposal/review/application authority. Review is non-mutating; application
+revalidates revision, expiry, proposal and policy digests, and the exact
+proposer/source/stream binding before advancing exactly once. Proposals cannot
+carry samples, commands, routes, media, permissions, product/platform locks,
+accepted revision, or accepted state.
+
 Manifold includes a source-only peer identity and accepted low-rate status
 authority slice. Sidecars and apps remain proposers; review and application
 reject replay, stale revisions/status, untrusted identity, role escalation,

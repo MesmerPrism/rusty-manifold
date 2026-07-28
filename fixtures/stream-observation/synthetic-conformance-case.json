@@ -1,0 +1,35 @@
+{
+  "$schema": "rusty.manifold.stream.observation_conformance_case.v1",
+  "snapshot": {
+    "$schema": "rusty.manifold.stream.observation_host_snapshot.v1",
+    "accepted_state": {"$schema": "rusty.manifold.stream.observation_accepted_state.v1", "authority_revision": 1, "streams": []},
+    "applied_proposal_ids": [],
+    "applied_proposal_sha256": [],
+    "audit_events": []
+  },
+  "policy": {
+    "$schema": "rusty.manifold.stream.observation_review_policy.v1",
+    "policy_id": "policy.stream-observation.default",
+    "allowed_bindings": [{"proposer_id": "adapter.rusty-lsl", "source_id": "source.synthetic", "stream_id": "stream.synthetic"}]
+  },
+  "proposal": {
+    "$schema": "rusty.manifold.stream.observation_proposal.v1",
+    "proposal_id": "proposal.synthetic.1",
+    "proposer_id": "adapter.rusty-lsl",
+    "source_id": "source.synthetic",
+    "stream_id": "stream.synthetic",
+    "content_sha256": "sha256:7ac114a4a1922293a9f10031a977c528be0c8e0c11689ca41b3760bacb4cd58d",
+    "observed_at_ms": 900,
+    "expires_at_ms": 2000,
+    "expected_authority_revision": 1,
+    "observation": {
+      "$schema": "rusty.manifold.stream.observation.v1",
+      "descriptor_type": "lsl.stream-info",
+      "channel_format": "float32",
+      "channel_count": 8,
+      "nominal_rate_millihz": 100000,
+      "native_descriptor_sha256": "sha256:abababababababababababababababababababababababababababababababab"
+    }
+  },
+  "now_ms": 1000
+}
