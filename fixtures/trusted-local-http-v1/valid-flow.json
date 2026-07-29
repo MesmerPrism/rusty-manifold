@@ -74,8 +74,8 @@
       "expected_authority_revision": 11,
       "token_id": "token.session.1111111111111111111111111111111111111111111111111111111111111111",
       "identity": {
-        "client_id": "controller.browser.synthetic_primary",
-        "platform_subject": "trusted_local_http.synthetic_controller",
+        "client_id": "adapter.quest.trusted_local_http",
+        "platform_subject": "io.github.mesmerprism.rustyquest.localcontrol",
         "signing_fingerprint": "sha256:b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"
       },
       "capability_id": "capability.command.player.select_video",

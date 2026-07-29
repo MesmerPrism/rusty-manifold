@@ -1,0 +1,17 @@
+{
+  "$schema": "rusty.manifold.local_control.command_request.v1",
+  "request_id": "request.local.command.select_video.0001",
+  "expected_local_revision": 3,
+  "expected_admission_revision": 11,
+  "expected_host_revision": 30,
+  "token_id": "token.session.1111111111111111111111111111111111111111111111111111111111111111",
+  "command_id": "command.player.select_video",
+  "params_digest": {
+    "$schema": "rusty.manifold.runtime_host.typed_params_digest.v1",
+    "params_type_id": "params.player.video_selection",
+    "canonical_sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "canonical_size_bytes": 39
+  },
+  "issued_at_ms": 12010,
+  "expires_at_ms": 17000
+}

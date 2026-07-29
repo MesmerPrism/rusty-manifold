@@ -95,6 +95,12 @@ identity to explicit capability grants and Manifold-owned short-lived opaque
 tokens. Replay, expiry, revocation, capability escalation, and identity
 substitution fail closed with revisioned receipts and audit.
 
+The source-only [Local Control Authority](docs/LOCAL_CONTROL_AUTHORITY.md)
+composes that admission authority with one generic controller lease and
+Runtime Host command acceptance for short, wearer-enabled trusted-LAN control
+windows. It starts disabled, exposes only a closed typed command registry, and
+never treats HTTP/WebSocket acknowledgement as a player effect.
+
 Rusty Manifold is the typed contract layer for graph, stream, command, lease,
 module, host, clock, session, and audit surfaces across the Rusty stack.
 
@@ -159,15 +165,15 @@ can reject bad state.
 ```powershell
 cargo fmt --all --check
 cargo test --workspace
-cargo run -p rusty-manifold-fixtures -- validate
-cargo run -p rusty-manifold-fixtures -- simulate --check
-cargo run -p rusty-manifold-fixtures -- diff --check
-cargo run -p rusty-manifold-fixtures -- emit-synthetic-scalar --check --expected fixtures/synthetic/synthetic-scalar-oscillator-samples.jsonl
+cargo run -p rusty-manifold-fixtures --bin rusty-manifold-fixtures -- validate
+cargo run -p rusty-manifold-fixtures --bin rusty-manifold-fixtures -- simulate --check
+cargo run -p rusty-manifold-fixtures --bin rusty-manifold-fixtures -- diff --check
+cargo run -p rusty-manifold-fixtures --bin rusty-manifold-fixtures -- emit-synthetic-scalar --check --expected fixtures/synthetic/synthetic-scalar-oscillator-samples.jsonl
 cargo run -p rusty-manifold-schema -- export --check
 ```
 
 To drive an already-running local broker with the same synthetic stream shape:
 
 ```powershell
-cargo run -p rusty-manifold-fixtures -- publish-synthetic-scalar --broker-host 127.0.0.1 --broker-port 8765 --sample-count 40
+cargo run -p rusty-manifold-fixtures --bin rusty-manifold-fixtures -- publish-synthetic-scalar --broker-host 127.0.0.1 --broker-port 8765 --sample-count 40
 ```

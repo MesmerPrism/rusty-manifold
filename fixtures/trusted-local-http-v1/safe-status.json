@@ -1,0 +1,14 @@
+{
+  "$schema": "rusty.manifold.local_control.safe_status.v1",
+  "state": "controller_active",
+  "local_revision": 4,
+  "admission_revision": 12,
+  "lease_authority_revision": 21,
+  "host_revision": 31,
+  "window_id": null,
+  "window_expires_at_ms": null,
+  "controller_id": "controller.browser.synthetic_primary",
+  "session_expires_at_ms": 312000,
+  "idle_expires_at_ms": 72010,
+  "last_accepted_command_receipt_id": "receipt.local_control.command.request.local.command.select_video.0001"
+}

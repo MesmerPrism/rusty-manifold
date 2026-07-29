@@ -66,10 +66,10 @@ For schema or fixture work, rerun the fixture and schema commands directly so
 the checked-in generated artifacts stay deterministic:
 
 ```powershell
-cargo run -p rusty-manifold-fixtures -- validate
-cargo run -p rusty-manifold-fixtures -- simulate --check
-cargo run -p rusty-manifold-fixtures -- diff --check
-cargo run -p rusty-manifold-fixtures -- emit-synthetic-scalar --check --expected fixtures/synthetic/synthetic-scalar-oscillator-samples.jsonl
+cargo run -p rusty-manifold-fixtures --bin rusty-manifold-fixtures -- validate
+cargo run -p rusty-manifold-fixtures --bin rusty-manifold-fixtures -- simulate --check
+cargo run -p rusty-manifold-fixtures --bin rusty-manifold-fixtures -- diff --check
+cargo run -p rusty-manifold-fixtures --bin rusty-manifold-fixtures -- emit-synthetic-scalar --check --expected fixtures/synthetic/synthetic-scalar-oscillator-samples.jsonl
 cargo run -p rusty-manifold-schema -- export --check
 ```
 
@@ -78,7 +78,7 @@ start or forward a Manifold broker first, then publish the same bounded
 synthetic scalar samples over websocket:
 
 ```powershell
-cargo run -p rusty-manifold-fixtures -- publish-synthetic-scalar --broker-host 127.0.0.1 --broker-port 8765 --sample-count 40
+cargo run -p rusty-manifold-fixtures --bin rusty-manifold-fixtures -- publish-synthetic-scalar --broker-host 127.0.0.1 --broker-port 8765 --sample-count 40
 ```
 
 Validation should keep Manifold contract-first. Do not accept a change because
@@ -87,3 +87,19 @@ schema catalog must still reject bad state without requiring runtime sockets,
 platform SDKs, renderer imports, or high-rate payloads in command JSON. The
 explicit live synthetic publisher is a validation adapter for already-running
 brokers, not core Manifold authority.
+
+The trusted-local control source slice additionally runs:
+
+```powershell
+cargo test -p rusty-manifold-admission
+cargo test -p rusty-manifold-local-control
+powershell -NoProfile -ExecutionPolicy Bypass -File .\fixtures\trusted-local-http-v1\Test-TrustedLocalHttpV1Fixtures.ps1
+```
+
+These tests are offline. They open no listener and perform no ADB, headset,
+APK, browser, discovery, relay, or Fleet operation. They prove disabled
+startup, exact adapter/controller identity separation, mandatory pairing-code
+verification evidence, explicit unadmitted-window disable, one controller
+lease, closed commands, strict typed parameters, replay/rate/expiry/revocation,
+composite receipt causality, and a status document without bearer or signing
+material.

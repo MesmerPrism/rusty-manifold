@@ -116,6 +116,7 @@ fn schema_entries() -> Vec<SchemaEntry> {
     entries.extend(broker_product_entries());
     entries.extend(broker_adapter_entries());
     entries.extend(admission_entries());
+    entries.extend(local_control_entries());
     entries.extend(authority_entries());
     entries.extend(bridge_route_entries());
     entries.extend(host_and_deployment_entries());
@@ -215,6 +216,11 @@ fn admission_entries() -> Vec<SchemaEntry> {
             &["fixtures/admission/revoke-request.json"],
         ),
         entry(
+            "rusty.manifold.admission.administrative_revocation_request.v1",
+            "ManifoldAdmissionAdministrativeRevocationRequest",
+            &["fixtures/admission/administrative-revoke-request.json"],
+        ),
+        entry(
             "rusty.manifold.admission.receipt.v1",
             "ManifoldAdmissionReceipt",
             &[
@@ -226,6 +232,86 @@ fn admission_entries() -> Vec<SchemaEntry> {
                 "fixtures/admission/wrong-identity-receipt.json",
                 "fixtures/admission/capability-escalation-receipt.json",
             ],
+        ),
+    ]
+}
+
+fn local_control_entries() -> Vec<SchemaEntry> {
+    vec![
+        entry(
+            "rusty.manifold.local_control.policy.v1",
+            "ManifoldLocalControlPolicy",
+            &["fixtures/trusted-local-http-v1/local-control-policy.json"],
+        ),
+        entry(
+            "rusty.manifold.local_control.window_request.v1",
+            "ManifoldLocalControlWindowRequest",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.local_control.window_receipt.v1",
+            "ManifoldLocalControlWindowReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.local_control.controller_evidence.v1",
+            "ManifoldLocalControllerEvidence",
+            &["fixtures/trusted-local-http-v1/controller-evidence.json"],
+        ),
+        entry(
+            "rusty.manifold.local_control.admission_request.v1",
+            "ManifoldLocalControlAdmissionRequest",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.local_control.admission_receipt.v1",
+            "ManifoldLocalControlAdmissionReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.local_control.command_request.v1",
+            "ManifoldLocalControlCommandRequest",
+            &["fixtures/trusted-local-http-v1/command-request.json"],
+        ),
+        entry(
+            "rusty.manifold.local_control.command_receipt.v1",
+            "ManifoldLocalControlCommandReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.local_control.revocation_request.v1",
+            "ManifoldLocalControlRevocationRequest",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.local_control.revocation_receipt.v1",
+            "ManifoldLocalControlRevocationReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.local_control.expiry_request.v1",
+            "ManifoldLocalControlExpiryRequest",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.local_control.expiry_receipt.v1",
+            "ManifoldLocalControlExpiryReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.local_control.disable_request.v1",
+            "ManifoldLocalControlDisableRequest",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.local_control.disable_receipt.v1",
+            "ManifoldLocalControlDisableReceipt",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.local_control.safe_status.v1",
+            "ManifoldLocalControlSafeStatus",
+            &["fixtures/trusted-local-http-v1/safe-status.json"],
         ),
     ]
 }

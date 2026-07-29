@@ -1048,6 +1048,13 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.admission.administrative_revocation_request.v1",
+      "rust_type": "ManifoldAdmissionAdministrativeRevocationRequest",
+      "fixture_paths": [
+        "fixtures/admission/administrative-revoke-request.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.admission.receipt.v1",
       "rust_type": "ManifoldAdmissionReceipt",
       "fixture_paths": [
@@ -1058,6 +1065,89 @@
         "fixtures/admission/after-revoke-use-receipt.json",
         "fixtures/admission/wrong-identity-receipt.json",
         "fixtures/admission/capability-escalation-receipt.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.policy.v1",
+      "rust_type": "ManifoldLocalControlPolicy",
+      "fixture_paths": [
+        "fixtures/trusted-local-http-v1/local-control-policy.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.window_request.v1",
+      "rust_type": "ManifoldLocalControlWindowRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.window_receipt.v1",
+      "rust_type": "ManifoldLocalControlWindowReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.controller_evidence.v1",
+      "rust_type": "ManifoldLocalControllerEvidence",
+      "fixture_paths": [
+        "fixtures/trusted-local-http-v1/controller-evidence.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.admission_request.v1",
+      "rust_type": "ManifoldLocalControlAdmissionRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.admission_receipt.v1",
+      "rust_type": "ManifoldLocalControlAdmissionReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.command_request.v1",
+      "rust_type": "ManifoldLocalControlCommandRequest",
+      "fixture_paths": [
+        "fixtures/trusted-local-http-v1/command-request.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.command_receipt.v1",
+      "rust_type": "ManifoldLocalControlCommandReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.revocation_request.v1",
+      "rust_type": "ManifoldLocalControlRevocationRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.revocation_receipt.v1",
+      "rust_type": "ManifoldLocalControlRevocationReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.expiry_request.v1",
+      "rust_type": "ManifoldLocalControlExpiryRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.expiry_receipt.v1",
+      "rust_type": "ManifoldLocalControlExpiryReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.disable_request.v1",
+      "rust_type": "ManifoldLocalControlDisableRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.disable_receipt.v1",
+      "rust_type": "ManifoldLocalControlDisableReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.safe_status.v1",
+      "rust_type": "ManifoldLocalControlSafeStatus",
+      "fixture_paths": [
+        "fixtures/trusted-local-http-v1/safe-status.json"
       ]
     },
     {

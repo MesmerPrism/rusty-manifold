@@ -646,6 +646,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusty-manifold-local-control"
+version = "0.1.0"
+dependencies = [
+ "rusty-manifold-admission",
+ "rusty-manifold-model",
+ "rusty-manifold-runtime-host",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "rusty-manifold-media-session"
 version = "0.1.0"
 dependencies = [

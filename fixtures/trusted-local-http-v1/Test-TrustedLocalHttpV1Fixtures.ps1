@@ -39,12 +39,30 @@ function Assert-Equal {
 $contractMap = Read-Json (Join-Path $fixtureRoot 'contract-map.json')
 $valid = Read-Json (Join-Path $fixtureRoot 'valid-flow.json')
 $damaged = Read-Json (Join-Path $fixtureRoot 'damaged-mappings.json')
+$localPolicy = Read-Json (Join-Path $fixtureRoot 'local-control-policy.json')
+$pairingEvidence = Read-Json (Join-Path $fixtureRoot 'controller-evidence.json')
+$commandRequest = Read-Json (Join-Path $fixtureRoot 'command-request.json')
+$safeStatusPath = Join-Path $fixtureRoot 'safe-status.json'
+$safeStatusRaw = Get-Content -LiteralPath $safeStatusPath -Raw
+$safeStatus = $safeStatusRaw | ConvertFrom-Json
 
 Assert-Equal $contractMap.profile_id 'trusted_local_http_v1' 'contract map profile id must be exact'
 Assert-Equal $contractMap.authority_owner 'rusty.manifold' 'Manifold must remain authority owner'
 Assert-Equal $contractMap.effect_owner 'rusty.quest.player' 'Quest player must remain effect owner'
 Assert-True (-not [bool]$contractMap.default_enabled) 'trusted local HTTP must be disabled by default'
 Assert-Equal $contractMap.transport_security.confidentiality 'none' 'trusted local HTTP must not claim confidentiality'
+Assert-Equal $localPolicy.'$schema' 'rusty.manifold.local_control.policy.v1' 'local-control policy schema must be exact'
+Assert-Equal $localPolicy.trusted_adapter_id $localPolicy.adapter_identity.client_id 'admission identity must be the exact trusted Quest adapter'
+Assert-True ($localPolicy.controller_id -ne $localPolicy.adapter_identity.client_id) 'logical browser controller id must remain distinct from signed adapter identity'
+Assert-Equal $pairingEvidence.'$schema' 'rusty.manifold.local_control.controller_evidence.v1' 'pairing evidence schema must be exact'
+Assert-Equal $pairingEvidence.adapter_id $localPolicy.trusted_adapter_id 'pairing evidence must bind the trusted adapter'
+Assert-Equal $pairingEvidence.controller_id $localPolicy.controller_id 'pairing evidence must bind the logical controller'
+Assert-True ([bool]$pairingEvidence.pairing_code_verified) 'single-use code verification must be explicit'
+Assert-Equal $commandRequest.'$schema' 'rusty.manifold.local_control.command_request.v1' 'composite command schema must be exact'
+Assert-Equal $safeStatus.'$schema' 'rusty.manifold.local_control.safe_status.v1' 'safe status schema must be exact'
+Assert-True (-not $safeStatusRaw.Contains('token.session')) 'safe status must not expose the session token'
+Assert-True (-not $safeStatusRaw.Contains('signing_fingerprint')) 'safe status must not expose signing evidence'
+Assert-True (-not $safeStatusRaw.Contains('pairing_code')) 'safe status must not expose pairing material'
 
 $seenConcerns = @{}
 foreach ($reference in $contractMap.references) {
@@ -58,6 +76,11 @@ foreach ($reference in $contractMap.references) {
 }
 
 $requiredConcerns = @(
+    'local_control_policy',
+    'pairing_evidence',
+    'composite_command_request',
+    'display_safe_status',
+    'authority_owned_session_revocation',
     'session_token_issue',
     'one_use_capability_request',
     'one_use_replay_rejection',

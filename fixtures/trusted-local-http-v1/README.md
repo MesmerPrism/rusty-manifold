@@ -1,14 +1,17 @@
 # Trusted Local HTTP v1 Manifold fixture
 
 This directory is an additive conformance fixture for the
-`trusted_local_http_v1` Quest adapter profile. It does not define a transport,
-listener, pairing-code implementation, player runtime, or new Manifold
-authority.
+`trusted_local_http_v1` Quest adapter profile and the platform-neutral
+`rusty-manifold-local-control` authority composition. It does not define a
+transport, listener, pairing-code implementation, or player runtime.
 
-The fixture maps the adapter into existing Manifold contracts:
+The fixture maps the adapter into typed Manifold contracts:
 
-- admission issues a short-lived opaque session token and consumes one-use
-  capability request ids;
+- local-control starts disabled and accepts only a wearer-opened, bounded
+  pairing window;
+- admission binds the real signed Quest adapter identity, issues a short-lived
+  opaque session token, and consumes one-use capability request ids;
+- a separate non-secret logical id represents the paired browser controller;
 - control-lease review/application admits at most one active controller for
   the player scope;
 - command review and Runtime Host application preserve expected revisions,
@@ -27,7 +30,9 @@ contract conformance are synthetic and are not credentials.
 
 `valid-flow.json` is a synthetic source-only flow. `damaged-mappings.json`
 enumerates fail-closed cases. `contract-map.json` binds each reused concern to
-an existing repository fixture and schema id.
+an existing repository fixture and schema id. `local-control-policy.json`,
+`controller-evidence.json`, `command-request.json`, and `safe-status.json`
+exercise the strict public composite contracts.
 
 Run the focused validator from the repository root:
 
@@ -37,11 +42,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\fixtures\trusted-local-htt
 
 The validator opens no socket and has no external dependencies.
 
-## Boundary and limitation
+## Identity boundary
 
-The existing admission fixture family is signature-scoped and does not define
-how a browser proves a stable platform identity. This fixture therefore starts
-at a deployment-projected synthetic controller identity and proves reuse from
-the Manifold admission decision onward. The Quest adapter must remain
-fail-closed until its manual pairing evidence is converted into an accepted
-Manifold admission receipt. No adapter-local fallback admission is permitted.
+A browser does not claim or fabricate a platform signing identity. The
+`ManifoldClientIdentity` is the installed Quest adapter's real package and
+signing-certificate identity. Pairing evidence separately binds the logical
+browser controller id to the current wearer-opened window. The Quest adapter
+must remain fail-closed until its mandatory single-use code evidence is
+converted into an accepted composite Manifold admission receipt. QR may convey
+the same code as a convenience, but never replaces it. No adapter-local
+fallback admission is permitted.
