@@ -1,0 +1,124 @@
+{
+  "fixture_kind": "trusted_local_http_contract_map_v1",
+  "profile_id": "trusted_local_http_v1",
+  "authority_owner": "rusty.manifold",
+  "adapter_owner": "rusty.quest.trusted_local_http",
+  "effect_owner": "rusty.quest.player",
+  "default_enabled": false,
+  "transport_security": {
+    "authentication": "manual_pairing_then_manifold_session",
+    "confidentiality": "none",
+    "trusted_network_required": true
+  },
+  "references": [
+    {
+      "concern": "session_token_issue",
+      "path": "fixtures/admission/issue-request.json",
+      "expected_schema": "rusty.manifold.admission.request.v1"
+    },
+    {
+      "concern": "session_token_issue_receipt",
+      "path": "fixtures/admission/issue-receipt.json",
+      "expected_schema": "rusty.manifold.admission.receipt.v2"
+    },
+    {
+      "concern": "one_use_capability_request",
+      "path": "fixtures/admission/use-request.json",
+      "expected_schema": "rusty.manifold.admission.use_request.v1"
+    },
+    {
+      "concern": "one_use_capability_receipt",
+      "path": "fixtures/admission/use-receipt.json",
+      "expected_schema": "rusty.manifold.admission.receipt.v2"
+    },
+    {
+      "concern": "one_use_replay_rejection",
+      "path": "fixtures/admission/replay-use-receipt.json",
+      "expected_schema": "rusty.manifold.admission.receipt.v2"
+    },
+    {
+      "concern": "session_revocation",
+      "path": "fixtures/admission/revoke-receipt.json",
+      "expected_schema": "rusty.manifold.admission.receipt.v2"
+    },
+    {
+      "concern": "post_revocation_rejection",
+      "path": "fixtures/admission/after-revoke-use-receipt.json",
+      "expected_schema": "rusty.manifold.admission.receipt.v2"
+    },
+    {
+      "concern": "single_controller_lease_request",
+      "path": "fixtures/command/synthetic-lease-request.json",
+      "expected_schema": "rusty.manifold.command.lease_request.v1"
+    },
+    {
+      "concern": "single_controller_lease_review",
+      "path": "fixtures/lease-review/synthetic-lease-accepted-review.json",
+      "expected_schema": "rusty.manifold.authority.lease_review.v1"
+    },
+    {
+      "concern": "single_controller_lease_application",
+      "path": "fixtures/authority-application/synthetic-lease-accepted-application.json",
+      "expected_schema": "rusty.manifold.authority.lease_application.v1"
+    },
+    {
+      "concern": "expected_revision",
+      "path": "fixtures/runtime-host/synthetic-runtime-command-request.json",
+      "expected_schema": "rusty.manifold.runtime_host.command_request.v1"
+    },
+    {
+      "concern": "command_dispatch",
+      "path": "fixtures/runtime-host/synthetic-runtime-dispatch-receipt.json",
+      "expected_schema": "rusty.manifold.runtime_host.dispatch_receipt.v2"
+    },
+    {
+      "concern": "command_acceptance",
+      "path": "fixtures/runtime-host/synthetic-runtime-application-receipt.json",
+      "expected_schema": "rusty.manifold.runtime_host.application_receipt.v2"
+    },
+    {
+      "concern": "explicit_lease_expiry",
+      "path": "fixtures/runtime-host/synthetic-runtime-lease-expiry-receipt.json",
+      "expected_schema": "rusty.manifold.runtime_host.lease_expiry_receipt.v2"
+    },
+    {
+      "concern": "lease_revocation_adoption",
+      "path": "fixtures/runtime-host/synthetic-control-lease-revocation-adoption-receipt.json",
+      "expected_schema": "rusty.manifold.runtime_host.control_lease_adoption_receipt.v2"
+    },
+    {
+      "concern": "transport_to_effect_evidence",
+      "path": "fixtures/bridge-route/command-websocket-applied-evidence.json",
+      "expected_schema": "rusty.manifold.bridge.route_evidence.v1"
+    },
+    {
+      "concern": "transport_only_damage",
+      "path": "fixtures/damaged/bridge-route-command-transport-only-evidence.json",
+      "expected_schema": "rusty.manifold.bridge.route_evidence.v1"
+    }
+  ],
+  "authority_boundary": {
+    "manifold_owns": [
+      "session_admission",
+      "opaque_token_lifetime",
+      "one_use_request_ids",
+      "controller_lease",
+      "expected_revision",
+      "command_replay",
+      "expiry",
+      "revocation",
+      "command_accepted"
+    ],
+    "quest_owns": [
+      "effective_player_state",
+      "player_state_revision",
+      "media3_callback_evidence",
+      "command_applied"
+    ],
+    "transport_never_proves": [
+      "session_admission",
+      "command_accepted",
+      "command_applied"
+    ]
+  }
+}

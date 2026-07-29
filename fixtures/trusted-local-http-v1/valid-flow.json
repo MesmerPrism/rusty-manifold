@@ -1,0 +1,130 @@
+{
+  "fixture_kind": "trusted_local_http_valid_flow_v1",
+  "profile_id": "trusted_local_http_v1",
+  "synthetic_fixture": true,
+  "policy": {
+    "default_enabled": false,
+    "wearer_enable_required": true,
+    "foreground_listener_window_ms": 300000,
+    "manual_address_required": true,
+    "single_use_pairing_code_required": true,
+    "pairing_code_material_present": false,
+    "max_controllers": 1,
+    "session_ttl_ms": 300000,
+    "idle_timeout_ms": 60000,
+    "command_rate_limit_per_second": 8,
+    "authentication": "trusted_lan_or_private_hotspot",
+    "confidentiality": "none"
+  },
+  "registry": {
+    "closed_build_time_registry": true,
+    "commands": [
+      "describe",
+      "get_state",
+      "list_videos",
+      "pause",
+      "play",
+      "select_video"
+    ],
+    "mutating_commands": [
+      "pause",
+      "play",
+      "select_video"
+    ],
+    "lease_scope": "player.local_control"
+  },
+  "controller": {
+    "controller_id": "controller.browser.synthetic_primary",
+    "active_controller_count": 1,
+    "visible_to_wearer": true,
+    "on_headset_revoke_available": true
+  },
+  "pairing": {
+    "pair_request_id": "request.local.pair.0001",
+    "pair_request_id_consumed_once": true,
+    "manual_address_confirmed": true,
+    "single_use_code_confirmed": true,
+    "code_material": null,
+    "adapter_evidence_is_authority": false,
+    "manifold_admission": {
+      "receipt_contract": "rusty.manifold.admission.receipt.v2",
+      "receipt_fixture_ref": "fixtures/admission/issue-receipt.json",
+      "operation": "issue_token",
+      "request_id": "request.local.pair.0001",
+      "applied": true,
+      "prior_authority_revision": 10,
+      "resulting_authority_revision": 11,
+      "token_material_in_fixture": false
+    }
+  },
+  "lease": {
+    "$schema": "rusty.manifold.command.control_lease.v1",
+    "lease_id": "lease.player.local_control.synthetic",
+    "holder_id": "controller.browser.synthetic_primary",
+    "scope": "player.local_control",
+    "state": "active",
+    "granted_revision": 20,
+    "expires_at_ms": 310000,
+    "required_capability": "player.local_control.command"
+  },
+  "command": {
+    "admission_use": {
+      "$schema": "rusty.manifold.admission.use_request.v1",
+      "request_id": "request.local.use.select_video.0001",
+      "expected_authority_revision": 11,
+      "token_id": "token.session.1111111111111111111111111111111111111111111111111111111111111111",
+      "identity": {
+        "client_id": "controller.browser.synthetic_primary",
+        "platform_subject": "trusted_local_http.synthetic_controller",
+        "signing_fingerprint": "sha256:b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"
+      },
+      "capability_id": "capability.command.player.select_video",
+      "issued_at_ms": 12000,
+      "expires_at_ms": 17000
+    },
+    "runtime_request": {
+      "$schema": "rusty.manifold.runtime_host.command_request.v1",
+      "request_id": "request.local.command.select_video.0001",
+      "expected_authority_revision": 30,
+      "requester_id": "controller.browser.synthetic_primary",
+      "command_id": "command.player.select_video",
+      "lease_id": "lease.player.local_control.synthetic",
+      "issued_at_ms": 12010,
+      "expires_at_ms": 17000
+    },
+    "transport_ack": {
+      "event_kind": "transport_ok",
+      "request_id": "request.local.command.select_video.0001",
+      "proves_application_effect": false
+    },
+    "command_accepted": {
+      "event_kind": "command_accepted",
+      "authority_owner": "rusty.manifold",
+      "proves_application_effect": false,
+      "receipt": {
+        "$schema": "rusty.manifold.runtime_host.application_receipt.v2",
+        "authority_host_id": "runtime.host.local_control.synthetic",
+        "receipt_id": "receipt.local.command.select_video.0001",
+        "dispatch_id": "dispatch.local.command.select_video.0001",
+        "request_id": "request.local.command.select_video.0001",
+        "applied": true,
+        "prior_authority_revision": 30,
+        "resulting_authority_revision": 31,
+        "rejection_reason": null
+      }
+    },
+    "command_applied": {
+      "event_kind": "command_applied",
+      "effect_owner": "rusty.quest.player",
+      "source": "androidx.media3.player.events",
+      "request_id": "request.local.command.select_video.0001",
+      "accepted_receipt_id": "receipt.local.command.select_video.0001",
+      "expected_player_state_revision": 6,
+      "resulting_player_state_revision": 7,
+      "effective_state": {
+        "selected_video_id": "video.synthetic.blue",
+        "play_when_ready": false
+      }
+    }
+  }
+}
