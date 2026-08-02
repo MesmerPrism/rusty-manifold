@@ -89,6 +89,7 @@ fn policy(max_commands_per_window: u16) -> ManifoldLocalControlPolicy {
         idle_timeout_ms: 2_000,
         rate_window_ms: 1_000,
         max_commands_per_window,
+        allow_debug_shell_operator: false,
     }
 }
 
@@ -214,6 +215,8 @@ fn open_window(authority: &mut ManifoldLocalControlAuthority) {
         schema_id: schema(LOCAL_CONTROL_WINDOW_REQUEST_SCHEMA),
         request_id: id("request.local.window.open"),
         window_id: id("window.local.one"),
+        access_mode: ManifoldLocalControlAccessMode::Paired,
+        enable_actor: ManifoldLocalControlEnableActor::Wearer,
         expected_local_revision: Revision::INITIAL,
         opened_at_ms: 1_000,
         expires_at_ms: 10_000,
@@ -399,6 +402,88 @@ fn pairing_evidence_is_exact_and_manual_code_verification_is_mandatory() {
     assert_eq!(
         rejected.rejection_reason,
         Some(ManifoldLocalControlRejectionReason::PairingEvidenceInvalid)
+    );
+}
+
+#[test]
+fn debug_shell_open_lan_is_explicit_policy_gated_and_never_claims_pairing() {
+    let mut denied = authority(8);
+    let denied_receipt = denied.open_pairing_window(&ManifoldLocalControlWindowRequest {
+        schema_id: schema(LOCAL_CONTROL_WINDOW_REQUEST_SCHEMA),
+        request_id: id("request.local.window.debug-denied"),
+        window_id: id("window.local.debug-denied"),
+        access_mode: ManifoldLocalControlAccessMode::OpenLanInsecure,
+        enable_actor: ManifoldLocalControlEnableActor::DebugShell,
+        expected_local_revision: Revision::INITIAL,
+        opened_at_ms: 1_000,
+        expires_at_ms: 10_000,
+        wearer_evidence_id: id("evidence.debug-shell.window.denied"),
+    });
+    assert!(!denied_receipt.opened);
+    assert_eq!(
+        denied_receipt.rejection_reason,
+        Some(ManifoldLocalControlRejectionReason::AuthorityRejected)
+    );
+
+    let mut open_policy = policy(8);
+    open_policy.allow_debug_shell_operator = true;
+    let mut open = ManifoldLocalControlAuthority::new(
+        open_policy.clone(),
+        admission(&open_policy),
+        lease_authority(&open_policy),
+        runtime_host(&open_policy),
+    )
+    .expect("open LAN authority");
+    let opened = open.open_pairing_window(&ManifoldLocalControlWindowRequest {
+        schema_id: schema(LOCAL_CONTROL_WINDOW_REQUEST_SCHEMA),
+        request_id: id("request.local.window.debug-open"),
+        window_id: id("window.local.debug-open"),
+        access_mode: ManifoldLocalControlAccessMode::OpenLanInsecure,
+        enable_actor: ManifoldLocalControlEnableActor::DebugShell,
+        expected_local_revision: Revision::INITIAL,
+        opened_at_ms: 1_000,
+        expires_at_ms: 10_000,
+        wearer_evidence_id: id("evidence.debug-shell.window.open"),
+    });
+    assert!(opened.opened, "{opened:#?}");
+    assert_eq!(
+        opened.status.access_mode,
+        Some(ManifoldLocalControlAccessMode::OpenLanInsecure)
+    );
+    assert_eq!(
+        opened.status.enable_actor,
+        Some(ManifoldLocalControlEnableActor::DebugShell)
+    );
+
+    let admitted = open.admit_controller(
+        &ManifoldLocalControlAdmissionRequest {
+            schema_id: schema(LOCAL_CONTROL_ADMISSION_REQUEST_SCHEMA),
+            request_id: id("request.local.controller.open-lan"),
+            expected_local_revision: Revision::new(2).expect("revision"),
+            expected_admission_revision: Revision::INITIAL,
+            expected_lease_authority_revision: Revision::INITIAL,
+            expected_host_revision: Revision::INITIAL,
+            evidence: ManifoldLocalControllerEvidence {
+                schema_id: schema(LOCAL_CONTROL_CONTROLLER_EVIDENCE_SCHEMA),
+                evidence_id: id("evidence.local.open-lan"),
+                adapter_id: id("adapter.quest.trusted_local_http"),
+                window_id: id("window.local.debug-open"),
+                controller_id: id("controller.apple.collaborator"),
+                presentation: ManifoldLocalControlPairingPresentation::OpenLanInsecure,
+                pairing_code_verified: false,
+                observed_at_ms: 1_100,
+                expires_at_ms: 9_000,
+            },
+            requested_at_ms: 1_200,
+            requested_session_ttl_ms: 5_000,
+        },
+        [9; 32],
+        clock(2, 1_200),
+    );
+    assert!(admitted.admitted, "{admitted:#?}");
+    assert_eq!(
+        open.safe_status().access_mode,
+        Some(ManifoldLocalControlAccessMode::OpenLanInsecure)
     );
 }
 

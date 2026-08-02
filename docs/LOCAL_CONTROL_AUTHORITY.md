@@ -2,7 +2,7 @@
 
 `rusty-manifold-local-control` is the platform-neutral authority composition
 for a short-lived local control surface. It owns the Manifold decisions needed
-to admit one paired browser controller, issue and revoke its admission token,
+to admit one browser controller, issue and revoke its admission token,
 hold one controller lease, accept only registered commands, reject replay,
 enforce rate/session/idle limits, and expose a display-safe status.
 
@@ -18,11 +18,21 @@ the real installed Quest adapter package and signing-certificate identity. The
 admission grant and opaque token remain bound to that verified adapter.
 
 `controller_id` is a distinct non-secret logical identifier for the browser
-controller proven inside the current pairing window. Pairing evidence binds
+controller proven inside the current bounded window. Paired-mode evidence binds
 the trusted adapter id, exact window id, logical controller id, presentation
 method, verification result, and bounded observation lifetime. It never
 contains the code. Manual code entry is always supported; QR presentation is
 only a convenience for conveying the same mandatory single-use code.
+
+An additive `open_lan_insecure` access mode carries different evidence: an
+explicit foreground wearer action, or an explicitly policy-enabled Android
+debug-shell action, opens the bounded window and the first LAN peer may claim
+the sole controller lease without a code. Its evidence must say
+`open_lan_insecure` and `pairing_code_verified=false`; it can never be reported
+as pairing. Manifold still owns admission, the one lease, command review,
+replay, expiry, and revocation. Debug-shell enable is rejected unless the
+packaged policy explicitly opts in, and downstream products must expose that
+route only from a shell-UID-gated debug component.
 
 ## Lifecycle
 
@@ -101,6 +111,12 @@ short foreground listener window. Authentication is suitable only for a
 trusted LAN or private hotspot. Plain HTTP/WebSocket provides no
 confidentiality. Passwords, private evidence, Fleet/device-management
 credentials, and other secrets must never cross this profile.
+
+The separately labelled Open LAN mode removes authentication as well as
+confidentiality: any peer on the reachable network may request the single
+controller lease until expiry or on-headset revoke. Discovery advertisements
+may contain only non-secret service metadata and must never contain the pairing
+code or a bearer token.
 
 The locked Rust provider owns trusted clock snapshot/sequence construction and
 the 256-bit admission-token entropy. Java wall time or handler wakeups are

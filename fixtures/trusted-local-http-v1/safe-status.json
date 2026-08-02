@@ -1,6 +1,8 @@
 {
   "$schema": "rusty.manifold.local_control.safe_status.v1",
   "state": "controller_active",
+  "access_mode": "paired",
+  "enable_actor": "wearer",
   "local_revision": 4,
   "admission_revision": 12,
   "lease_authority_revision": 21,

@@ -1,4 +1,4 @@
-//! Platform-neutral authority for a bounded, paired local control surface.
+//! Platform-neutral authority for a bounded local control surface.
 //!
 //! This crate owns admission, a single controller lease, command acceptance,
 //! replay, expiry, and revocation composition. It does not open a listener,
@@ -131,6 +131,10 @@ pub struct ManifoldLocalControlPolicy {
     pub rate_window_ms: u64,
     /// Maximum command attempts in the rate window.
     pub max_commands_per_window: u16,
+    /// Whether the trusted platform adapter may identify an ADB shell operator
+    /// in a debug-only build instead of a wearer action.
+    #[serde(default)]
+    pub allow_debug_shell_operator: bool,
 }
 
 /// How the adapter conveyed the same mandatory single-use pairing code.
@@ -141,6 +145,31 @@ pub enum ManifoldLocalControlPairingPresentation {
     ManualEntry,
     /// A QR code conveyed the code as an optional convenience.
     QrConvenience,
+    /// No pairing code was used because the wearer explicitly opened the
+    /// separately labelled unauthenticated LAN mode.
+    OpenLanInsecure,
+}
+
+/// Wearer-selected authentication posture for one bounded listener window.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ManifoldLocalControlAccessMode {
+    /// A manually entered single-use code authenticates the controller.
+    #[default]
+    Paired,
+    /// Any LAN peer may claim the one controller lease without authentication.
+    OpenLanInsecure,
+}
+
+/// Trusted foreground actor that explicitly requested a bounded listener.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ManifoldLocalControlEnableActor {
+    /// A wearer selected the mode from the visible headset panel.
+    #[default]
+    Wearer,
+    /// Android's shell UID called the debug-only, DUMP-protected provider.
+    DebugShell,
 }
 
 /// Sanitized adapter evidence that a single-use code was verified.
@@ -181,6 +210,12 @@ pub struct ManifoldLocalControlWindowRequest {
     pub request_id: DottedId,
     /// New window id.
     pub window_id: DottedId,
+    /// Explicit wearer-selected authentication posture.
+    #[serde(default)]
+    pub access_mode: ManifoldLocalControlAccessMode,
+    /// Exact foreground actor asserted by the trusted platform adapter.
+    #[serde(default)]
+    pub enable_actor: ManifoldLocalControlEnableActor,
     /// Expected local-control revision.
     pub expected_local_revision: Revision,
     /// Trusted open time.
@@ -204,6 +239,10 @@ pub struct ManifoldLocalControlWindowReceipt {
     pub request_id: DottedId,
     /// Exact requested window id.
     pub window_id: DottedId,
+    /// Exact access mode reviewed for this window.
+    pub access_mode: ManifoldLocalControlAccessMode,
+    /// Exact actor reviewed for this window.
+    pub enable_actor: ManifoldLocalControlEnableActor,
     /// Whether the pairing window opened.
     pub opened: bool,
     /// Exact resulting composite revision tuple.
@@ -501,6 +540,12 @@ pub struct ManifoldLocalControlSafeStatus {
     pub schema_id: SchemaId,
     /// Coarse lifecycle state.
     pub state: ManifoldLocalControlState,
+    /// Active wearer-selected mode, absent only while disabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access_mode: Option<ManifoldLocalControlAccessMode>,
+    /// Actor that opened the active window/controller admission.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enable_actor: Option<ManifoldLocalControlEnableActor>,
     /// Local-control revision.
     pub local_revision: Revision,
     /// Admission authority revision.
@@ -597,6 +642,8 @@ impl std::error::Error for ManifoldLocalControlError {}
 struct PairingWindow {
     window_id: DottedId,
     expires_at_ms: u64,
+    access_mode: ManifoldLocalControlAccessMode,
+    enable_actor: ManifoldLocalControlEnableActor,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -605,6 +652,8 @@ struct ActiveController {
     lease: ManifoldControlLease,
     session_expires_at_ms: u64,
     idle_expires_at_ms: u64,
+    access_mode: ManifoldLocalControlAccessMode,
+    enable_actor: ManifoldLocalControlEnableActor,
 }
 
 /// Composite source-only authority. Construction is disabled by default.
@@ -681,6 +730,24 @@ impl ManifoldLocalControlAuthority {
         ManifoldLocalControlSafeStatus {
             schema_id: schema_id(LOCAL_CONTROL_SAFE_STATUS_SCHEMA),
             state,
+            access_mode: self
+                .window
+                .as_ref()
+                .map(|window| window.access_mode)
+                .or_else(|| {
+                    self.controller
+                        .as_ref()
+                        .map(|controller| controller.access_mode)
+                }),
+            enable_actor: self
+                .window
+                .as_ref()
+                .map(|window| window.enable_actor)
+                .or_else(|| {
+                    self.controller
+                        .as_ref()
+                        .map(|controller| controller.enable_actor)
+                }),
             local_revision: revisions.local_revision,
             admission_revision: revisions.admission_revision,
             lease_authority_revision: revisions.lease_authority_revision,
@@ -720,6 +787,10 @@ impl ManifoldLocalControlAuthority {
             Some(ManifoldLocalControlRejectionReason::StaleLocalRevision)
         } else if self.controller.is_some() {
             Some(ManifoldLocalControlRejectionReason::ControllerAlreadyActive)
+        } else if request.enable_actor == ManifoldLocalControlEnableActor::DebugShell
+            && !self.policy.allow_debug_shell_operator
+        {
+            Some(ManifoldLocalControlRejectionReason::AuthorityRejected)
         } else if request.opened_at_ms >= request.expires_at_ms
             || request.expires_at_ms - request.opened_at_ms > self.policy.max_window_ttl_ms
         {
@@ -738,6 +809,8 @@ impl ManifoldLocalControlAuthority {
         self.window = Some(PairingWindow {
             window_id: request.window_id.clone(),
             expires_at_ms: request.expires_at_ms,
+            access_mode: request.access_mode,
+            enable_actor: request.enable_actor,
         });
         if self.advance_local_revision().is_err() {
             self.window = None;
@@ -884,6 +957,16 @@ impl ManifoldLocalControlAuthority {
                 .requested_at_ms
                 .saturating_add(self.policy.idle_timeout_ms)
                 .min(session_expires_at_ms),
+            access_mode: self
+                .window
+                .as_ref()
+                .expect("admission precheck requires a window")
+                .access_mode,
+            enable_actor: self
+                .window
+                .as_ref()
+                .expect("admission precheck requires a window")
+                .enable_actor,
         });
         self.window = None;
         receipt.admitted = true;
@@ -1330,11 +1413,24 @@ impl ManifoldLocalControlAuthority {
             return Some(ManifoldLocalControlRejectionReason::Expired);
         }
         let evidence = &request.evidence;
+        let access_evidence_valid = match window.access_mode {
+            ManifoldLocalControlAccessMode::Paired => {
+                matches!(
+                    evidence.presentation,
+                    ManifoldLocalControlPairingPresentation::ManualEntry
+                        | ManifoldLocalControlPairingPresentation::QrConvenience
+                ) && evidence.pairing_code_verified
+            }
+            ManifoldLocalControlAccessMode::OpenLanInsecure => {
+                evidence.presentation == ManifoldLocalControlPairingPresentation::OpenLanInsecure
+                    && !evidence.pairing_code_verified
+            }
+        };
         if evidence.schema_id.as_str() != LOCAL_CONTROL_CONTROLLER_EVIDENCE_SCHEMA
             || evidence.adapter_id != self.policy.trusted_adapter_id
             || evidence.window_id != window.window_id
             || evidence.controller_id != self.policy.controller_id
-            || !evidence.pairing_code_verified
+            || !access_evidence_valid
             || evidence.observed_at_ms > request.requested_at_ms
             || evidence.expires_at_ms <= request.requested_at_ms
             || evidence.expires_at_ms > window.expires_at_ms
@@ -1705,6 +1801,8 @@ fn window_receipt(
         receipt_id: derived_id("receipt.local_control.window", &request.request_id),
         request_id: request.request_id.clone(),
         window_id: request.window_id.clone(),
+        access_mode: request.access_mode,
+        enable_actor: request.enable_actor,
         opened: false,
         resulting_revisions: authority.revision_tuple(),
         status: authority.safe_status(),

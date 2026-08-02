@@ -58,5 +58,6 @@
   "max_session_ttl_ms": 300000,
   "idle_timeout_ms": 60000,
   "rate_window_ms": 1000,
-  "max_commands_per_window": 8
+  "max_commands_per_window": 8,
+  "allow_debug_shell_operator": false
 }
