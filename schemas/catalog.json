@@ -1174,30 +1174,51 @@
     },
     {
       "schema_id": "rusty.manifold.connection_hub.policy.v2",
+      "rust_type": "LegacyManifoldConnectionHubPolicyV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.request.v2",
+      "rust_type": "LegacyManifoldConnectionHubRequestV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.state.v2",
+      "rust_type": "LegacyManifoldConnectionHubStateV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.snapshot.v2",
+      "rust_type": "LegacyManifoldConnectionHubSnapshotV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.policy.v3",
       "rust_type": "ManifoldConnectionHubPolicy",
       "fixture_paths": [
         "fixtures/connection-hub/policy.json"
       ]
     },
     {
-      "schema_id": "rusty.manifold.connection_hub.request.v2",
+      "schema_id": "rusty.manifold.connection_hub.request.v3",
       "rust_type": "ManifoldConnectionHubRequest",
       "fixture_paths": [
         "fixtures/connection-hub/trust-controller-request.json",
         "fixtures/connection-hub/trust-controller-request.unknown-field.damaged.json",
+        "fixtures/connection-hub/refresh-authenticated-activity-request.json",
         "fixtures/connection-hub/authorize-command-request.json",
         "fixtures/connection-hub/authorize-command-request.bad-digest.damaged.json"
       ]
     },
     {
-      "schema_id": "rusty.manifold.connection_hub.state.v2",
+      "schema_id": "rusty.manifold.connection_hub.state.v3",
       "rust_type": "ManifoldConnectionHubState",
       "fixture_paths": [
         "fixtures/connection-hub/initial-snapshot.json"
       ]
     },
     {
-      "schema_id": "rusty.manifold.connection_hub.snapshot.v2",
+      "schema_id": "rusty.manifold.connection_hub.snapshot.v3",
       "rust_type": "ManifoldConnectionHubSnapshot",
       "fixture_paths": [
         "fixtures/connection-hub/initial-snapshot.json"
@@ -1205,7 +1226,17 @@
     },
     {
       "schema_id": "rusty.manifold.connection_hub.history_checkpoint.v1",
+      "rust_type": "LegacyManifoldConnectionHubHistoryCheckpointV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.history_checkpoint.v2",
       "rust_type": "ManifoldConnectionHubHistoryCheckpoint",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.external_request_fence.v1",
+      "rust_type": "ManifoldConnectionHubExternalRequestFence",
       "fixture_paths": []
     },
     {

@@ -86,6 +86,8 @@ fn policy() -> ManifoldConnectionHubPolicy {
         max_controller_ttl_ms: 100_000,
         max_session_ttl_ms: 80_000,
         max_surface_lease_ttl_ms: 60_000,
+        authenticated_activity_controller_ttl_ms: 90_000,
+        authenticated_activity_session_ttl_ms: 70_000,
     }
 }
 
@@ -175,6 +177,81 @@ impl TestAuthorityApply for ManifoldConnectionHubAuthority {
         request: &ManifoldConnectionHubRequest,
         context: TestOwnerContext<'_>,
     ) -> ManifoldConnectionHubReceipt {
+        if let ManifoldConnectionHubOperationRequest::ReplaceTransport {
+            session_id,
+            expected_transport_epoch,
+            ..
+        } = &request.operation
+        {
+            if let Some(controller_id) = self
+                .snapshot()
+                .state
+                .sessions
+                .iter()
+                .find(|session| session.session_id == *session_id)
+                .map(|session| session.controller_id.clone())
+            {
+                return self.owner().replace_authenticated_transport(
+                    request,
+                    ManifoldConnectionHubAuthenticatedTransportEvidence {
+                        observed_at_ms: request.requested_at_ms,
+                        controller_id: &controller_id,
+                        session_id,
+                        transport_epoch: *expected_transport_epoch,
+                    },
+                );
+            }
+        }
+        let authenticated = match &request.operation {
+            ManifoldConnectionHubOperationRequest::RefreshAuthenticatedActivity {
+                controller_id,
+                session_id,
+                expected_transport_epoch,
+                external_request_sequence,
+                external_request_sha256,
+            } => Some((
+                controller_id.clone(),
+                session_id.clone(),
+                *expected_transport_epoch,
+                *external_request_sequence,
+                external_request_sha256.clone(),
+            )),
+            ManifoldConnectionHubOperationRequest::AuthorizeSurfaceCommand {
+                session_id,
+                expected_transport_epoch,
+                external_request_sequence,
+                external_request_sha256,
+                ..
+            } => self
+                .snapshot()
+                .state
+                .sessions
+                .iter()
+                .find(|session| session.session_id == *session_id)
+                .map(|session| {
+                    (
+                        session.controller_id.clone(),
+                        session_id.clone(),
+                        *expected_transport_epoch,
+                        *external_request_sequence,
+                        external_request_sha256.clone(),
+                    )
+                }),
+            _ => None,
+        };
+        if let Some((controller, session, epoch, sequence, digest)) = authenticated {
+            return self.owner().apply_authenticated_activity(
+                request,
+                ManifoldConnectionHubAuthenticatedActivityEvidence {
+                    observed_at_ms: request.requested_at_ms,
+                    controller_id: &controller,
+                    session_id: &session,
+                    transport_epoch: epoch,
+                    external_request_sequence: sequence,
+                    external_request_sha256: &digest,
+                },
+            );
+        }
         match context {
             TestOwnerContext::Lifecycle(now) => self.owner().apply_lifecycle(request, now),
             TestOwnerContext::Operator(now, evidence) => {
@@ -416,6 +493,73 @@ fn host_with_surface_lease() -> ManifoldConnectionHubAuthority {
     host
 }
 
+fn refresh_request(
+    host: &ManifoldConnectionHubAuthority,
+    name: &str,
+    now: u64,
+    transport_epoch: u64,
+    sequence: u64,
+    external_digest: String,
+) -> ManifoldConnectionHubRequest {
+    request(
+        host,
+        name,
+        now,
+        ManifoldConnectionHubOperationRequest::RefreshAuthenticatedActivity {
+            controller_id: id("controller.friend-phone"),
+            session_id: id("session.friend-phone.primary"),
+            expected_transport_epoch: transport_epoch,
+            external_request_sequence: sequence,
+            external_request_sha256: external_digest,
+        },
+    )
+}
+
+fn long_lived_host() -> ManifoldConnectionHubAuthority {
+    const DAY_MS: u64 = 24 * 60 * 60 * 1_000;
+    let mut hub_policy = policy();
+    hub_policy.max_controller_ttl_ms = 120 * DAY_MS;
+    hub_policy.max_session_ttl_ms = 30 * DAY_MS;
+    hub_policy.max_surface_lease_ttl_ms = DAY_MS;
+    hub_policy.authenticated_activity_controller_ttl_ms = 60 * DAY_MS;
+    hub_policy.authenticated_activity_session_ttl_ms = 10 * DAY_MS;
+    let mut host = new_host_with_policy(hub_policy);
+    let trust_request = request(
+        &host,
+        "request.hub.long.trust",
+        1_000,
+        ManifoldConnectionHubOperationRequest::TrustController {
+            controller_id: id("controller.friend-phone"),
+            public_identity_sha256: digest("c"),
+            capabilities: vec![id("capability.player.pause"), id("capability.player.play")],
+            operator_evidence_id: id("evidence.operator.wearer-action"),
+            requested_ttl_ms: 40 * DAY_MS,
+        },
+    );
+    assert!(
+        host.trust_controller(&trust_request, operator_context(&trust_request))
+            .applied
+    );
+    let open = request(
+        &host,
+        "request.hub.long.open",
+        1_100,
+        ManifoldConnectionHubOperationRequest::OpenSession {
+            session_id: id("session.friend-phone.primary"),
+            controller_id: id("controller.friend-phone"),
+            public_identity_sha256: digest("c"),
+            transport: ManifoldConnectionHubTransportBinding {
+                transport_id: id("transport.websocket.long.first"),
+                evidence_id: id("evidence.transport.long.first"),
+                attached_at_ms: 1_100,
+            },
+            requested_ttl_ms: 29 * DAY_MS,
+        },
+    );
+    assert!(host.open_session(&open, lifecycle_context(&open)).applied);
+    host
+}
+
 #[test]
 fn logical_session_survives_transport_replacement_and_replay_stays_closed() {
     let mut host = new_host();
@@ -477,6 +621,161 @@ fn logical_session_survives_transport_replacement_and_replay_stays_closed() {
 }
 
 #[test]
+fn authenticated_activity_slides_past_24_hours_and_restart_preserves_next_sequence() {
+    const DAY_MS: u64 = 24 * 60 * 60 * 1_000;
+    let mut host = long_lived_host();
+    let first = refresh_request(
+        &host,
+        "request.hub.long.refresh.1",
+        25 * DAY_MS,
+        1,
+        1,
+        digest("1"),
+    );
+    let before = host.snapshot_json().unwrap();
+    assert_eq!(
+        host.owner()
+            .apply_lifecycle(&first, first.requested_at_ms)
+            .rejection_reason,
+        Some(ManifoldConnectionHubRejectionReason::OwnerContextMismatch)
+    );
+    assert_eq!(host.snapshot_json().unwrap(), before);
+    let first_receipt = host.apply_lifecycle(&first, lifecycle_context(&first));
+    assert!(first_receipt.applied, "{first_receipt:?}");
+    assert_eq!(first_receipt.next_external_request_sequence, Some(2));
+    assert_eq!(host.snapshot().state.external_request_fences.len(), 1);
+    assert!(host.snapshot().state.sessions[0].expires_at_ms > 29 * DAY_MS);
+
+    let bytes = host.snapshot_json().unwrap();
+    let mut host = restart_host(&bytes).unwrap();
+    assert_eq!(host.snapshot_json().unwrap(), bytes);
+
+    let replace = request(
+        &host,
+        "request.hub.long.reconnect",
+        27 * DAY_MS,
+        ManifoldConnectionHubOperationRequest::ReplaceTransport {
+            session_id: id("session.friend-phone.primary"),
+            expected_transport_epoch: 1,
+            transport: ManifoldConnectionHubTransportBinding {
+                transport_id: id("transport.websocket.long.second"),
+                evidence_id: id("evidence.transport.long.second"),
+                attached_at_ms: 27 * DAY_MS,
+            },
+        },
+    );
+    let reconnect = host.replace_transport(&replace, lifecycle_context(&replace));
+    assert!(reconnect.applied, "{reconnect:?}");
+    assert_eq!(reconnect.next_external_request_sequence, Some(2));
+    assert_eq!(host.snapshot().state.external_request_fences.len(), 1);
+    assert_eq!(
+        host.snapshot().state.external_request_fences[0].latest_external_request_sequence,
+        1
+    );
+
+    let second = refresh_request(
+        &host,
+        "request.hub.long.refresh.2",
+        34 * DAY_MS,
+        2,
+        2,
+        digest("2"),
+    );
+    let second_receipt = host.apply_lifecycle(&second, lifecycle_context(&second));
+    assert!(second_receipt.applied, "{second_receipt:?}");
+    assert_eq!(second_receipt.next_external_request_sequence, Some(3));
+    assert!(host.snapshot().state.sessions[0].expires_at_ms > 43 * DAY_MS);
+    assert!(host.snapshot().state.trusted_controllers[0].expires_at_ms > 90 * DAY_MS);
+}
+
+#[test]
+fn offline_expiry_and_revoke_never_resurrect_or_retain_sequence_state() {
+    let mut expired = new_host();
+    trust(&mut expired);
+    open_session(&mut expired);
+    let too_late = refresh_request(
+        &expired,
+        "request.hub.offline.refresh",
+        72_000,
+        1,
+        1,
+        digest("3"),
+    );
+    let before = expired.snapshot_json().unwrap();
+    let rejected = expired.apply_lifecycle(&too_late, lifecycle_context(&too_late));
+    assert_eq!(
+        rejected.rejection_reason,
+        Some(ManifoldConnectionHubRejectionReason::SessionNotActive)
+    );
+    assert_eq!(expired.snapshot_json().unwrap(), before);
+
+    let expire = request(
+        &expired,
+        "request.hub.offline.expire",
+        72_001,
+        ManifoldConnectionHubOperationRequest::Expire,
+    );
+    assert!(
+        expired
+            .apply_lifecycle(&expire, lifecycle_context(&expire))
+            .applied
+    );
+    assert!(expired.snapshot().state.sessions.is_empty());
+    assert!(expired.snapshot().state.external_request_fences.is_empty());
+
+    let mut revoked = new_host();
+    trust(&mut revoked);
+    open_session(&mut revoked);
+    let activity = refresh_request(
+        &revoked,
+        "request.hub.revoked.refresh",
+        2_000,
+        1,
+        1,
+        digest("4"),
+    );
+    assert!(
+        revoked
+            .apply_lifecycle(&activity, lifecycle_context(&activity))
+            .applied
+    );
+    assert_eq!(revoked.snapshot().state.external_request_fences.len(), 1);
+    let revoke = request(
+        &revoked,
+        "request.hub.revoked.session",
+        2_100,
+        ManifoldConnectionHubOperationRequest::RevokeSession {
+            session_id: id("session.friend-phone.primary"),
+            reason: id("wearer-revoked"),
+        },
+    );
+    assert!(
+        revoked
+            .apply_lifecycle(&revoke, lifecycle_context(&revoke))
+            .applied
+    );
+    assert!(revoked.snapshot().state.sessions.is_empty());
+    assert!(revoked.snapshot().state.external_request_fences.is_empty());
+    assert_eq!(
+        revoked
+            .owner()
+            .apply_authenticated_activity(
+                &activity,
+                ManifoldConnectionHubAuthenticatedActivityEvidence {
+                    observed_at_ms: activity.requested_at_ms,
+                    controller_id: &id("controller.friend-phone"),
+                    session_id: &id("session.friend-phone.primary"),
+                    transport_epoch: 1,
+                    external_request_sequence: 1,
+                    external_request_sha256: &digest("4"),
+                },
+            )
+            .rejection_reason,
+        Some(ManifoldConnectionHubRejectionReason::Replay)
+    );
+}
+
+#[test]
 #[allow(clippy::too_many_lines)]
 fn provider_surface_lease_command_and_provider_death_flow_is_closed() {
     let mut host = new_host();
@@ -517,6 +816,8 @@ fn provider_surface_lease_command_and_provider_death_flow_is_closed() {
             typed_params_schema_id: schema(EMPTY_TYPED_PARAMS_SCHEMA),
             typed_params_schema_sha256: EMPTY_TYPED_PARAMS_SCHEMA_SHA256.to_owned(),
             typed_params_sha256: EMPTY_TYPED_PARAMS_SHA256.to_owned(),
+            external_request_sequence: 1,
+            external_request_sha256: digest("4"),
         },
     );
     assert_eq!(
@@ -536,6 +837,8 @@ fn provider_surface_lease_command_and_provider_death_flow_is_closed() {
             typed_params_schema_id: schema(EMPTY_TYPED_PARAMS_SCHEMA),
             typed_params_schema_sha256: EMPTY_TYPED_PARAMS_SCHEMA_SHA256.to_owned(),
             typed_params_sha256: EMPTY_TYPED_PARAMS_SHA256.to_owned(),
+            external_request_sequence: 1,
+            external_request_sha256: digest("5"),
         },
     );
     let receipt = host.apply_lifecycle(&command, lifecycle_context(&command));
@@ -581,6 +884,8 @@ fn provider_surface_lease_command_and_provider_death_flow_is_closed() {
             typed_params_schema_id: schema(EMPTY_TYPED_PARAMS_SCHEMA),
             typed_params_schema_sha256: EMPTY_TYPED_PARAMS_SCHEMA_SHA256.to_owned(),
             typed_params_sha256: digest("2"),
+            external_request_sequence: 2,
+            external_request_sha256: digest("6"),
         },
     );
     let distinct_receipt =
@@ -602,6 +907,8 @@ fn provider_surface_lease_command_and_provider_death_flow_is_closed() {
             typed_params_schema_id: schema(EMPTY_TYPED_PARAMS_SCHEMA),
             typed_params_schema_sha256: EMPTY_TYPED_PARAMS_SCHEMA_SHA256.to_owned(),
             typed_params_sha256: "sha256:ABC".to_owned(),
+            external_request_sequence: 2,
+            external_request_sha256: digest("7"),
         },
     );
     let before = host.snapshot_json().unwrap();
@@ -937,6 +1244,8 @@ fn command_spam_cannot_consume_terminal_cleanup_capacity_or_weaken_replay() {
                 typed_params_schema_id: schema(EMPTY_TYPED_PARAMS_SCHEMA),
                 typed_params_schema_sha256: EMPTY_TYPED_PARAMS_SCHEMA_SHA256.to_owned(),
                 typed_params_sha256: EMPTY_TYPED_PARAMS_SHA256.to_owned(),
+                external_request_sequence: u64::try_from(sequence - 5 + 1).unwrap(),
+                external_request_sha256: typed_sha256(&sequence),
             },
         );
         if first_command.is_none() {
@@ -968,6 +1277,8 @@ fn command_spam_cannot_consume_terminal_cleanup_capacity_or_weaken_replay() {
             typed_params_schema_id: schema(EMPTY_TYPED_PARAMS_SCHEMA),
             typed_params_schema_sha256: EMPTY_TYPED_PARAMS_SCHEMA_SHA256.to_owned(),
             typed_params_sha256: EMPTY_TYPED_PARAMS_SHA256.to_owned(),
+            external_request_sequence: u64::try_from(MAX_ORDINARY_AUDIT_EVENTS - 5 + 1).unwrap(),
+            external_request_sha256: digest("8"),
         },
     );
     let before_cleanup = host.snapshot_json().unwrap();
@@ -1148,9 +1459,15 @@ fn history_rollover_preserves_live_state_and_fences_prior_replay_namespaces() {
             },
         },
     );
-    let replace_receipt = host
-        .owner()
-        .apply_lifecycle(&replace, replace.requested_at_ms);
+    let replace_receipt = host.owner().replace_authenticated_transport(
+        &replace,
+        ManifoldConnectionHubAuthenticatedTransportEvidence {
+            observed_at_ms: replace.requested_at_ms,
+            controller_id: &id("controller.friend-phone"),
+            session_id: &id("session.friend-phone.primary"),
+            transport_epoch: 1,
+        },
+    );
     assert!(replace_receipt.applied, "{replace_receipt:?}");
     let second = request(
         &host,
@@ -1174,6 +1491,185 @@ fn history_rollover_preserves_live_state_and_fences_prior_replay_namespaces() {
         restart_host(&bytes).unwrap().snapshot_json().unwrap(),
         bytes
     );
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn rollover_keeps_active_subjects_addressable_and_rejects_rederived_raw_command() {
+    let mut host = host_with_surface_lease();
+    let first = request(
+        &host,
+        "request.hub.rollover.command.1",
+        1_500,
+        ManifoldConnectionHubOperationRequest::AuthorizeSurfaceCommand {
+            session_id: id("session.friend-phone.primary"),
+            expected_transport_epoch: 1,
+            lease_id: id("lease.surface.media-player.friend"),
+            command_id: id("command.player.play"),
+            typed_params_schema_id: schema(EMPTY_TYPED_PARAMS_SCHEMA),
+            typed_params_schema_sha256: EMPTY_TYPED_PARAMS_SCHEMA_SHA256.to_owned(),
+            typed_params_sha256: EMPTY_TYPED_PARAMS_SHA256.to_owned(),
+            external_request_sequence: 1,
+            external_request_sha256: digest("9"),
+        },
+    );
+    let first_receipt = host.apply_lifecycle(&first, lifecycle_context(&first));
+    assert!(first_receipt.applied, "{first_receipt:?}");
+    assert_eq!(first_receipt.next_external_request_sequence, Some(2));
+    let captured_operation = first.operation.clone();
+
+    let admission = admission();
+    let rollover = request(
+        &host,
+        "request.hub.rollover.with-command",
+        1_600,
+        ManifoldConnectionHubOperationRequest::RolloverHistory {
+            next_authority_epoch: 2,
+            admission_authority_revision: admission.snapshot().authority_revision,
+        },
+    );
+    let rollover_receipt =
+        host.owner()
+            .rollover_history(&rollover, rollover.requested_at_ms, &admission);
+    assert!(rollover_receipt.applied, "{rollover_receipt:?}");
+    assert_eq!(host.snapshot().state.authority_epoch, 2);
+    assert_eq!(host.snapshot().state.trusted_controllers.len(), 1);
+    assert_eq!(host.snapshot().state.sessions.len(), 1);
+    assert_eq!(host.snapshot().state.providers.len(), 1);
+    assert_eq!(host.snapshot().state.surfaces.len(), 1);
+    assert_eq!(host.snapshot().state.surface_leases.len(), 1);
+    assert_eq!(host.snapshot().state.external_request_fences.len(), 1);
+
+    let rederived = request(
+        &host,
+        "request.hub.rollover.command.rederived",
+        1_700,
+        captured_operation,
+    );
+    let replay = host.apply_lifecycle(&rederived, lifecycle_context(&rederived));
+    assert_eq!(
+        replay.rejection_reason,
+        Some(ManifoldConnectionHubRejectionReason::Replay)
+    );
+
+    let fresh = request(
+        &host,
+        "request.hub.rollover.command.2",
+        1_800,
+        ManifoldConnectionHubOperationRequest::AuthorizeSurfaceCommand {
+            session_id: id("session.friend-phone.primary"),
+            expected_transport_epoch: 1,
+            lease_id: id("lease.surface.media-player.friend"),
+            command_id: id("command.player.pause"),
+            typed_params_schema_id: schema(EMPTY_TYPED_PARAMS_SCHEMA),
+            typed_params_schema_sha256: EMPTY_TYPED_PARAMS_SCHEMA_SHA256.to_owned(),
+            typed_params_sha256: EMPTY_TYPED_PARAMS_SHA256.to_owned(),
+            external_request_sequence: 2,
+            external_request_sha256: digest("a"),
+        },
+    );
+    let fresh_receipt = host.apply_lifecycle(&fresh, lifecycle_context(&fresh));
+    assert!(fresh_receipt.applied, "{fresh_receipt:?}");
+    assert_eq!(fresh_receipt.next_external_request_sequence, Some(3));
+
+    let stale_new_id = request(
+        &host,
+        "request.hub.rollover.lease.stale-id",
+        1_900,
+        ManifoldConnectionHubOperationRequest::AcquireSurfaceLease {
+            lease_id: DottedId::new("epoch-1.lease.surface.second.stale").unwrap(),
+            session_id: id("session.friend-phone.primary"),
+            expected_transport_epoch: 1,
+            surface_id: id("surface.media-player.controls"),
+            requested_ttl_ms: 10_000,
+        },
+    );
+    assert_eq!(
+        host.apply_lifecycle(&stale_new_id, lifecycle_context(&stale_new_id))
+            .rejection_reason,
+        Some(ManifoldConnectionHubRejectionReason::AuthorityEpochMismatch)
+    );
+    let current_new_id = request(
+        &host,
+        "request.hub.rollover.lease.current-id",
+        2_000,
+        ManifoldConnectionHubOperationRequest::AcquireSurfaceLease {
+            lease_id: DottedId::new("epoch-2.lease.surface.second.current").unwrap(),
+            session_id: id("session.friend-phone.primary"),
+            expected_transport_epoch: 1,
+            surface_id: id("surface.media-player.controls"),
+            requested_ttl_ms: 10_000,
+        },
+    );
+    let current_receipt = host.apply_lifecycle(&current_new_id, lifecycle_context(&current_new_id));
+    assert!(current_receipt.applied, "{current_receipt:?}");
+}
+
+#[test]
+fn sequence_high_water_is_constant_size_and_terminal_cleanup_reclaims_it() {
+    let mut host = new_host();
+    trust(&mut host);
+    open_session(&mut host);
+    for sequence in 1..=256_u64 {
+        let activity = refresh_request(
+            &host,
+            &format!("request.hub.sequence.{sequence}"),
+            2_000 + sequence,
+            1,
+            sequence,
+            typed_sha256(&sequence),
+        );
+        let receipt = host.apply_lifecycle(&activity, lifecycle_context(&activity));
+        assert!(receipt.applied, "sequence {sequence}: {receipt:?}");
+        assert_eq!(receipt.next_external_request_sequence, Some(sequence + 1));
+        assert_eq!(host.snapshot().state.external_request_fences.len(), 1);
+    }
+    assert_eq!(
+        host.snapshot().state.external_request_fences[0].latest_external_request_sequence,
+        256
+    );
+    let bytes = host.snapshot_json().unwrap();
+    let mut host = restart_host(&bytes).unwrap();
+    let regressed = refresh_request(
+        &host,
+        "request.hub.sequence.regressed-time",
+        2_000,
+        1,
+        257,
+        digest("c"),
+    );
+    assert_eq!(
+        host.apply_lifecycle(&regressed, lifecycle_context(&regressed))
+            .rejection_reason,
+        Some(ManifoldConnectionHubRejectionReason::TrustedTimeRegression)
+    );
+    let gap = refresh_request(
+        &host,
+        "request.hub.sequence.gap",
+        2_300,
+        1,
+        258,
+        digest("b"),
+    );
+    assert_eq!(
+        host.apply_lifecycle(&gap, lifecycle_context(&gap))
+            .rejection_reason,
+        Some(ManifoldConnectionHubRejectionReason::ExternalRequestSequenceMismatch)
+    );
+    let revoke = request(
+        &host,
+        "request.hub.sequence.revoke",
+        2_301,
+        ManifoldConnectionHubOperationRequest::RevokeSession {
+            session_id: id("session.friend-phone.primary"),
+            reason: id("wearer-revoked"),
+        },
+    );
+    assert!(
+        host.apply_lifecycle(&revoke, lifecycle_context(&revoke))
+            .applied
+    );
+    assert!(host.snapshot().state.external_request_fences.is_empty());
 }
 
 #[test]
@@ -1256,7 +1752,7 @@ fn deterministic_request_and_snapshot_bytes_are_stable() {
     );
     assert_eq!(
         serde_json::to_string(&request).unwrap(),
-        r#"{"$schema":"rusty.manifold.connection_hub.request.v2","request_id":"epoch-1.request.hub.stable.1","authority_epoch":1,"expected_authority_revision":1,"requested_at_ms":1000,"operation":{"type":"expire"}}"#
+        r#"{"$schema":"rusty.manifold.connection_hub.request.v3","request_id":"epoch-1.request.hub.stable.1","authority_epoch":1,"expected_authority_revision":1,"requested_at_ms":1000,"operation":{"type":"expire"}}"#
     );
     let bytes = host.snapshot_json().unwrap();
     assert_eq!(
@@ -1295,6 +1791,28 @@ fn committed_fixtures_match_types_and_unknown_field_damage_rejects() {
     )
     .unwrap();
     assert!(serde_json::from_str::<ManifoldConnectionHubRequest>(&damaged).is_err());
+
+    let refresh: ManifoldConnectionHubRequest = serde_json::from_str(
+        &std::fs::read_to_string(
+            root.join("fixtures/connection-hub/refresh-authenticated-activity-request.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    match refresh.operation {
+        ManifoldConnectionHubOperationRequest::RefreshAuthenticatedActivity {
+            external_request_sequence,
+            ref external_request_sha256,
+            ..
+        } => {
+            assert_eq!(external_request_sequence, 1);
+            assert_eq!(
+                external_request_sha256,
+                &format!("sha256:{}", "f".repeat(64))
+            );
+        }
+        _ => panic!("expected authenticated-activity refresh fixture"),
+    }
 
     let command_json = std::fs::read_to_string(
         root.join("fixtures/connection-hub/authorize-command-request.json"),

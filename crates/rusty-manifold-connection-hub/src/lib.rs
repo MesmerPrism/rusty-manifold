@@ -19,30 +19,33 @@ use std::collections::BTreeSet;
 use std::fmt;
 
 /// Authority policy schema.
-pub const POLICY_SCHEMA: &str = "rusty.manifold.connection_hub.policy.v2";
+pub const POLICY_SCHEMA: &str = "rusty.manifold.connection_hub.policy.v3";
 /// Mutation request schema.
-pub const REQUEST_SCHEMA: &str = "rusty.manifold.connection_hub.request.v2";
+pub const REQUEST_SCHEMA: &str = "rusty.manifold.connection_hub.request.v3";
 /// Accepted-state schema.
-pub const STATE_SCHEMA: &str = "rusty.manifold.connection_hub.state.v2";
+pub const STATE_SCHEMA: &str = "rusty.manifold.connection_hub.state.v3";
 /// Restart snapshot schema.
-pub const SNAPSHOT_SCHEMA: &str = "rusty.manifold.connection_hub.snapshot.v2";
+pub const SNAPSHOT_SCHEMA: &str = "rusty.manifold.connection_hub.snapshot.v3";
 /// Mutation receipt schema.
-pub const RECEIPT_SCHEMA: &str = "rusty.manifold.connection_hub.receipt.v2";
+pub const RECEIPT_SCHEMA: &str = "rusty.manifold.connection_hub.receipt.v3";
 /// Audit-event schema.
-pub const AUDIT_SCHEMA: &str = "rusty.manifold.connection_hub.audit_event.v2";
+pub const AUDIT_SCHEMA: &str = "rusty.manifold.connection_hub.audit_event.v3";
 /// Surface descriptor schema.
 pub const SURFACE_SCHEMA: &str = "rusty.manifold.connection_hub.surface.v2";
 /// Provider-admission record schema.
 pub const PROVIDER_SCHEMA: &str = "rusty.manifold.connection_hub.provider.v2";
 /// Logical session schema.
-pub const SESSION_SCHEMA: &str = "rusty.manifold.connection_hub.session.v1";
+pub const SESSION_SCHEMA: &str = "rusty.manifold.connection_hub.session.v2";
 /// Derivative surface-lease schema.
 pub const SURFACE_LEASE_SCHEMA: &str = "rusty.manifold.connection_hub.surface_lease.v1";
 /// Surface command-authorization schema.
 pub const COMMAND_AUTHORIZATION_SCHEMA: &str =
     "rusty.manifold.connection_hub.command_authorization.v2";
 /// Chained ordinary-work history checkpoint schema.
-pub const HISTORY_CHECKPOINT_SCHEMA: &str = "rusty.manifold.connection_hub.history_checkpoint.v1";
+pub const HISTORY_CHECKPOINT_SCHEMA: &str = "rusty.manifold.connection_hub.history_checkpoint.v2";
+/// Retained external-request replay-fence schema.
+pub const EXTERNAL_REQUEST_FENCE_SCHEMA: &str =
+    "rusty.manifold.connection_hub.external_request_fence.v1";
 /// Cross-language canonical typed-parameter vector schema.
 pub const TYPED_PARAMS_CANONICAL_VECTORS_SCHEMA: &str =
     "rusty.manifold.connection_hub.typed_params_canonical_vectors.v1";
@@ -125,6 +128,13 @@ pub struct ManifoldConnectionHubPolicy {
     pub max_session_ttl_ms: u64,
     /// Maximum derivative surface-lease lifetime.
     pub max_surface_lease_ttl_ms: u64,
+    /// Policy-fixed controller lifetime restored by one accepted authenticated
+    /// activity. This is bounded by `max_controller_ttl_ms`.
+    pub authenticated_activity_controller_ttl_ms: u64,
+    /// Policy-fixed logical-session lifetime restored by one accepted
+    /// authenticated activity. This is bounded by `max_session_ttl_ms` and by
+    /// the refreshed controller lifetime.
+    pub authenticated_activity_session_ttl_ms: u64,
 }
 
 /// Durable trusted controller identity. The SHA-256 binds a public identity;
@@ -177,6 +187,33 @@ pub struct ManifoldConnectionHubSession {
     pub transport_epoch: u64,
     /// Current adapter transport evidence.
     pub transport: ManifoldConnectionHubTransportBinding,
+}
+
+/// One accepted external request digest retained while its logical session is
+/// live. The adapter supplies the SHA-256 of the exact authenticated public
+/// request bytes; Manifold never retains those bytes.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldConnectionHubExternalRequestFence {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Exact live logical session.
+    pub session_id: DottedId,
+    /// Exact trusted controller that authenticated the request.
+    pub controller_id: DottedId,
+    /// Greatest accepted external request sequence for this session. The
+    /// additive Quest public command/keepalive v2 supplies this value; public
+    /// v1 is not reinterpreted as sequence evidence.
+    pub latest_external_request_sequence: u64,
+    /// Lowercase SHA-256 of the exact latest external request bytes.
+    pub latest_external_request_sha256: String,
+    /// Internal accepted request identity that installed the high-water mark.
+    pub latest_accepted_request_id: DottedId,
+    /// Authority epoch in which the high-water mark was installed.
+    pub latest_accepted_authority_epoch: u64,
+    /// Trusted acceptance time.
+    pub latest_accepted_at_ms: u64,
 }
 
 /// Provider registration tied to a separately accepted admission use.
@@ -384,6 +421,9 @@ pub struct ManifoldConnectionHubState {
     pub surfaces: Vec<ManifoldConnectionHubSurface>,
     /// Active derivative surface leases.
     pub surface_leases: Vec<ManifoldConnectionHubSurfaceLease>,
+    /// Bounded exact replay fences for authenticated external requests whose
+    /// logical sessions remain live. These survive history rollover.
+    pub external_request_fences: Vec<ManifoldConnectionHubExternalRequestFence>,
     /// Terminal cleanup lineage.
     pub tombstones: Vec<ManifoldConnectionHubTombstone>,
 }
@@ -440,6 +480,22 @@ pub enum ManifoldConnectionHubOperationRequest {
         expected_transport_epoch: u64,
         /// Fresh replacement transport evidence.
         transport: ManifoldConnectionHubTransportBinding,
+    },
+    /// Record one successfully authenticated activity and slide the exact
+    /// controller and logical-session deadlines under fixed policy bounds.
+    RefreshAuthenticatedActivity {
+        /// Exact trusted controller authenticated by the adapter.
+        controller_id: DottedId,
+        /// Exact live logical session authenticated by the adapter.
+        session_id: DottedId,
+        /// Exact current physical transport epoch.
+        expected_transport_epoch: u64,
+        /// Monotonic external request sequence supplied by the additive public
+        /// command/keepalive v2 contract.
+        external_request_sequence: u64,
+        /// SHA-256 of the exact external request bytes. The bytes are not
+        /// retained by Manifold.
+        external_request_sha256: String,
     },
     /// Register one separately admitted app provider instance.
     RegisterProvider {
@@ -511,6 +567,12 @@ pub enum ManifoldConnectionHubOperationRequest {
         typed_params_schema_sha256: String,
         /// SHA-256 of the exact canonical low-rate typed parameters.
         typed_params_sha256: String,
+        /// Monotonic external request sequence supplied by the additive public
+        /// command v2 contract.
+        external_request_sequence: u64,
+        /// SHA-256 of the exact authenticated public command request bytes.
+        /// It is separately fenced across authority-history rollover.
+        external_request_sha256: String,
     },
     /// Explicitly revoke one logical session and its derivative leases.
     RevokeSession {
@@ -564,6 +626,8 @@ pub enum ManifoldConnectionHubOperation {
     OpenSession,
     /// Physical transport replacement.
     ReplaceTransport,
+    /// Authenticated activity and sliding deadline refresh.
+    RefreshAuthenticatedActivity,
     /// Provider admission.
     RegisterProvider,
     /// Provider removal/death cleanup.
@@ -633,6 +697,14 @@ pub enum ManifoldConnectionHubRejectionReason {
     CommandNotRegistered,
     /// Canonical typed-parameter digest is malformed.
     InvalidTypedParamsDigest,
+    /// Exact authenticated external-request digest is malformed.
+    InvalidExternalRequestDigest,
+    /// External request sequence was zero, replayed, skipped, or otherwise
+    /// differed from the exact next value retained for the logical session.
+    ExternalRequestSequenceMismatch,
+    /// Trusted activity time regressed behind the active transport or retained
+    /// external request high-water mark.
+    TrustedTimeRegression,
     /// Typed-parameter schema identity or exact schema bytes were substituted.
     TypedParamsSchemaMismatch,
     /// Request or newly created identity is outside the current epoch namespace.
@@ -703,6 +775,9 @@ pub struct ManifoldConnectionHubHistoryCheckpoint {
     pub source_epoch_request_ids_sha256: String,
     /// SHA-256 of the exact ordered source-epoch request-digest vector.
     pub source_epoch_request_digests_sha256: String,
+    /// SHA-256 of the exact retained active-session external-request fences at
+    /// rollover. Individual digests remain addressable in accepted state.
+    pub retained_external_request_fences_sha256: String,
     /// SHA-256 of the exact ordered source-epoch audit-event vector.
     pub source_epoch_audit_events_sha256: String,
     /// SHA-256 of exact compacted terminal tombstones.
@@ -757,6 +832,12 @@ pub struct ManifoldConnectionHubReceipt {
     pub rejection_reason: Option<ManifoldConnectionHubRejectionReason>,
     /// Resulting or selected session where applicable.
     pub session: Option<ManifoldConnectionHubSession>,
+    /// Resulting trusted controller where authenticated activity refreshed it.
+    pub trusted_controller: Option<ManifoldConnectionHubTrustedController>,
+    /// Exact next external request sequence for the selected logical session.
+    /// Authenticated transport replacement exposes it without consuming it;
+    /// accepted commands and JSON keepalives consume one value.
+    pub next_external_request_sequence: Option<u64>,
     /// Resulting surface lease where applicable.
     pub surface_lease: Option<ManifoldConnectionHubSurfaceLease>,
     /// Resulting one-time command authorization where applicable.
@@ -767,6 +848,38 @@ pub struct ManifoldConnectionHubReceipt {
     pub audit_event: Option<ManifoldConnectionHubAuditEvent>,
     /// Accepted history checkpoint for a rollover, absent otherwise.
     pub history_checkpoint: Option<ManifoldConnectionHubHistoryCheckpoint>,
+}
+
+/// Non-serializable adapter evidence for one authenticated v2 command or JSON
+/// keepalive. Holding the borrowed Hub owner is still required to apply it.
+#[derive(Clone, Copy, Debug)]
+pub struct ManifoldConnectionHubAuthenticatedActivityEvidence<'a> {
+    /// Trusted platform observation time.
+    pub observed_at_ms: u64,
+    /// Exact authenticated controller.
+    pub controller_id: &'a DottedId,
+    /// Exact authenticated logical session.
+    pub session_id: &'a DottedId,
+    /// Exact current physical transport epoch.
+    pub transport_epoch: u64,
+    /// Exact positive next public v2 request sequence.
+    pub external_request_sequence: u64,
+    /// Lowercase SHA-256 of the exact canonical public v2 request bytes.
+    pub external_request_sha256: &'a str,
+}
+
+/// Non-serializable adapter evidence for one bearer-authenticated transport
+/// replacement. Reconnect does not consume an external request sequence.
+#[derive(Clone, Copy, Debug)]
+pub struct ManifoldConnectionHubAuthenticatedTransportEvidence<'a> {
+    /// Trusted platform observation time.
+    pub observed_at_ms: u64,
+    /// Exact authenticated controller.
+    pub controller_id: &'a DottedId,
+    /// Exact authenticated logical session.
+    pub session_id: &'a DottedId,
+    /// Exact transport epoch being replaced.
+    pub transport_epoch: u64,
 }
 
 #[derive(Clone, Copy)]
@@ -786,6 +899,8 @@ enum ManifoldConnectionHubOwnerEvidence<'a> {
         observed_at_ms: u64,
         admission_authority: &'a ManifoldAdmissionAuthority,
     },
+    AuthenticatedActivity(ManifoldConnectionHubAuthenticatedActivityEvidence<'a>),
+    AuthenticatedTransport(ManifoldConnectionHubAuthenticatedTransportEvidence<'a>),
 }
 
 /// Authority construction, restart, or snapshot validation failure.
@@ -870,6 +985,7 @@ impl ManifoldConnectionHubAuthority {
                     providers: Vec::new(),
                     surfaces: Vec::new(),
                     surface_leases: Vec::new(),
+                    external_request_fences: Vec::new(),
                     tombstones: Vec::new(),
                 },
                 applied_request_ids: Vec::new(),
@@ -955,8 +1071,6 @@ impl ManifoldConnectionHubAuthority {
         let request_digest = typed_sha256(request);
         let generic_rejection = if request.schema_id.as_str() != REQUEST_SCHEMA {
             Some(ManifoldConnectionHubRejectionReason::SchemaMismatch)
-        } else if !owner_evidence_matches(&self.snapshot.policy, request, owner_evidence) {
-            Some(ManifoldConnectionHubRejectionReason::OwnerContextMismatch)
         } else if request.authority_epoch != self.snapshot.state.authority_epoch
             || !id_is_in_epoch(&request.request_id, request.authority_epoch)
         {
@@ -971,9 +1085,20 @@ impl ManifoldConnectionHubAuthority {
                 .applied_request_sha256
                 .iter()
                 .any(|digest| digest == &request_digest)
+            || external_request_replayed(
+                &self.snapshot.state.external_request_fences,
+                &request.operation,
+            )
             || provider_admission_use_replayed(&self.snapshot.audit_events, &request.operation)
         {
             Some(ManifoldConnectionHubRejectionReason::Replay)
+        } else if !owner_evidence_matches(
+            &self.snapshot.policy,
+            &self.snapshot.state,
+            request,
+            owner_evidence,
+        ) {
+            Some(ManifoldConnectionHubRejectionReason::OwnerContextMismatch)
         } else if request.expected_authority_revision != prior {
             Some(ManifoldConnectionHubRejectionReason::StaleAuthorityRevision)
         } else if self.snapshot.applied_request_ids.len() >= MAX_REPLAY_RECORDS
@@ -1081,6 +1206,9 @@ impl ManifoldConnectionHubAuthority {
                 source_epoch_request_digests_sha256: typed_sha256(
                     &self.snapshot.applied_request_sha256,
                 ),
+                retained_external_request_fences_sha256: typed_sha256(
+                    &self.snapshot.state.external_request_fences,
+                ),
                 source_epoch_audit_events_sha256: typed_sha256(&self.snapshot.audit_events),
                 compacted_tombstones_sha256: typed_sha256(&tombstones),
                 resulting_state_sha256: typed_sha256(&self.snapshot.state),
@@ -1103,6 +1231,8 @@ impl ManifoldConnectionHubAuthority {
             resulting_authority_revision: resulting_revision,
             rejection_reason: None,
             session: output.session,
+            trusted_controller: output.trusted_controller,
+            next_external_request_sequence: output.next_external_request_sequence,
             surface_lease: output.surface_lease,
             command_authorization: output.command_authorization,
             cleaned_subject_ids: output.cleaned_subject_ids,
@@ -1165,6 +1295,41 @@ impl ManifoldConnectionHubOwner<'_> {
         )
     }
 
+    /// Applies one authenticated keepalive or surface-command request using
+    /// exact adapter-proven controller, logical-session, transport-epoch, raw
+    /// request-digest, and trusted-clock evidence.
+    ///
+    /// This is the Rust/JNI authority boundary for authenticated controller
+    /// activity. The serialized request alone cannot select this evidence
+    /// mode, and failed/replayed/stale activity never refreshes a deadline.
+    #[must_use]
+    pub fn apply_authenticated_activity(
+        &mut self,
+        request: &ManifoldConnectionHubRequest,
+        evidence: ManifoldConnectionHubAuthenticatedActivityEvidence<'_>,
+    ) -> ManifoldConnectionHubReceipt {
+        self.authority.apply_owned(
+            request,
+            ManifoldConnectionHubOwnerEvidence::AuthenticatedActivity(evidence),
+        )
+    }
+
+    /// Replaces a bearer-authenticated transport without consuming the
+    /// command/keepalive replay sequence. Successful replacement slides the
+    /// exact controller/session deadlines and returns the next sequence so a
+    /// reconnected client can safely resynchronize after a lost receipt.
+    #[must_use]
+    pub fn replace_authenticated_transport(
+        &mut self,
+        request: &ManifoldConnectionHubRequest,
+        evidence: ManifoldConnectionHubAuthenticatedTransportEvidence<'_>,
+    ) -> ManifoldConnectionHubReceipt {
+        self.authority.apply_owned(
+            request,
+            ManifoldConnectionHubOwnerEvidence::AuthenticatedTransport(evidence),
+        )
+    }
+
     /// Advances and compacts ordinary-work history with exact current
     /// admission-owner evidence.
     #[must_use]
@@ -1195,7 +1360,10 @@ impl ManifoldConnectionHubOwnerEvidence<'_> {
                 admission_authority,
                 ..
             } => Some(admission_authority.snapshot()),
-            Self::Lifecycle { .. } | Self::OperatorDecision { .. } => None,
+            Self::Lifecycle { .. }
+            | Self::OperatorDecision { .. }
+            | Self::AuthenticatedActivity(_)
+            | Self::AuthenticatedTransport(_) => None,
         }
     }
 }
@@ -1203,6 +1371,8 @@ impl ManifoldConnectionHubOwnerEvidence<'_> {
 #[derive(Default)]
 struct ApplyOutput {
     session: Option<ManifoldConnectionHubSession>,
+    trusted_controller: Option<ManifoldConnectionHubTrustedController>,
+    next_external_request_sequence: Option<u64>,
     surface_lease: Option<ManifoldConnectionHubSurfaceLease>,
     command_authorization: Option<ManifoldConnectionHubCommandAuthorization>,
     cleaned_subject_ids: Vec<DottedId>,
@@ -1353,17 +1523,26 @@ fn apply_operation(
             transport,
         } => {
             validate_transport(transport, request.requested_at_ms)?;
+            let controller_id = state
+                .sessions
+                .iter()
+                .find(|session| &session.session_id == session_id)
+                .ok_or(ManifoldConnectionHubRejectionReason::SessionNotActive)?
+                .controller_id
+                .clone();
+            let (trusted_controller, _) = slide_authenticated_deadlines(
+                policy,
+                state,
+                request.requested_at_ms,
+                &controller_id,
+                session_id,
+                *expected_transport_epoch,
+            )?;
             let session = state
                 .sessions
                 .iter_mut()
                 .find(|session| &session.session_id == session_id)
                 .ok_or(ManifoldConnectionHubRejectionReason::SessionNotActive)?;
-            if session.expires_at_ms <= request.requested_at_ms {
-                return Err(ManifoldConnectionHubRejectionReason::SessionNotActive);
-            }
-            if session.transport_epoch != *expected_transport_epoch {
-                return Err(ManifoldConnectionHubRejectionReason::TransportEpochMismatch);
-            }
             if session.transport.transport_id == transport.transport_id
                 || session.transport.evidence_id == transport.evidence_id
                 || transport.attached_at_ms < session.transport.attached_at_ms
@@ -1375,8 +1554,40 @@ fn apply_operation(
                 .checked_add(1)
                 .ok_or(ManifoldConnectionHubRejectionReason::TransportEpochMismatch)?;
             session.transport = transport.clone();
+            let resulting_session = session.clone();
+            let next_external_request_sequence = next_external_request_sequence(state, session_id)?;
             Ok(ApplyOutput {
-                session: Some(session.clone()),
+                session: Some(resulting_session),
+                trusted_controller: Some(trusted_controller),
+                next_external_request_sequence: Some(next_external_request_sequence),
+                ..ApplyOutput::default()
+            })
+        }
+        ManifoldConnectionHubOperationRequest::RefreshAuthenticatedActivity {
+            controller_id,
+            session_id,
+            expected_transport_epoch,
+            external_request_sequence,
+            external_request_sha256,
+        } => {
+            let (trusted_controller, session, next_external_request_sequence) =
+                refresh_authenticated_deadlines(
+                    policy,
+                    state,
+                    request,
+                    ManifoldConnectionHubAuthenticatedActivityEvidence {
+                        observed_at_ms: request.requested_at_ms,
+                        controller_id,
+                        session_id,
+                        transport_epoch: *expected_transport_epoch,
+                        external_request_sequence: *external_request_sequence,
+                        external_request_sha256,
+                    },
+                )?;
+            Ok(ApplyOutput {
+                session: Some(session),
+                trusted_controller: Some(trusted_controller),
+                next_external_request_sequence: Some(next_external_request_sequence),
                 ..ApplyOutput::default()
             })
         }
@@ -1611,9 +1822,14 @@ fn apply_operation(
             typed_params_schema_id,
             typed_params_schema_sha256,
             typed_params_sha256,
+            external_request_sequence,
+            external_request_sha256,
         } => {
             if !is_sha256(typed_params_schema_sha256) || !is_sha256(typed_params_sha256) {
                 return Err(ManifoldConnectionHubRejectionReason::InvalidTypedParamsDigest);
+            }
+            if !is_sha256(external_request_sha256) {
+                return Err(ManifoldConnectionHubRejectionReason::InvalidExternalRequestDigest);
             }
             let session = active_session(state, session_id, request.requested_at_ms)?;
             if session.transport_epoch != *expected_transport_epoch {
@@ -1680,7 +1896,25 @@ fn apply_operation(
                 typed_params_sha256: typed_params_sha256.clone(),
                 proves_application_effect: false,
             };
+            let controller_id = session.controller_id.clone();
+            let (trusted_controller, refreshed_session, next_external_request_sequence) =
+                refresh_authenticated_deadlines(
+                    policy,
+                    state,
+                    request,
+                    ManifoldConnectionHubAuthenticatedActivityEvidence {
+                        observed_at_ms: request.requested_at_ms,
+                        controller_id: &controller_id,
+                        session_id,
+                        transport_epoch: *expected_transport_epoch,
+                        external_request_sequence: *external_request_sequence,
+                        external_request_sha256,
+                    },
+                )?;
             Ok(ApplyOutput {
+                session: Some(refreshed_session),
+                trusted_controller: Some(trusted_controller),
+                next_external_request_sequence: Some(next_external_request_sequence),
                 command_authorization: Some(authorization),
                 ..ApplyOutput::default()
             })
@@ -1911,6 +2145,9 @@ fn cleanup_session(
     reason: &DottedId,
     output: &mut ApplyOutput,
 ) -> Result<(), ManifoldConnectionHubRejectionReason> {
+    state
+        .external_request_fences
+        .retain(|fence| &fence.session_id != session_id);
     let leases = state
         .surface_leases
         .iter()
@@ -2056,6 +2293,139 @@ fn checked_expiry(
     Ok(expiry)
 }
 
+fn refresh_authenticated_deadlines(
+    policy: &ManifoldConnectionHubPolicy,
+    state: &mut ManifoldConnectionHubState,
+    request: &ManifoldConnectionHubRequest,
+    evidence: ManifoldConnectionHubAuthenticatedActivityEvidence<'_>,
+) -> Result<
+    (
+        ManifoldConnectionHubTrustedController,
+        ManifoldConnectionHubSession,
+        u64,
+    ),
+    ManifoldConnectionHubRejectionReason,
+> {
+    if !is_sha256(evidence.external_request_sha256) {
+        return Err(ManifoldConnectionHubRejectionReason::InvalidExternalRequestDigest);
+    }
+    let fence_position = state
+        .external_request_fences
+        .iter()
+        .position(|fence| &fence.session_id == evidence.session_id);
+    let expected_external_request_sequence = match fence_position {
+        Some(position) => {
+            if request.requested_at_ms
+                < state.external_request_fences[position].latest_accepted_at_ms
+            {
+                return Err(ManifoldConnectionHubRejectionReason::TrustedTimeRegression);
+            }
+            state.external_request_fences[position]
+                .latest_external_request_sequence
+                .checked_add(1)
+                .ok_or(ManifoldConnectionHubRejectionReason::ExternalRequestSequenceMismatch)?
+        }
+        None => 1,
+    };
+    if evidence.external_request_sequence != expected_external_request_sequence {
+        return Err(ManifoldConnectionHubRejectionReason::ExternalRequestSequenceMismatch);
+    }
+    let (controller, session) = slide_authenticated_deadlines(
+        policy,
+        state,
+        evidence.observed_at_ms,
+        evidence.controller_id,
+        evidence.session_id,
+        evidence.transport_epoch,
+    )?;
+    let fence = ManifoldConnectionHubExternalRequestFence {
+        schema_id: schema(EXTERNAL_REQUEST_FENCE_SCHEMA),
+        session_id: evidence.session_id.clone(),
+        controller_id: evidence.controller_id.clone(),
+        latest_external_request_sequence: evidence.external_request_sequence,
+        latest_external_request_sha256: evidence.external_request_sha256.to_owned(),
+        latest_accepted_request_id: request.request_id.clone(),
+        latest_accepted_authority_epoch: request.authority_epoch,
+        latest_accepted_at_ms: request.requested_at_ms,
+    };
+    if let Some(position) = fence_position {
+        state.external_request_fences[position] = fence;
+    } else {
+        state.external_request_fences.push(fence);
+    }
+    Ok((
+        controller,
+        session,
+        evidence
+            .external_request_sequence
+            .checked_add(1)
+            .ok_or(ManifoldConnectionHubRejectionReason::ExternalRequestSequenceMismatch)?,
+    ))
+}
+
+fn slide_authenticated_deadlines(
+    policy: &ManifoldConnectionHubPolicy,
+    state: &mut ManifoldConnectionHubState,
+    observed_at_ms: u64,
+    controller_id: &DottedId,
+    session_id: &DottedId,
+    expected_transport_epoch: u64,
+) -> Result<
+    (
+        ManifoldConnectionHubTrustedController,
+        ManifoldConnectionHubSession,
+    ),
+    ManifoldConnectionHubRejectionReason,
+> {
+    let controller_position = state
+        .trusted_controllers
+        .iter()
+        .position(|controller| &controller.controller_id == controller_id)
+        .ok_or(ManifoldConnectionHubRejectionReason::ControllerNotTrusted)?;
+    let session_position = state
+        .sessions
+        .iter()
+        .position(|session| &session.session_id == session_id)
+        .ok_or(ManifoldConnectionHubRejectionReason::SessionNotActive)?;
+    let controller = &state.trusted_controllers[controller_position];
+    let session = &state.sessions[session_position];
+    if controller.expires_at_ms <= observed_at_ms {
+        return Err(ManifoldConnectionHubRejectionReason::ControllerNotTrusted);
+    }
+    if session.controller_id != *controller_id || session.expires_at_ms <= observed_at_ms {
+        return Err(ManifoldConnectionHubRejectionReason::SessionNotActive);
+    }
+    if session.transport_epoch != expected_transport_epoch {
+        return Err(ManifoldConnectionHubRejectionReason::TransportEpochMismatch);
+    }
+    if observed_at_ms < session.transport.attached_at_ms {
+        return Err(ManifoldConnectionHubRejectionReason::TrustedTimeRegression);
+    }
+    let controller_expires_at_ms = checked_expiry(
+        observed_at_ms,
+        policy.authenticated_activity_controller_ttl_ms,
+        policy.max_controller_ttl_ms,
+        None,
+    )?;
+    let session_expires_at_ms = checked_expiry(
+        observed_at_ms,
+        policy.authenticated_activity_session_ttl_ms,
+        policy.max_session_ttl_ms,
+        Some(controller_expires_at_ms),
+    )?;
+    state.trusted_controllers[controller_position].expires_at_ms = state.trusted_controllers
+        [controller_position]
+        .expires_at_ms
+        .max(controller_expires_at_ms);
+    state.sessions[session_position].expires_at_ms = state.sessions[session_position]
+        .expires_at_ms
+        .max(session_expires_at_ms);
+    Ok((
+        state.trusted_controllers[controller_position].clone(),
+        state.sessions[session_position].clone(),
+    ))
+}
+
 fn validate_transport(
     transport: &ManifoldConnectionHubTransportBinding,
     now_ms: u64,
@@ -2086,6 +2456,8 @@ fn rejected_receipt(
         resulting_authority_revision: revision,
         rejection_reason: Some(reason),
         session: None,
+        trusted_controller: None,
+        next_external_request_sequence: None,
         surface_lease: None,
         command_authorization: None,
         cleaned_subject_ids: Vec::new(),
@@ -2118,6 +2490,12 @@ fn validate_policy(policy: &ManifoldConnectionHubPolicy) -> Result<(), ManifoldC
         || policy.max_session_ttl_ms > MAX_SESSION_TTL_MS
         || policy.max_surface_lease_ttl_ms == 0
         || policy.max_surface_lease_ttl_ms > MAX_SURFACE_LEASE_TTL_MS
+        || policy.authenticated_activity_controller_ttl_ms == 0
+        || policy.authenticated_activity_controller_ttl_ms > policy.max_controller_ttl_ms
+        || policy.authenticated_activity_session_ttl_ms == 0
+        || policy.authenticated_activity_session_ttl_ms > policy.max_session_ttl_ms
+        || policy.authenticated_activity_session_ttl_ms
+            > policy.authenticated_activity_controller_ttl_ms
     {
         return Err(ManifoldConnectionHubError::InvalidPolicy("unsafe_lifetime"));
     }
@@ -2215,6 +2593,7 @@ fn validate_snapshot(
                     != Some(checkpoint.resulting_applied_request_count)
                 || !is_sha256(&checkpoint.source_epoch_request_ids_sha256)
                 || !is_sha256(&checkpoint.source_epoch_request_digests_sha256)
+                || !is_sha256(&checkpoint.retained_external_request_fences_sha256)
                 || !is_sha256(&checkpoint.source_epoch_audit_events_sha256)
                 || !is_sha256(&checkpoint.compacted_tombstones_sha256)
                 || !is_sha256(&checkpoint.resulting_state_sha256)
@@ -2340,12 +2719,14 @@ fn validate_state(
         || state.providers.len() > MAX_PROVIDERS
         || state.surfaces.len() > MAX_SURFACES
         || state.surface_leases.len() > MAX_SURFACE_LEASES
+        || state.external_request_fences.len() > MAX_SESSIONS
         || state.tombstones.len() > MAX_TOMBSTONES
         || !is_sorted_unique_by(&state.trusted_controllers, |value| &value.controller_id)
         || !is_sorted_unique_by(&state.sessions, |value| &value.session_id)
         || !is_sorted_unique_by(&state.providers, |value| &value.provider_instance_id)
         || !is_sorted_unique_by(&state.surfaces, |value| &value.surface_id)
         || !is_sorted_unique_by(&state.surface_leases, |value| &value.lease_id)
+        || !is_sorted_unique_by(&state.external_request_fences, |value| &value.session_id)
     {
         return Err(ManifoldConnectionHubError::InvalidSnapshot(
             "state_bounds_or_order",
@@ -2480,6 +2861,28 @@ fn validate_state(
             return Err(ManifoldConnectionHubError::InvalidSnapshot("lease_damage"));
         }
     }
+    for fence in &state.external_request_fences {
+        let session = state
+            .sessions
+            .iter()
+            .find(|session| session.session_id == fence.session_id)
+            .ok_or(ManifoldConnectionHubError::InvalidSnapshot(
+                "orphan_external_request_fence_session",
+            ))?;
+        if fence.schema_id.as_str() != EXTERNAL_REQUEST_FENCE_SCHEMA
+            || fence.controller_id != session.controller_id
+            || fence.latest_external_request_sequence == 0
+            || !is_sha256(&fence.latest_external_request_sha256)
+            || fence.latest_accepted_authority_epoch == 0
+            || fence.latest_accepted_authority_epoch > state.authority_epoch
+            || fence.latest_accepted_at_ms < session.opened_at_ms
+            || !id_is_in_or_before_epoch(&fence.latest_accepted_request_id, state.authority_epoch)
+        {
+            return Err(ManifoldConnectionHubError::InvalidSnapshot(
+                "external_request_fence_damage",
+            ));
+        }
+    }
     let mut tombstone_keys = BTreeSet::new();
     for tombstone in &state.tombstones {
         let key = format!("{:?}:{}", tombstone.subject_kind, tombstone.subject_id);
@@ -2512,6 +2915,9 @@ fn canonicalize_state(state: &mut ManifoldConnectionHubState) {
     state
         .surface_leases
         .sort_by(|left, right| left.lease_id.cmp(&right.lease_id));
+    state
+        .external_request_fences
+        .sort_by(|left, right| left.session_id.cmp(&right.session_id));
     state.tombstones.sort_by(|left, right| {
         format!("{:?}:{}", left.subject_kind, left.subject_id)
             .cmp(&format!("{:?}:{}", right.subject_kind, right.subject_id))
@@ -2529,8 +2935,10 @@ fn is_retired(
         .any(|entry| entry.subject_kind == kind && &entry.subject_id == id)
 }
 
+#[allow(clippy::too_many_lines)]
 fn owner_evidence_matches(
     policy: &ManifoldConnectionHubPolicy,
+    state: &ManifoldConnectionHubState,
     request: &ManifoldConnectionHubRequest,
     owner_evidence: ManifoldConnectionHubOwnerEvidence<'_>,
 ) -> bool {
@@ -2540,6 +2948,12 @@ fn owner_evidence_matches(
         | ManifoldConnectionHubOwnerEvidence::ProviderAdmission { observed_at_ms, .. }
         | ManifoldConnectionHubOwnerEvidence::HistoryRollover { observed_at_ms, .. } => {
             observed_at_ms
+        }
+        ManifoldConnectionHubOwnerEvidence::AuthenticatedActivity(evidence) => {
+            evidence.observed_at_ms
+        }
+        ManifoldConnectionHubOwnerEvidence::AuthenticatedTransport(evidence) => {
+            evidence.observed_at_ms
         }
     };
     if request.requested_at_ms != observed_at_ms {
@@ -2575,10 +2989,63 @@ fn owner_evidence_matches(
             },
         ) => admission_authority.snapshot().authority_id == policy.admission_authority_id,
         (
+            ManifoldConnectionHubOperationRequest::RefreshAuthenticatedActivity {
+                controller_id,
+                session_id,
+                expected_transport_epoch,
+                external_request_sequence,
+                external_request_sha256,
+            },
+            ManifoldConnectionHubOwnerEvidence::AuthenticatedActivity(evidence),
+        ) => {
+            controller_id == evidence.controller_id
+                && session_id == evidence.session_id
+                && expected_transport_epoch == &evidence.transport_epoch
+                && external_request_sequence == &evidence.external_request_sequence
+                && external_request_sha256 == evidence.external_request_sha256
+        }
+        (
+            ManifoldConnectionHubOperationRequest::AuthorizeSurfaceCommand {
+                session_id,
+                expected_transport_epoch,
+                external_request_sequence,
+                external_request_sha256,
+                ..
+            },
+            ManifoldConnectionHubOwnerEvidence::AuthenticatedActivity(evidence),
+        ) => {
+            session_id == evidence.session_id
+                && expected_transport_epoch == &evidence.transport_epoch
+                && external_request_sequence == &evidence.external_request_sequence
+                && external_request_sha256 == evidence.external_request_sha256
+                && state.sessions.iter().any(|session| {
+                    &session.session_id == evidence.session_id
+                        && &session.controller_id == evidence.controller_id
+                })
+        }
+        (
+            ManifoldConnectionHubOperationRequest::ReplaceTransport {
+                session_id,
+                expected_transport_epoch,
+                ..
+            },
+            ManifoldConnectionHubOwnerEvidence::AuthenticatedTransport(evidence),
+        ) => {
+            session_id == evidence.session_id
+                && expected_transport_epoch == &evidence.transport_epoch
+                && state.sessions.iter().any(|session| {
+                    &session.session_id == evidence.session_id
+                        && &session.controller_id == evidence.controller_id
+                })
+        }
+        (
             ManifoldConnectionHubOperationRequest::TrustController { .. }
             | ManifoldConnectionHubOperationRequest::ForgetController { .. }
             | ManifoldConnectionHubOperationRequest::RegisterProvider { .. }
-            | ManifoldConnectionHubOperationRequest::RolloverHistory { .. },
+            | ManifoldConnectionHubOperationRequest::RolloverHistory { .. }
+            | ManifoldConnectionHubOperationRequest::ReplaceTransport { .. }
+            | ManifoldConnectionHubOperationRequest::RefreshAuthenticatedActivity { .. }
+            | ManifoldConnectionHubOperationRequest::AuthorizeSurfaceCommand { .. },
             _,
         ) => false,
         (_, ManifoldConnectionHubOwnerEvidence::Lifecycle { .. }) => true,
@@ -2601,6 +3068,9 @@ fn operation_label(
         }
         ManifoldConnectionHubOperationRequest::ReplaceTransport { .. } => {
             ManifoldConnectionHubOperation::ReplaceTransport
+        }
+        ManifoldConnectionHubOperationRequest::RefreshAuthenticatedActivity { .. } => {
+            ManifoldConnectionHubOperation::RefreshAuthenticatedActivity
         }
         ManifoldConnectionHubOperationRequest::RegisterProvider { .. } => {
             ManifoldConnectionHubOperation::RegisterProvider
@@ -2666,6 +3136,52 @@ fn provider_admission_use_replayed(
             } if applied == admission_use_request_id
         )
     })
+}
+
+fn external_request_replayed(
+    fences: &[ManifoldConnectionHubExternalRequestFence],
+    operation: &ManifoldConnectionHubOperationRequest,
+) -> bool {
+    let (session_id, sequence, digest) = match operation {
+        ManifoldConnectionHubOperationRequest::RefreshAuthenticatedActivity {
+            session_id,
+            external_request_sequence,
+            external_request_sha256,
+            ..
+        }
+        | ManifoldConnectionHubOperationRequest::AuthorizeSurfaceCommand {
+            session_id,
+            external_request_sequence,
+            external_request_sha256,
+            ..
+        } => (
+            session_id,
+            *external_request_sequence,
+            external_request_sha256,
+        ),
+        _ => return false,
+    };
+    fences.iter().any(|fence| {
+        &fence.session_id == session_id
+            && (sequence <= fence.latest_external_request_sequence
+                || digest == &fence.latest_external_request_sha256)
+    })
+}
+
+fn next_external_request_sequence(
+    state: &ManifoldConnectionHubState,
+    session_id: &DottedId,
+) -> Result<u64, ManifoldConnectionHubRejectionReason> {
+    state
+        .external_request_fences
+        .iter()
+        .find(|fence| &fence.session_id == session_id)
+        .map_or(Ok(1), |fence| {
+            fence
+                .latest_external_request_sequence
+                .checked_add(1)
+                .ok_or(ManifoldConnectionHubRejectionReason::ExternalRequestSequenceMismatch)
+        })
 }
 
 fn typed_sha256<T: Serialize>(value: &T) -> String {

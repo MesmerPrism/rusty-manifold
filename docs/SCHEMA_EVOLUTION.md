@@ -14,3 +14,10 @@ Manifold starts with JSON fixtures and deterministic schema export.
 
 Binary formats, HTTP descriptions, event descriptions, and language bindings
 can be generated later from stable Manifold contracts.
+
+Connection Hub internal policy/request/state/snapshot v3 is an explicit
+pre-release transition from v2. It adds fixed authenticated-activity sliding
+windows and exact per-session external sequence fences. No v2 snapshot
+migration is inferred because v2 lacks the replay lineage needed to construct
+those fences. Public Hub WebSocket v1 remains a separate byte-exact contract;
+rollover-safe persistent sessions use an additive v2 command/keepalive surface.

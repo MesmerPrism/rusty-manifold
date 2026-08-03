@@ -1,7 +1,7 @@
 {
-  "$schema": "rusty.manifold.connection_hub.snapshot.v2",
+  "$schema": "rusty.manifold.connection_hub.snapshot.v3",
   "policy": {
-    "$schema": "rusty.manifold.connection_hub.policy.v2",
+    "$schema": "rusty.manifold.connection_hub.policy.v3",
     "authority_id": "authority.connection-hub.synthetic",
     "admission_authority_id": "authority.admission.synthetic",
     "broker_product_lock_id": "lock.broker.connection-hub.standalone",
@@ -39,10 +39,12 @@
     ],
     "max_controller_ttl_ms": 100000,
     "max_session_ttl_ms": 80000,
-    "max_surface_lease_ttl_ms": 60000
+    "max_surface_lease_ttl_ms": 60000,
+    "authenticated_activity_controller_ttl_ms": 90000,
+    "authenticated_activity_session_ttl_ms": 70000
   },
   "state": {
-    "$schema": "rusty.manifold.connection_hub.state.v2",
+    "$schema": "rusty.manifold.connection_hub.state.v3",
     "authority_id": "authority.connection-hub.synthetic",
     "authority_revision": 1,
     "authority_epoch": 1,
@@ -53,6 +55,7 @@
     "providers": [],
     "surfaces": [],
     "surface_leases": [],
+    "external_request_fences": [],
     "tombstones": []
   },
   "applied_request_ids": [],

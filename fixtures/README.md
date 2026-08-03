@@ -127,7 +127,9 @@ and safe to use in tests, generated schemas, documentation, and clients.
   listener, external asset, or player effect is included.
 - `connection-hub/`: deterministic exact provider/contract/command-capability
   policy with admission and packaged Broker product-lock binding, initial
-  restart snapshot, bounded epoch-scoped trust request, canonical typed-command
+  v3 restart snapshot, bounded epoch-scoped trust request, policy-fixed
+  authenticated-activity sliding windows, constant-size per-session external
+  request sequence/digest fencing, canonical typed-command
   parameter schema/digest request, shared cross-language canonical JSON vectors,
   explicit zero-argument schema, malformed digest damage, and unknown-field
   damage for durable controller/session/provider/surface

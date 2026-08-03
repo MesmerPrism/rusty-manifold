@@ -117,7 +117,10 @@ it must not define Lattice relation semantics or default to legacy
   mutation boundary must retain exact admission/product-lock owners, derive
   per-command parameter schema bindings internally, treat admission expiry as
   registration-credential expiry rather than provider-process death, and use
-  audited epoch rollover rather than exhausting ordinary-work history. Sockets,
+  audited epoch rollover rather than exhausting ordinary-work history. Sliding
+  authenticated deadlines and external command replay use one exact sequence
+  high-water fence per live logical session; reconnect does not consume the
+  sequence and must report the next value. Sockets,
   Android services, UI documents, pairing secrets, high-rate data, and app
   effects remain downstream.
 - Broker product features resolve through `rusty-manifold-broker-product` into

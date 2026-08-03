@@ -35,6 +35,13 @@ explicit Binder/process death cleanup does. Quest owns the foreground service, l
 identity projection, UI delivery, and effective app receipts. Transport
 replacement advances an epoch inside one logical session; it does not create a
 parallel Java session authority.
+Successful sealed authenticated activity slides the exact controller and
+session deadlines under fixed product policy. One monotonic external-request
+high-water fence per live session survives history rollover and restart;
+authenticated reconnect does not consume it and returns the next sequence.
+This keeps replay state O(active sessions) while allowing long-lived active
+connections. Public Hub wire v1 remains byte-exact compatibility input; the
+additive rollover-safe command/keepalive v2 supplies the monotonic sequence.
 
 Broker Runtime Host leases are derived state, not a second lease authority.
 Normal Broker construction and restart retain a synchronized

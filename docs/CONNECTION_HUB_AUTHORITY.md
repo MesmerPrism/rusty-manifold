@@ -27,6 +27,10 @@ The accepted snapshot owns:
   operator evidence, sorted capabilities, and an explicit expiry;
 - logical connection sessions with a stable id and an initial transport epoch
   of one;
+- policy-fixed sliding controller/session deadlines after successful exact
+  authenticated activity. Authenticated transport replacement is repeatable,
+  slides the same deadlines, consumes no command sequence, and reports the
+  next sequence needed by the controller;
 - replacement transport evidence whose epoch advances exactly once while the
   logical session and its surface leases remain active;
 - provider instances proven by a current accepted
@@ -50,6 +54,11 @@ The accepted snapshot owns:
   surface unregister, lease release, and trusted-clock expiry cleanup;
 - epoch-scoped replay ids, exact request digests, tombstones, revision lineage,
   chained history checkpoints, and audit.
+- one constant-size external-request high-water fence per live session. It
+  retains the exact latest raw-request SHA-256 and sequence, requires the next
+  accepted command or JSON keepalive to use exactly `sequence + 1`, survives
+  history rollover and restart, and is removed only with terminal session
+  cleanup.
 
 Provider death removes that provider's surfaces and every derivative lease.
 Admission-token expiry alone does not remove a live provider or cap a surface
@@ -76,6 +85,13 @@ providers, surfaces, and leases byte-exact.
 Every request id and newly created durable object id is prefixed by its exact
 authority epoch. A prior-epoch request remains rejected even if a caller
 changes the serialized epoch field, because its id prefix no longer matches.
+Live controllers, sessions, providers, surfaces, and leases keep their original
+ids and remain addressable after rollover; only newly created identities use
+the new epoch. The per-session external-request high-water fence is not
+compacted. Therefore re-deriving a fresh internal request id in a new epoch
+cannot make an exact old public command fresh: its retained sequence is at or
+below the high-water mark. The fence is O(live sessions), not O(commands), so
+active use has no finite command-count lifetime.
 Provider admission replay is independently fenced by the exact current
 admission-authority revision captured at rollover. A use event at or below that
 floor can never register a new provider. These namespace and revision fences,
@@ -150,16 +166,47 @@ binding internally, then calls this owner. A controller never supplies an
 authority epoch, product-lock fingerprint, admission revision, or parameter-
 schema digest.
 
+Persistent rollover-safe sessions use an additive public
+`surface_command.v2`/JSON-keepalive v2 contract with a positive monotonic
+`request_sequence`; v1 remains byte-exact compatibility input and is not
+silently reinterpreted as v2 replay evidence. The first accepted v2 request for
+a session uses sequence one. Each accepted command/keepalive consumes exactly
+one sequence and returns `next_external_request_sequence`. A rejected request
+does not consume it. A bearer-authenticated reconnect calls repeatable
+transport replacement, consumes no sequence, and returns the exact next value,
+so a client that lost a receipt reconnects rather than guessing or persisting a
+potentially stale counter. The adapter hashes the exact canonical public
+request bytes and supplies that lowercase SHA-256 with the sequence.
+
+The exact Rust/JNI authority calls are:
+
+- `owner.replace_authenticated_transport(request,
+  ManifoldConnectionHubAuthenticatedTransportEvidence { ... })` for
+  authenticated reconnect; and
+- `owner.apply_authenticated_activity(request,
+  ManifoldConnectionHubAuthenticatedActivityEvidence { ... })` for v2 commands
+  and JSON keepalives.
+
+Serialized fields alone cannot select either evidence mode. Controller,
+session, transport epoch, time, sequence, and digest must match the sealed
+adapter evidence exactly. Failed authentication, stale transport, expired or
+revoked state, sequence replay/gap, malformed digest, command rejection, and
+owner-evidence substitution leave accepted state and deadlines unchanged.
+
 ## Authority schema transition
 
-The internal policy/request/state/snapshot family advances from v1 to v2.
+The internal policy/request/state/snapshot family advances from v2 to v3 for
+sliding authenticated activity and the per-session external-request fence.
 There is deliberately no field-inference migration: v1 snapshots do not carry
 the exact product-lock bytes, admission revision floor, command schema bytes,
-or replay namespace needed to construct v2 safely. The current pre-release Hub
-must initialize a fresh v2 authority from exact packaged inputs before first
-deployment. A v1 build may be rolled back only with its untouched v1 snapshot;
-after any accepted v2 mutation, downgrade is prohibited. The public Quest/
-Hostess WebSocket v1 is a separate contract and remains compatible.
+or replay namespace needed to construct v2 safely, and v2 snapshots do not
+carry authenticated sliding policy or exact external sequence lineage needed
+to construct v3 safely. The current pre-release Hub must initialize a fresh v3
+authority from exact packaged inputs before first deployment. Older builds may
+be rolled back only with their untouched matching snapshot; after any accepted
+v3 mutation, downgrade is prohibited. Public Quest/Hostess WebSocket v1 is a
+separate byte-exact compatibility contract; persistent replay-safe operation is
+the additive v2 surface described above.
 
 The additive broker product feature `connection_hub` resolves the standalone
 authority, WebSocket transport adapter, low-rate status stream, closed Hub
@@ -178,6 +225,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\check_all.ps1
 
 Focused tests prove transport replacement with logical-session continuity,
 surface-lease continuity, stale-epoch rejection, command replay protection,
+sliding activity beyond 24 hours, reconnect resynchronization, restart
+continuity, long-offline fail-closed expiry, permanent revoke, constant-size
+sequence state and terminal cleanup, exact raw-command replay rejection after
+rollover, prior-epoch live-subject addressing and current-epoch-only creation,
 provider-admission/identity/provider-family/contract/capability substitution
 rejection, exact owner/product/admission bindings, provider lifetime beyond its
 registration credential, command-schema substitution rejection, canonical

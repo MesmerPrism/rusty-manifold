@@ -131,6 +131,7 @@ fn connection_hub_entries() -> Vec<SchemaEntry> {
     let request = &[
         "fixtures/connection-hub/trust-controller-request.json",
         "fixtures/connection-hub/trust-controller-request.unknown-field.damaged.json",
+        "fixtures/connection-hub/refresh-authenticated-activity-request.json",
         "fixtures/connection-hub/authorize-command-request.json",
         "fixtures/connection-hub/authorize-command-request.bad-digest.damaged.json",
     ];
@@ -160,27 +161,57 @@ fn connection_hub_entries() -> Vec<SchemaEntry> {
         ),
         entry(
             "rusty.manifold.connection_hub.policy.v2",
+            "LegacyManifoldConnectionHubPolicyV2",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.connection_hub.request.v2",
+            "LegacyManifoldConnectionHubRequestV2",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.connection_hub.state.v2",
+            "LegacyManifoldConnectionHubStateV2",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.connection_hub.snapshot.v2",
+            "LegacyManifoldConnectionHubSnapshotV2",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.connection_hub.policy.v3",
             "ManifoldConnectionHubPolicy",
             policy,
         ),
         entry(
-            "rusty.manifold.connection_hub.request.v2",
+            "rusty.manifold.connection_hub.request.v3",
             "ManifoldConnectionHubRequest",
             request,
         ),
         entry(
-            "rusty.manifold.connection_hub.state.v2",
+            "rusty.manifold.connection_hub.state.v3",
             "ManifoldConnectionHubState",
             snapshot,
         ),
         entry(
-            "rusty.manifold.connection_hub.snapshot.v2",
+            "rusty.manifold.connection_hub.snapshot.v3",
             "ManifoldConnectionHubSnapshot",
             snapshot,
         ),
         entry(
             "rusty.manifold.connection_hub.history_checkpoint.v1",
+            "LegacyManifoldConnectionHubHistoryCheckpointV1",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.connection_hub.history_checkpoint.v2",
             "ManifoldConnectionHubHistoryCheckpoint",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.connection_hub.external_request_fence.v1",
+            "ManifoldConnectionHubExternalRequestFence",
             &[],
         ),
         entry(

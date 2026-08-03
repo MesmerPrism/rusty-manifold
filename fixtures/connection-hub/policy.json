@@ -1,5 +1,5 @@
 {
-  "$schema": "rusty.manifold.connection_hub.policy.v2",
+  "$schema": "rusty.manifold.connection_hub.policy.v3",
   "authority_id": "authority.connection-hub.synthetic",
   "admission_authority_id": "authority.admission.synthetic",
   "broker_product_lock_id": "lock.broker.connection-hub.standalone",
@@ -37,5 +37,7 @@
   ],
   "max_controller_ttl_ms": 100000,
   "max_session_ttl_ms": 80000,
-  "max_surface_lease_ttl_ms": 60000
+  "max_surface_lease_ttl_ms": 60000,
+  "authenticated_activity_controller_ttl_ms": 90000,
+  "authenticated_activity_session_ttl_ms": 70000
 }
