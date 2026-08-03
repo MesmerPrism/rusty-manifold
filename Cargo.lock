@@ -640,6 +640,7 @@ name = "rusty-manifold-connection-hub"
 version = "0.1.0"
 dependencies = [
  "rusty-manifold-admission",
+ "rusty-manifold-broker-product",
  "rusty-manifold-model",
  "serde",
  "serde_json",

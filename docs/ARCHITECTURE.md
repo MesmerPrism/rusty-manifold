@@ -27,7 +27,11 @@ mutate accepted state directly.
 The standalone Connection Hub is an additive Manifold authority family. It
 owns durable controller trust, logical sessions, transport epochs, admitted
 provider/surface state, derivative surface leases, replay, cleanup, restart,
-and audit. Quest owns the foreground service, listener/socket, platform
+and audit. Its owner boundary binds the exact admission authority and packaged
+Broker product lock, fences replay through authority epochs and admission
+revision floors, and binds every command to exact typed-parameter schema bytes.
+Short-lived admission expiry does not end an already admitted live provider;
+explicit Binder/process death cleanup does. Quest owns the foreground service, listener/socket, platform
 identity projection, UI delivery, and effective app receipts. Transport
 replacement advances an epoch inside one logical session; it does not create a
 parallel Java session authority.

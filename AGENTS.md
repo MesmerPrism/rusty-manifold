@@ -113,7 +113,11 @@ it must not define Lattice relation semantics or default to legacy
 - Durable standalone connection products compose trusted controller records,
   logical sessions, monotonic transport epochs, separately admitted provider
   instances, command-closed UI surfaces, derivative surface leases, replay,
-  cleanup, and restart audit through `rusty-manifold-connection-hub`. Sockets,
+  cleanup, and restart audit through `rusty-manifold-connection-hub`. Its
+  mutation boundary must retain exact admission/product-lock owners, derive
+  per-command parameter schema bindings internally, treat admission expiry as
+  registration-credential expiry rather than provider-process death, and use
+  audited epoch rollover rather than exhausting ordinary-work history. Sockets,
   Android services, UI documents, pairing secrets, high-rate data, and app
   effects remain downstream.
 - Broker product features resolve through `rusty-manifold-broker-product` into

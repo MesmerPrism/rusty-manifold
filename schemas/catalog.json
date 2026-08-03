@@ -1154,13 +1154,33 @@
     },
     {
       "schema_id": "rusty.manifold.connection_hub.policy.v1",
+      "rust_type": "LegacyManifoldConnectionHubPolicyV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.request.v1",
+      "rust_type": "LegacyManifoldConnectionHubRequestV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.state.v1",
+      "rust_type": "LegacyManifoldConnectionHubStateV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.snapshot.v1",
+      "rust_type": "LegacyManifoldConnectionHubSnapshotV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.policy.v2",
       "rust_type": "ManifoldConnectionHubPolicy",
       "fixture_paths": [
         "fixtures/connection-hub/policy.json"
       ]
     },
     {
-      "schema_id": "rusty.manifold.connection_hub.request.v1",
+      "schema_id": "rusty.manifold.connection_hub.request.v2",
       "rust_type": "ManifoldConnectionHubRequest",
       "fixture_paths": [
         "fixtures/connection-hub/trust-controller-request.json",
@@ -1170,17 +1190,36 @@
       ]
     },
     {
-      "schema_id": "rusty.manifold.connection_hub.state.v1",
+      "schema_id": "rusty.manifold.connection_hub.state.v2",
       "rust_type": "ManifoldConnectionHubState",
       "fixture_paths": [
         "fixtures/connection-hub/initial-snapshot.json"
       ]
     },
     {
-      "schema_id": "rusty.manifold.connection_hub.snapshot.v1",
+      "schema_id": "rusty.manifold.connection_hub.snapshot.v2",
       "rust_type": "ManifoldConnectionHubSnapshot",
       "fixture_paths": [
         "fixtures/connection-hub/initial-snapshot.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.history_checkpoint.v1",
+      "rust_type": "ManifoldConnectionHubHistoryCheckpoint",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.typed_params.empty.v1",
+      "rust_type": "EmptyTypedParams",
+      "fixture_paths": [
+        "fixtures/connection-hub/typed-params-empty.schema.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.typed_params_canonical_vectors.v1",
+      "rust_type": "CanonicalTypedParamsVectors",
+      "fixture_paths": [
+        "fixtures/connection-hub/typed-params-canonical-vectors.v1.json"
       ]
     },
     {

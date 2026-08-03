@@ -134,26 +134,64 @@ fn connection_hub_entries() -> Vec<SchemaEntry> {
         "fixtures/connection-hub/authorize-command-request.json",
         "fixtures/connection-hub/authorize-command-request.bad-digest.damaged.json",
     ];
+    let empty_typed_params = &["fixtures/connection-hub/typed-params-empty.schema.json"];
+    let canonical_typed_params =
+        &["fixtures/connection-hub/typed-params-canonical-vectors.v1.json"];
     vec![
         entry(
             "rusty.manifold.connection_hub.policy.v1",
+            "LegacyManifoldConnectionHubPolicyV1",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.connection_hub.request.v1",
+            "LegacyManifoldConnectionHubRequestV1",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.connection_hub.state.v1",
+            "LegacyManifoldConnectionHubStateV1",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.connection_hub.snapshot.v1",
+            "LegacyManifoldConnectionHubSnapshotV1",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.connection_hub.policy.v2",
             "ManifoldConnectionHubPolicy",
             policy,
         ),
         entry(
-            "rusty.manifold.connection_hub.request.v1",
+            "rusty.manifold.connection_hub.request.v2",
             "ManifoldConnectionHubRequest",
             request,
         ),
         entry(
-            "rusty.manifold.connection_hub.state.v1",
+            "rusty.manifold.connection_hub.state.v2",
             "ManifoldConnectionHubState",
             snapshot,
         ),
         entry(
-            "rusty.manifold.connection_hub.snapshot.v1",
+            "rusty.manifold.connection_hub.snapshot.v2",
             "ManifoldConnectionHubSnapshot",
             snapshot,
+        ),
+        entry(
+            "rusty.manifold.connection_hub.history_checkpoint.v1",
+            "ManifoldConnectionHubHistoryCheckpoint",
+            &[],
+        ),
+        entry(
+            "rusty.manifold.connection_hub.typed_params.empty.v1",
+            "EmptyTypedParams",
+            empty_typed_params,
+        ),
+        entry(
+            "rusty.manifold.connection_hub.typed_params_canonical_vectors.v1",
+            "CanonicalTypedParamsVectors",
+            canonical_typed_params,
         ),
     ]
 }

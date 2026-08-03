@@ -126,9 +126,11 @@ and safe to use in tests, generated schemas, documentation, and clients.
   pairing code, password, production token, device-management credential,
   listener, external asset, or player effect is included.
 - `connection-hub/`: deterministic exact provider/contract/command-capability
-  policy, initial restart snapshot, bounded trust request, canonical
-  typed-command-parameter digest request, malformed digest damage, and
-  unknown-field damage for durable controller/session/provider/surface
+  policy with admission and packaged Broker product-lock binding, initial
+  restart snapshot, bounded epoch-scoped trust request, canonical typed-command
+  parameter schema/digest request, shared cross-language canonical JSON vectors,
+  explicit zero-argument schema, malformed digest damage, and unknown-field
+  damage for durable controller/session/provider/surface
   authority. Fixtures contain synthetic public digests and no
   token, pairing code, endpoint, socket, UI document, parameter bytes, or app
   effect.

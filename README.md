@@ -104,7 +104,10 @@ never treats HTTP/WebSocket acknowledgement as a player effect.
 The additive [Connection Hub Authority](docs/CONNECTION_HUB_AUTHORITY.md)
 retains durable controller trust, logical sessions across transport
 replacement, separately admitted app-provider surfaces, derivative surface
-leases, explicit cleanup, replay, restart, and audit. It generalizes the
+leases, sealed owner/admission/product-lock bindings, per-command typed schemas,
+explicit cleanup, epoch-fenced replay, constant-size audited history rollover,
+restart, and audit. Provider credential expiry does not replace explicit live-
+process death cleanup. It generalizes the
 standalone lifecycle without changing the bounded local-control contract and
 still owns no socket, Android service, UI bytes, high-rate payload, or app
 effect.

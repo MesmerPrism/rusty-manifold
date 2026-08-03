@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rusty.manifold.connection_hub.typed_params.empty.v1",
+  "type": "object",
+  "maxProperties": 0,
+  "additionalProperties": false
+}
