@@ -1,0 +1,16 @@
+{
+  "$schema": "rusty.manifold.connection_hub.request.v1",
+  "request_id": "request.hub.command.bad-digest.fixture",
+  "expected_authority_revision": 6,
+  "requested_at_ms": 1600,
+  "operation": {
+    "type": "authorize_surface_command",
+    "details": {
+      "session_id": "session.friend-phone.primary",
+      "expected_transport_epoch": 1,
+      "lease_id": "lease.surface.media-player.friend",
+      "command_id": "command.player.play",
+      "typed_params_sha256": "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    }
+  }
+}

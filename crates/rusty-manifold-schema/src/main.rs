@@ -131,6 +131,8 @@ fn connection_hub_entries() -> Vec<SchemaEntry> {
     let request = &[
         "fixtures/connection-hub/trust-controller-request.json",
         "fixtures/connection-hub/trust-controller-request.unknown-field.damaged.json",
+        "fixtures/connection-hub/authorize-command-request.json",
+        "fixtures/connection-hub/authorize-command-request.bad-digest.damaged.json",
     ];
     vec![
         entry(

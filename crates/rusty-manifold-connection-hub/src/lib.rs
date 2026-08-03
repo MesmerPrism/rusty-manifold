@@ -53,6 +53,9 @@ const MAX_COMMANDS_PER_SURFACE: usize = 64;
 const MAX_CAPABILITIES: usize = 64;
 const MAX_REPLAY_RECORDS: usize = 4096;
 const MAX_AUDIT_EVENTS: usize = 4096;
+// Command and ordinary lifecycle traffic cannot consume the final retained
+// slots. Those slots remain available for terminal cleanup operations.
+const MAX_ORDINARY_AUDIT_EVENTS: usize = 3840;
 const MAX_TOMBSTONES: usize = 4096;
 const MAX_CONTROLLER_TTL_MS: u64 = 366 * 24 * 60 * 60 * 1_000;
 const MAX_SESSION_TTL_MS: u64 = 30 * 24 * 60 * 60 * 1_000;
@@ -63,14 +66,19 @@ const MAX_SNAPSHOT_JSON_BYTES: usize = 8 * 1024 * 1024;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ManifoldConnectionHubProviderGrant {
+    /// Exact provider family identity this grant may register.
+    pub provider_id: DottedId,
     /// Stable admitted Manifold client identity.
     pub client_id: DottedId,
     /// Exact packaged client-lock identity.
     pub client_lock_id: DottedId,
     /// Exact packaged client-lock SHA-256.
     pub client_lock_sha256: String,
-    /// Exact sorted command set this provider may expose.
-    pub allowed_command_ids: Vec<DottedId>,
+    /// SHA-256 of the exact separately packaged surface contract.
+    pub surface_contract_sha256: String,
+    /// Exact sorted command-to-controller-capability registry this provider
+    /// may expose. Capability requirements cannot be lowered at runtime.
+    pub allowed_commands: Vec<ManifoldConnectionHubSurfaceCommand>,
 }
 
 /// Immutable authority policy supplied by the standalone product lock owner.
@@ -173,8 +181,10 @@ pub struct ManifoldConnectionHubProvider {
     pub admission_use_request_id: DottedId,
     /// Expiry inherited from the admitted token.
     pub admission_expires_at_ms: u64,
-    /// Exact commands the product policy permits this provider to expose.
-    pub allowed_command_ids: Vec<DottedId>,
+    /// Exact surface-contract digest retained from product policy.
+    pub surface_contract_sha256: String,
+    /// Exact command-to-capability registry retained from product policy.
+    pub allowed_commands: Vec<ManifoldConnectionHubSurfaceCommand>,
     /// Registration time.
     pub registered_at_ms: u64,
 }
@@ -263,8 +273,18 @@ pub struct ManifoldConnectionHubCommandAuthorization {
     pub surface_id: DottedId,
     /// Exact live provider instance.
     pub provider_instance_id: DottedId,
+    /// Exact provider family authorized by product policy.
+    pub provider_id: DottedId,
+    /// Exact registered and product-authorized surface-contract digest.
+    pub surface_contract_sha256: String,
     /// Closed command identity.
     pub command_id: DottedId,
+    /// Exact controller capability required by product policy.
+    pub required_controller_capability: DottedId,
+    /// SHA-256 of the exact canonical low-rate typed command parameters. The
+    /// parameter bytes themselves remain downstream and are never retained by
+    /// Manifold.
+    pub typed_params_sha256: String,
     /// Command admission is not application effect evidence.
     pub proves_application_effect: bool,
 }
@@ -328,7 +348,12 @@ pub struct ManifoldConnectionHubState {
 
 /// One complete operation-specific request body.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", content = "details", rename_all = "snake_case")]
+#[serde(
+    deny_unknown_fields,
+    tag = "type",
+    content = "details",
+    rename_all = "snake_case"
+)]
 pub enum ManifoldConnectionHubOperationRequest {
     /// Admit a durable trusted controller after adapter-owned verification.
     TrustController {
@@ -438,6 +463,8 @@ pub enum ManifoldConnectionHubOperationRequest {
         lease_id: DottedId,
         /// Closed command identity.
         command_id: DottedId,
+        /// SHA-256 of the exact canonical low-rate typed parameters.
+        typed_params_sha256: String,
     },
     /// Explicitly revoke one logical session and its derivative leases.
     RevokeSession {
@@ -506,6 +533,9 @@ pub enum ManifoldConnectionHubOperation {
 pub enum ManifoldConnectionHubRejectionReason {
     /// Contract schema differs.
     SchemaMismatch,
+    /// Platform time, verified operator evidence, or retained admission
+    /// evidence did not match the operation's non-serializable owner context.
+    OwnerContextMismatch,
     /// Request expected a different accepted revision.
     StaleAuthorityRevision,
     /// Request identity or exact request digest was already applied.
@@ -542,6 +572,8 @@ pub enum ManifoldConnectionHubRejectionReason {
     SurfaceLeaseNotActive,
     /// Command is not in the exact registered surface command set.
     CommandNotRegistered,
+    /// Canonical typed-parameter digest is malformed.
+    InvalidTypedParamsDigest,
     /// Explicit expiry found no expired accepted state.
     NothingExpired,
 }
@@ -622,6 +654,55 @@ pub struct ManifoldConnectionHubReceipt {
     pub cleaned_subject_ids: Vec<DottedId>,
     /// Accepted audit event.
     pub audit_event: Option<ManifoldConnectionHubAuditEvent>,
+}
+
+/// Non-serializable owner evidence required to apply a request. This context
+/// must be constructed inside the retained Hub owner from platform time,
+/// verified wearer/operator evidence, or its in-process admission authority;
+/// it is deliberately not accepted from protocol JSON.
+#[derive(Clone, Copy, Debug)]
+pub struct ManifoldConnectionHubOwnerContext<'a> {
+    observed_at_ms: u64,
+    verified_operator_evidence_id: Option<&'a DottedId>,
+    admission_snapshot: Option<&'a ManifoldAdmissionSnapshot>,
+}
+
+impl<'a> ManifoldConnectionHubOwnerContext<'a> {
+    /// Context for lifecycle operations that require only platform time.
+    #[must_use]
+    pub const fn lifecycle(observed_at_ms: u64) -> Self {
+        Self {
+            observed_at_ms,
+            verified_operator_evidence_id: None,
+            admission_snapshot: None,
+        }
+    }
+
+    /// Context for a fixed owner-verified operator decision.
+    #[must_use]
+    pub const fn operator_decision(
+        observed_at_ms: u64,
+        verified_operator_evidence_id: &'a DottedId,
+    ) -> Self {
+        Self {
+            observed_at_ms,
+            verified_operator_evidence_id: Some(verified_operator_evidence_id),
+            admission_snapshot: None,
+        }
+    }
+
+    /// Context for provider registration from the retained admission owner.
+    #[must_use]
+    pub const fn provider_admission(
+        observed_at_ms: u64,
+        admission_snapshot: &'a ManifoldAdmissionSnapshot,
+    ) -> Self {
+        Self {
+            observed_at_ms,
+            verified_operator_evidence_id: None,
+            admission_snapshot: Some(admission_snapshot),
+        }
+    }
 }
 
 /// Authority construction, restart, or snapshot validation failure.
@@ -726,19 +807,22 @@ impl ManifoldConnectionHubAuthority {
         Ok(Self { snapshot })
     }
 
-    /// Applies one request. Provider registration additionally requires the
-    /// exact current separately admitted provider snapshot.
+    /// Applies one request with non-serializable evidence from the retained
+    /// owner. Provider registration additionally requires that owner's exact
+    /// current admission snapshot.
     #[must_use]
     pub fn apply(
         &mut self,
         request: &ManifoldConnectionHubRequest,
-        admission: Option<&ManifoldAdmissionSnapshot>,
+        owner_context: ManifoldConnectionHubOwnerContext<'_>,
     ) -> ManifoldConnectionHubReceipt {
         let operation = operation_label(&request.operation);
         let prior = self.snapshot.state.authority_revision;
         let request_digest = typed_sha256(request);
         let generic_rejection = if request.schema_id.as_str() != REQUEST_SCHEMA {
             Some(ManifoldConnectionHubRejectionReason::SchemaMismatch)
+        } else if !owner_context_matches(request, owner_context) {
+            Some(ManifoldConnectionHubRejectionReason::OwnerContextMismatch)
         } else if self
             .snapshot
             .applied_request_ids
@@ -756,6 +840,8 @@ impl ManifoldConnectionHubAuthority {
             Some(ManifoldConnectionHubRejectionReason::StaleAuthorityRevision)
         } else if self.snapshot.applied_request_ids.len() >= MAX_REPLAY_RECORDS
             || self.snapshot.audit_events.len() >= MAX_AUDIT_EVENTS
+            || (!is_terminal_cleanup_operation(&request.operation)
+                && self.snapshot.audit_events.len() >= MAX_ORDINARY_AUDIT_EVENTS)
         {
             Some(ManifoldConnectionHubRejectionReason::CapacityExceeded)
         } else {
@@ -778,7 +864,7 @@ impl ManifoldConnectionHubAuthority {
             &self.snapshot.policy,
             &mut state,
             request,
-            admission,
+            owner_context.admission_snapshot,
             resulting_revision,
         );
         let output = match outcome {
@@ -838,8 +924,9 @@ impl ManifoldConnectionHubAuthority {
     pub fn trust_controller(
         &mut self,
         request: &ManifoldConnectionHubRequest,
+        owner_context: ManifoldConnectionHubOwnerContext<'_>,
     ) -> ManifoldConnectionHubReceipt {
-        self.apply(request, None)
+        self.apply(request, owner_context)
     }
 
     /// Applies a durable controller removal request.
@@ -847,8 +934,9 @@ impl ManifoldConnectionHubAuthority {
     pub fn forget_controller(
         &mut self,
         request: &ManifoldConnectionHubRequest,
+        owner_context: ManifoldConnectionHubOwnerContext<'_>,
     ) -> ManifoldConnectionHubReceipt {
-        self.apply(request, None)
+        self.apply(request, owner_context)
     }
 
     /// Applies a logical-session open request.
@@ -856,8 +944,9 @@ impl ManifoldConnectionHubAuthority {
     pub fn open_session(
         &mut self,
         request: &ManifoldConnectionHubRequest,
+        owner_context: ManifoldConnectionHubOwnerContext<'_>,
     ) -> ManifoldConnectionHubReceipt {
-        self.apply(request, None)
+        self.apply(request, owner_context)
     }
 
     /// Applies a physical transport replacement request.
@@ -865,18 +954,19 @@ impl ManifoldConnectionHubAuthority {
     pub fn replace_transport(
         &mut self,
         request: &ManifoldConnectionHubRequest,
+        owner_context: ManifoldConnectionHubOwnerContext<'_>,
     ) -> ManifoldConnectionHubReceipt {
-        self.apply(request, None)
+        self.apply(request, owner_context)
     }
 
     /// Registers a provider from exact current admission evidence.
     #[must_use]
     pub fn register_provider(
         &mut self,
-        admission: &ManifoldAdmissionSnapshot,
         request: &ManifoldConnectionHubRequest,
+        owner_context: ManifoldConnectionHubOwnerContext<'_>,
     ) -> ManifoldConnectionHubReceipt {
-        self.apply(request, Some(admission))
+        self.apply(request, owner_context)
     }
 
     /// Applies any non-provider-registration lifecycle request.
@@ -884,8 +974,9 @@ impl ManifoldConnectionHubAuthority {
     pub fn apply_lifecycle(
         &mut self,
         request: &ManifoldConnectionHubRequest,
+        owner_context: ManifoldConnectionHubOwnerContext<'_>,
     ) -> ManifoldConnectionHubReceipt {
-        self.apply(request, None)
+        self.apply(request, owner_context)
     }
 }
 
@@ -1149,10 +1240,8 @@ fn apply_operation(
             if provider.admission_expires_at_ms <= request.requested_at_ms {
                 return Err(ManifoldConnectionHubRejectionReason::ProviderNotActive);
             }
-            if !surface
-                .commands
-                .iter()
-                .all(|command| provider.allowed_command_ids.contains(&command.command_id))
+            if surface.surface_contract_sha256 != provider.surface_contract_sha256
+                || surface.commands != provider.allowed_commands
             {
                 return Err(ManifoldConnectionHubRejectionReason::SurfaceNotAllowed);
             }
@@ -1289,7 +1378,11 @@ fn apply_operation(
             expected_transport_epoch,
             lease_id,
             command_id,
+            typed_params_sha256,
         } => {
+            if !is_sha256(typed_params_sha256) {
+                return Err(ManifoldConnectionHubRejectionReason::InvalidTypedParamsDigest);
+            }
             let session = active_session(state, session_id, request.requested_at_ms)?;
             if session.transport_epoch != *expected_transport_epoch {
                 return Err(ManifoldConnectionHubRejectionReason::TransportEpochMismatch);
@@ -1328,10 +1421,10 @@ fn apply_operation(
             }
             let authorization = ManifoldConnectionHubCommandAuthorization {
                 schema_id: schema(COMMAND_AUTHORIZATION_SCHEMA),
-                authorization_id: artifact_id(
-                    "authorization.connection-hub",
+                authorization_id: command_authorization_id(
                     &request.request_id,
-                    resulting_revision.get(),
+                    typed_params_sha256,
+                    resulting_revision,
                 ),
                 request_id: request.request_id.clone(),
                 session_id: session_id.clone(),
@@ -1339,7 +1432,11 @@ fn apply_operation(
                 lease_id: lease_id.clone(),
                 surface_id: surface.surface_id.clone(),
                 provider_instance_id: surface.provider_instance_id.clone(),
+                provider_id: surface.provider_id.clone(),
+                surface_contract_sha256: surface.surface_contract_sha256.clone(),
                 command_id: command_id.clone(),
+                required_controller_capability: command.required_controller_capability.clone(),
+                typed_params_sha256: typed_params_sha256.clone(),
                 proves_application_effect: false,
             };
             Ok(ApplyOutput {
@@ -1408,7 +1505,8 @@ fn validate_provider_admission(
         .provider_grants
         .iter()
         .find(|grant| {
-            grant.client_id == binding.token.identity.client_id
+            &grant.provider_id == provider_id
+                && grant.client_id == binding.token.identity.client_id
                 && grant.client_lock_id == binding.token.client_lock_id
                 && grant.client_lock_sha256 == binding.token.client_lock_fingerprint
         })
@@ -1424,7 +1522,8 @@ fn validate_provider_admission(
         admission_authority_revision: admission.authority_revision,
         admission_use_request_id: use_request_id.clone(),
         admission_expires_at_ms: binding.token.expires_at_ms,
-        allowed_command_ids: grant.allowed_command_ids.clone(),
+        surface_contract_sha256: grant.surface_contract_sha256.clone(),
+        allowed_commands: grant.allowed_commands.clone(),
         registered_at_ms: now_ms,
     })
 }
@@ -1774,7 +1873,7 @@ fn validate_policy(policy: &ManifoldConnectionHubPolicy) -> Result<(), ManifoldC
         || policy.allowed_controller_capabilities.len() > MAX_CAPABILITIES
         || !is_sorted_unique(&policy.allowed_controller_capabilities)
         || policy.provider_grants.len() > MAX_PROVIDERS
-        || !is_sorted_unique_by(&policy.provider_grants, |grant| &grant.client_id)
+        || !is_sorted_unique_by(&policy.provider_grants, |grant| &grant.provider_id)
     {
         return Err(ManifoldConnectionHubError::InvalidPolicy(
             "noncanonical_sets",
@@ -1791,9 +1890,15 @@ fn validate_policy(policy: &ManifoldConnectionHubPolicy) -> Result<(), ManifoldC
     }
     for grant in &policy.provider_grants {
         if !is_sha256(&grant.client_lock_sha256)
-            || grant.allowed_command_ids.is_empty()
-            || grant.allowed_command_ids.len() > MAX_COMMANDS_PER_SURFACE
-            || !is_sorted_unique(&grant.allowed_command_ids)
+            || !is_sha256(&grant.surface_contract_sha256)
+            || grant.allowed_commands.is_empty()
+            || grant.allowed_commands.len() > MAX_COMMANDS_PER_SURFACE
+            || !is_sorted_unique_by(&grant.allowed_commands, |command| &command.command_id)
+            || !grant.allowed_commands.iter().all(|command| {
+                policy
+                    .allowed_controller_capabilities
+                    .contains(&command.required_controller_capability)
+            })
         {
             return Err(ManifoldConnectionHubError::InvalidPolicy(
                 "invalid_provider_grant",
@@ -1955,14 +2060,18 @@ fn validate_state(
         let grant = policy
             .provider_grants
             .iter()
-            .find(|grant| grant.client_id == provider.identity.client_id)
+            .find(|grant| {
+                grant.provider_id == provider.provider_id
+                    && grant.client_id == provider.identity.client_id
+            })
             .ok_or(ManifoldConnectionHubError::InvalidSnapshot(
                 "provider_grant_missing",
             ))?;
         if provider.schema_id.as_str() != PROVIDER_SCHEMA
             || provider.client_lock_id != grant.client_lock_id
             || provider.client_lock_sha256 != grant.client_lock_sha256
-            || provider.allowed_command_ids != grant.allowed_command_ids
+            || provider.surface_contract_sha256 != grant.surface_contract_sha256
+            || provider.allowed_commands != grant.allowed_commands
             || provider.registered_at_ms >= provider.admission_expires_at_ms
             || !live_ids.insert(provider.provider_instance_id.clone())
         {
@@ -1990,10 +2099,8 @@ fn validate_state(
             || surface.commands.is_empty()
             || surface.commands.len() > MAX_COMMANDS_PER_SURFACE
             || !is_sorted_unique_by(&surface.commands, |command| &command.command_id)
-            || !surface
-                .commands
-                .iter()
-                .all(|command| provider.allowed_command_ids.contains(&command.command_id))
+            || surface.surface_contract_sha256 != provider.surface_contract_sha256
+            || surface.commands != provider.allowed_commands
             || !live_ids.insert(surface.surface_id.clone())
         {
             return Err(ManifoldConnectionHubError::InvalidSnapshot(
@@ -2084,6 +2191,36 @@ fn is_retired(
         .any(|entry| entry.subject_kind == kind && &entry.subject_id == id)
 }
 
+fn owner_context_matches(
+    request: &ManifoldConnectionHubRequest,
+    owner_context: ManifoldConnectionHubOwnerContext<'_>,
+) -> bool {
+    if request.requested_at_ms != owner_context.observed_at_ms {
+        return false;
+    }
+    match &request.operation {
+        ManifoldConnectionHubOperationRequest::TrustController {
+            operator_evidence_id,
+            ..
+        }
+        | ManifoldConnectionHubOperationRequest::ForgetController {
+            operator_evidence_id,
+            ..
+        } => {
+            owner_context.verified_operator_evidence_id == Some(operator_evidence_id)
+                && owner_context.admission_snapshot.is_none()
+        }
+        ManifoldConnectionHubOperationRequest::RegisterProvider { .. } => {
+            owner_context.verified_operator_evidence_id.is_none()
+                && owner_context.admission_snapshot.is_some()
+        }
+        _ => {
+            owner_context.verified_operator_evidence_id.is_none()
+                && owner_context.admission_snapshot.is_none()
+        }
+    }
+}
+
 fn operation_label(
     operation: &ManifoldConnectionHubOperationRequest,
 ) -> ManifoldConnectionHubOperation {
@@ -2128,6 +2265,18 @@ fn operation_label(
     }
 }
 
+fn is_terminal_cleanup_operation(operation: &ManifoldConnectionHubOperationRequest) -> bool {
+    matches!(
+        operation,
+        ManifoldConnectionHubOperationRequest::ForgetController { .. }
+            | ManifoldConnectionHubOperationRequest::UnregisterProvider { .. }
+            | ManifoldConnectionHubOperationRequest::UnregisterSurface { .. }
+            | ManifoldConnectionHubOperationRequest::ReleaseSurfaceLease { .. }
+            | ManifoldConnectionHubOperationRequest::RevokeSession { .. }
+            | ManifoldConnectionHubOperationRequest::Expire
+    )
+}
+
 fn provider_admission_use_replayed(
     audit_events: &[ManifoldConnectionHubAuditEvent],
     operation: &ManifoldConnectionHubOperationRequest,
@@ -2159,6 +2308,22 @@ fn artifact_id(prefix: &str, request_id: &DottedId, sequence: u64) -> DottedId {
     let digest = Sha256::digest(format!("{prefix}|{request_id}|{sequence}").as_bytes());
     let hex = format!("{digest:x}");
     DottedId::new(format!("{prefix}.{}", &hex[..16])).expect("derived id")
+}
+
+fn command_authorization_id(
+    request_id: &DottedId,
+    typed_params_sha256: &str,
+    revision: Revision,
+) -> DottedId {
+    let digest = Sha256::digest(
+        format!(
+            "authorization.connection-hub|{request_id}|{typed_params_sha256}|{}",
+            revision.get()
+        )
+        .as_bytes(),
+    );
+    let hex = format!("{digest:x}");
+    DottedId::new(format!("authorization.connection-hub.{}", &hex[..16])).expect("derived id")
 }
 
 fn schema(value: &str) -> SchemaId {

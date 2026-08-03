@@ -10,12 +10,20 @@
   ],
   "provider_grants": [
     {
+      "provider_id": "provider.media-player",
       "client_id": "client.media-player",
       "client_lock_id": "client-lock.media-player",
       "client_lock_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-      "allowed_command_ids": [
-        "command.player.pause",
-        "command.player.play"
+      "surface_contract_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "allowed_commands": [
+        {
+          "command_id": "command.player.pause",
+          "required_controller_capability": "capability.player.pause"
+        },
+        {
+          "command_id": "command.player.play",
+          "required_controller_capability": "capability.player.play"
+        }
       ]
     }
   ],
