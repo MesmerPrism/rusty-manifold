@@ -1,0 +1,42 @@
+{
+  "$schema": "rusty.manifold.connection_hub.snapshot.v1",
+  "policy": {
+    "$schema": "rusty.manifold.connection_hub.policy.v1",
+    "authority_id": "authority.connection-hub.synthetic",
+    "trusted_operator_evidence_ids": [
+      "evidence.operator.wearer-action"
+    ],
+    "allowed_controller_capabilities": [
+      "capability.player.pause",
+      "capability.player.play"
+    ],
+    "provider_grants": [
+      {
+        "client_id": "client.media-player",
+        "client_lock_id": "client-lock.media-player",
+        "client_lock_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "allowed_command_ids": [
+          "command.player.pause",
+          "command.player.play"
+        ]
+      }
+    ],
+    "max_controller_ttl_ms": 100000,
+    "max_session_ttl_ms": 80000,
+    "max_surface_lease_ttl_ms": 60000
+  },
+  "state": {
+    "$schema": "rusty.manifold.connection_hub.state.v1",
+    "authority_id": "authority.connection-hub.synthetic",
+    "authority_revision": 1,
+    "trusted_controllers": [],
+    "sessions": [],
+    "providers": [],
+    "surfaces": [],
+    "surface_leases": [],
+    "tombstones": []
+  },
+  "applied_request_ids": [],
+  "applied_request_sha256": [],
+  "audit_events": []
+}

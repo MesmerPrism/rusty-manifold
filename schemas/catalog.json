@@ -752,6 +752,7 @@
       "rust_type": "ManifoldBrokerProductSpec",
       "fixture_paths": [
         "fixtures/broker-product/base-standalone.json",
+        "fixtures/broker-product/connection-hub-standalone.json",
         "fixtures/broker-product/media-session-standalone.json",
         "fixtures/broker-product/camera-embedded.json",
         "fixtures/broker-product/direct-p2p-standalone.json",
@@ -766,6 +767,7 @@
       "rust_type": "ManifoldBrokerProductLock",
       "fixture_paths": [
         "fixtures/broker-product/base-standalone.lock.json",
+        "fixtures/broker-product/connection-hub-standalone.lock.json",
         "fixtures/broker-product/media-session-standalone.lock.json",
         "fixtures/broker-product/media-session-embedded.lock.json",
         "fixtures/broker-product/camera-embedded.lock.json",
@@ -1148,6 +1150,35 @@
       "rust_type": "ManifoldLocalControlSafeStatus",
       "fixture_paths": [
         "fixtures/trusted-local-http-v1/safe-status.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.policy.v1",
+      "rust_type": "ManifoldConnectionHubPolicy",
+      "fixture_paths": [
+        "fixtures/connection-hub/policy.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.request.v1",
+      "rust_type": "ManifoldConnectionHubRequest",
+      "fixture_paths": [
+        "fixtures/connection-hub/trust-controller-request.json",
+        "fixtures/connection-hub/trust-controller-request.unknown-field.damaged.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.state.v1",
+      "rust_type": "ManifoldConnectionHubState",
+      "fixture_paths": [
+        "fixtures/connection-hub/initial-snapshot.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.snapshot.v1",
+      "rust_type": "ManifoldConnectionHubSnapshot",
+      "fixture_paths": [
+        "fixtures/connection-hub/initial-snapshot.json"
       ]
     },
     {

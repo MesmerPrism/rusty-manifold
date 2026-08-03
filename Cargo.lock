@@ -636,6 +636,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusty-manifold-connection-hub"
+version = "0.1.0"
+dependencies = [
+ "rusty-manifold-admission",
+ "rusty-manifold-model",
+ "serde",
+ "serde_json",
+ "sha2",
+]
+
+[[package]]
 name = "rusty-manifold-fixtures"
 version = "0.1.0"
 dependencies = [

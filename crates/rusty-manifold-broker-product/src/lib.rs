@@ -13,6 +13,9 @@ pub const BROKER_PRODUCT_LOCK_SCHEMA: &str = "rusty.manifold.broker.product_lock
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ManifoldBrokerFeature {
+    /// Durable standalone Connection Hub authority with LAN/WebSocket control
+    /// adapters but no BLE, P2P, camera, or media-plane authority.
+    ConnectionHub,
     /// Generic media-session descriptors without capture-device authority.
     MediaSession,
     /// Camera capture adapter layered over generic media sessions.
@@ -218,6 +221,31 @@ fn resolve_feature_closure(
     }
     for feature in feature_set {
         match feature {
+            ManifoldBrokerFeature::ConnectionHub => {
+                commands.extend(ids([
+                    "command.connection_hub.status.get",
+                    "command.connection_hub.controller.trust",
+                    "command.connection_hub.controller.forget",
+                    "command.connection_hub.session.open",
+                    "command.connection_hub.session.revoke",
+                    "command.connection_hub.provider.register",
+                    "command.connection_hub.provider.unregister",
+                    "command.connection_hub.surface.register",
+                    "command.connection_hub.surface.unregister",
+                    "command.connection_hub.surface_lease.acquire",
+                    "command.connection_hub.surface_lease.release",
+                    "command.connection_hub.surface_command.authorize",
+                    "command.connection_hub.transport.replace",
+                    "command.connection_hub.expire",
+                    "command.connection_hub.surface.list",
+                ]));
+                streams.extend(ids(["stream.connection_hub.status"]));
+                modules.extend(ids([
+                    "module.connection_hub.authority",
+                    "module.transport.websocket",
+                ]));
+                permissions.insert(ManifoldBrokerPermission::NetworkStateObservation);
+            }
             ManifoldBrokerFeature::MediaSession => {
                 commands.extend(ids([
                     "command.media.session.start",
@@ -351,6 +379,21 @@ mod tests {
 
     #[test]
     fn optional_profiles_resolve_independently_and_exactly() {
+        let hub = resolve_broker_product(&spec("connection-hub-standalone")).expect("hub");
+        assert!(hub.features.contains(&ManifoldBrokerFeature::ConnectionHub));
+        assert!(hub
+            .module_ids
+            .contains(&DottedId::new("module.connection_hub.authority").expect("id")));
+        assert!(hub
+            .permissions
+            .contains(&ManifoldBrokerPermission::NetworkStateObservation));
+        assert!(!hub.permissions.contains(&ManifoldBrokerPermission::Camera));
+        assert!(!hub
+            .permissions
+            .contains(&ManifoldBrokerPermission::NearbyWifiDevices));
+        assert!(!hub
+            .permissions
+            .contains(&ManifoldBrokerPermission::BluetoothScan));
         let camera = resolve_broker_product(&spec("camera-embedded")).expect("camera");
         assert!(camera
             .features
@@ -418,6 +461,7 @@ mod tests {
     fn committed_locks_match_fresh_resolution() {
         for name in [
             "base-standalone",
+            "connection-hub-standalone",
             "media-session-standalone",
             "media-session-embedded",
             "camera-embedded",

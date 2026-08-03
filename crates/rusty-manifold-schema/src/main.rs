@@ -117,11 +117,43 @@ fn schema_entries() -> Vec<SchemaEntry> {
     entries.extend(broker_adapter_entries());
     entries.extend(admission_entries());
     entries.extend(local_control_entries());
+    entries.extend(connection_hub_entries());
     entries.extend(authority_entries());
     entries.extend(bridge_route_entries());
     entries.extend(host_and_deployment_entries());
     entries.extend(verification_entries());
     entries
+}
+
+fn connection_hub_entries() -> Vec<SchemaEntry> {
+    let policy = &["fixtures/connection-hub/policy.json"];
+    let snapshot = &["fixtures/connection-hub/initial-snapshot.json"];
+    let request = &[
+        "fixtures/connection-hub/trust-controller-request.json",
+        "fixtures/connection-hub/trust-controller-request.unknown-field.damaged.json",
+    ];
+    vec![
+        entry(
+            "rusty.manifold.connection_hub.policy.v1",
+            "ManifoldConnectionHubPolicy",
+            policy,
+        ),
+        entry(
+            "rusty.manifold.connection_hub.request.v1",
+            "ManifoldConnectionHubRequest",
+            request,
+        ),
+        entry(
+            "rusty.manifold.connection_hub.state.v1",
+            "ManifoldConnectionHubState",
+            snapshot,
+        ),
+        entry(
+            "rusty.manifold.connection_hub.snapshot.v1",
+            "ManifoldConnectionHubSnapshot",
+            snapshot,
+        ),
+    ]
 }
 
 fn stream_observation_entries() -> Vec<SchemaEntry> {
@@ -549,6 +581,7 @@ fn broker_product_entries() -> Vec<SchemaEntry> {
             "ManifoldBrokerProductSpec",
             &[
                 "fixtures/broker-product/base-standalone.json",
+                "fixtures/broker-product/connection-hub-standalone.json",
                 "fixtures/broker-product/media-session-standalone.json",
                 "fixtures/broker-product/camera-embedded.json",
                 "fixtures/broker-product/direct-p2p-standalone.json",
@@ -563,6 +596,7 @@ fn broker_product_entries() -> Vec<SchemaEntry> {
             "ManifoldBrokerProductLock",
             &[
                 "fixtures/broker-product/base-standalone.lock.json",
+                "fixtures/broker-product/connection-hub-standalone.lock.json",
                 "fixtures/broker-product/media-session-standalone.lock.json",
                 "fixtures/broker-product/media-session-embedded.lock.json",
                 "fixtures/broker-product/camera-embedded.lock.json",

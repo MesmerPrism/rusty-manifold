@@ -15,7 +15,11 @@ without relabelling either one.
 The base standalone product contains only the Runtime Host, peer-status
 observation, session listing, generic network access, and the notification plus
 background data-sync permissions required by its service lifecycle. It has no
-camera, direct-P2P, or BLE capability. `media_session` adds generic media
+camera, direct-P2P, or BLE capability. `connection_hub` adds the durable Hub
+authority, WebSocket transport-adapter module, low-rate Hub status, closed Hub
+commands, and network-state observation. Its standalone lock still contains no
+camera, background-camera, BLE, nearby-Wi-Fi/P2P, Wi-Fi-mutation, or media
+permission/module. `media_session` adds generic media
 session/stream/module references without camera permission. `camera_media`
 layers the camera module and capture permissions over that generic feature;
 direct-P2P and BLE rendezvous add only their own closures. A product may

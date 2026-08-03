@@ -24,6 +24,14 @@ Manifold authority owns accepted mutable state:
 Clients observe or request through typed commands and descriptors. They do not
 mutate accepted state directly.
 
+The standalone Connection Hub is an additive Manifold authority family. It
+owns durable controller trust, logical sessions, transport epochs, admitted
+provider/surface state, derivative surface leases, replay, cleanup, restart,
+and audit. Quest owns the foreground service, listener/socket, platform
+identity projection, UI delivery, and effective app receipts. Transport
+replacement advances an epoch inside one logical session; it does not create a
+parallel Java session authority.
+
 Broker Runtime Host leases are derived state, not a second lease authority.
 Normal Broker construction and restart retain a synchronized
 `ManifoldBrokerControlLeaseAuthority` containing the current owner view and

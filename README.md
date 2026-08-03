@@ -101,6 +101,14 @@ Runtime Host command acceptance for short, wearer-enabled trusted-LAN control
 windows. It starts disabled, exposes only a closed typed command registry, and
 never treats HTTP/WebSocket acknowledgement as a player effect.
 
+The additive [Connection Hub Authority](docs/CONNECTION_HUB_AUTHORITY.md)
+retains durable controller trust, logical sessions across transport
+replacement, separately admitted app-provider surfaces, derivative surface
+leases, explicit cleanup, replay, restart, and audit. It generalizes the
+standalone lifecycle without changing the bounded local-control contract and
+still owns no socket, Android service, UI bytes, high-rate payload, or app
+effect.
+
 Rusty Manifold is the typed contract layer for graph, stream, command, lease,
 module, host, clock, session, and audit surfaces across the Rusty stack.
 

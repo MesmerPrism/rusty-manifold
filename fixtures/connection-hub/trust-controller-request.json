@@ -1,0 +1,19 @@
+{
+  "$schema": "rusty.manifold.connection_hub.request.v1",
+  "request_id": "request.hub.trust-controller.fixture",
+  "expected_authority_revision": 1,
+  "requested_at_ms": 1000,
+  "operation": {
+    "type": "trust_controller",
+    "details": {
+      "controller_id": "controller.friend-phone",
+      "public_identity_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "capabilities": [
+        "capability.player.pause",
+        "capability.player.play"
+      ],
+      "operator_evidence_id": "evidence.operator.wearer-action",
+      "requested_ttl_ms": 90000
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "$schema": "rusty.manifold.broker.product_lock.v1",
+  "lock_id": "lock.broker.connection-hub.standalone",
+  "product_id": "broker.connection-hub.standalone",
+  "standalone_enabled": true,
+  "embedded_enabled": false,
+  "features": [
+    "connection_hub"
+  ],
+  "command_ids": [
+    "command.connection_hub.controller.forget",
+    "command.connection_hub.controller.trust",
+    "command.connection_hub.expire",
+    "command.connection_hub.provider.register",
+    "command.connection_hub.provider.unregister",
+    "command.connection_hub.session.open",
+    "command.connection_hub.session.revoke",
+    "command.connection_hub.status.get",
+    "command.connection_hub.surface.list",
+    "command.connection_hub.surface.register",
+    "command.connection_hub.surface.unregister",
+    "command.connection_hub.surface_command.authorize",
+    "command.connection_hub.surface_lease.acquire",
+    "command.connection_hub.surface_lease.release",
+    "command.connection_hub.transport.replace",
+    "command.peer.status.get",
+    "command.session.list"
+  ],
+  "stream_ids": [
+    "stream.connection_hub.status",
+    "stream.peer.status"
+  ],
+  "module_ids": [
+    "module.connection_hub.authority",
+    "module.runtime.host",
+    "module.transport.websocket"
+  ],
+  "permissions": [
+    "internet",
+    "user_notifications",
+    "background_service",
+    "background_data_sync",
+    "network_state_observation"
+  ],
+  "spec_fingerprint": "fnv1a64-e857d4cede86e709"
+}

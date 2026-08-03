@@ -8,6 +8,7 @@ use rusty_manifold_broker_product::{resolve_broker_product, ManifoldBrokerProduc
 
 const PRODUCTS: &[&str] = &[
     "base-standalone",
+    "connection-hub-standalone",
     "media-session-standalone",
     "media-session-embedded",
     "camera-embedded",

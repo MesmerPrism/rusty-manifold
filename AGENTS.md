@@ -51,10 +51,11 @@ it must not define Lattice relation semantics or default to legacy
 14. `docs/BROKER_ADAPTERS.md`
 15. `docs/ADMISSION.md`
 16. `docs/LOCAL_CONTROL_AUTHORITY.md`
-17. `docs/IMPLEMENTATION_PLAN.md`
-18. `docs/MODULE_PACKAGE_STRATEGY.md`
-19. `docs/SCHEMA_EVOLUTION.md`
-20. `fixtures/README.md`
+17. `docs/CONNECTION_HUB_AUTHORITY.md`
+18. `docs/IMPLEMENTATION_PLAN.md`
+19. `docs/MODULE_PACKAGE_STRATEGY.md`
+20. `docs/SCHEMA_EVOLUTION.md`
+21. `fixtures/README.md`
 
 ## Architecture Rules
 
@@ -109,6 +110,12 @@ it must not define Lattice relation semantics or default to legacy
   platform identity is the trusted installed adapter; a paired browser has a
   separate non-secret logical controller id. HTTP/WebSocket, discovery,
   pairing-code material, UI assets, and application effects remain downstream.
+- Durable standalone connection products compose trusted controller records,
+  logical sessions, monotonic transport epochs, separately admitted provider
+  instances, command-closed UI surfaces, derivative surface leases, replay,
+  cleanup, and restart audit through `rusty-manifold-connection-hub`. Sockets,
+  Android services, UI documents, pairing secrets, high-rate data, and app
+  effects remain downstream.
 - Broker product features resolve through `rusty-manifold-broker-product` into
   exact commands, streams, modules, permissions, and fingerprint. Generic
   `media_session` is camera-free; `camera_media` explicitly layers capture

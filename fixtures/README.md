@@ -125,6 +125,10 @@ and safe to use in tests, generated schemas, documentation, and clients.
   Quest adapter; the browser controller id is a separate logical id. No
   pairing code, password, production token, device-management credential,
   listener, external asset, or player effect is included.
+- `connection-hub/`: deterministic policy, initial restart snapshot, bounded
+  trust request, and unknown-field damage for durable controller/session/
+  provider/surface authority. Fixtures contain synthetic public digests and no
+  token, pairing code, endpoint, socket, UI document, or app effect.
 - `shell-handoff/`: contract-backed shell handoff and Manifold review receipt examples for downstream operator or render shells.
 - `simulator/`: deterministic source-only simulator snapshots.
 - `damaged/`: intentionally invalid examples.
