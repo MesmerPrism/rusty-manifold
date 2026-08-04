@@ -1,0 +1,21 @@
+{
+  "$schema": "rusty.manifold.connection_hub.request.v3",
+  "request_id": "epoch-1.request.hub.command.fixture",
+  "authority_epoch": 1,
+  "expected_authority_revision": 6,
+  "requested_at_ms": 1600,
+  "operation": {
+    "type": "authorize_surface_command",
+    "details": {
+      "session_id": "epoch-1.session.friend-phone.primary",
+      "expected_transport_epoch": 1,
+      "lease_id": "epoch-1.lease.surface.media-player.friend",
+      "command_id": "command.player.play",
+      "typed_params_schema_id": "rusty.manifold.connection_hub.typed_params.empty.v1",
+      "typed_params_schema_sha256": "sha256:7eedc1ccca80b83dbd121d1e4bae4f6a6c9c1561e1a08d6d5919c668d5406a51",
+      "typed_params_sha256": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+      "external_request_sequence": 1,
+      "external_request_sha256": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+    }
+  }
+}

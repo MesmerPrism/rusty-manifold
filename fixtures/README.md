@@ -116,8 +116,26 @@ and safe to use in tests, generated schemas, documentation, and clients.
   provider-epoch restart rejection.
 - `admission/`: deterministic grant/token lifecycle from issue through one-time
   use, replay rejection, explicit revocation, and post-revocation rejection,
-  plus damaged signing-fingerprint and capability-escalation requests. The
+  retained-authority revocation, plus damaged signing-fingerprint and
+  capability-escalation requests. The
   signing hashes are synthetic fixture values, never production identities.
+- `trusted-local-http-v1/`: sanitized source-only policy, pairing evidence,
+  composite command, safe-status, valid-flow, and damaged mappings for one
+  wearer-enabled local browser controller. The signed identity is the trusted
+  Quest adapter; the browser controller id is a separate logical id. No
+  pairing code, password, production token, device-management credential,
+  listener, external asset, or player effect is included.
+- `connection-hub/`: deterministic exact provider/contract/command-capability
+  policy with admission and packaged Broker product-lock binding, initial
+  v3 restart snapshot, bounded epoch-scoped trust request, policy-fixed
+  authenticated-activity sliding windows, constant-size per-session external
+  request sequence/digest fencing, canonical typed-command
+  parameter schema/digest request, shared cross-language canonical JSON vectors,
+  explicit zero-argument schema, malformed digest damage, and unknown-field
+  damage for durable controller/session/provider/surface
+  authority. Fixtures contain synthetic public digests and no
+  token, pairing code, endpoint, socket, UI document, parameter bytes, or app
+  effect.
 - `shell-handoff/`: contract-backed shell handoff and Manifold review receipt examples for downstream operator or render shells.
 - `simulator/`: deterministic source-only simulator snapshots.
 - `damaged/`: intentionally invalid examples.

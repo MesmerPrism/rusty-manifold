@@ -1,0 +1,11 @@
+{
+  "$schema": "rusty.manifold.local_control.controller_evidence.v1",
+  "evidence_id": "evidence.local.pairing.synthetic",
+  "adapter_id": "adapter.quest.trusted_local_http",
+  "window_id": "window.local.synthetic",
+  "controller_id": "controller.browser.synthetic_primary",
+  "presentation": "manual_entry",
+  "pairing_code_verified": true,
+  "observed_at_ms": 12000,
+  "expires_at_ms": 17000
+}

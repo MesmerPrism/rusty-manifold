@@ -50,10 +50,12 @@ it must not define Lattice relation semantics or default to legacy
 13. `docs/BROKER_PRODUCTS.md`
 14. `docs/BROKER_ADAPTERS.md`
 15. `docs/ADMISSION.md`
-16. `docs/IMPLEMENTATION_PLAN.md`
-17. `docs/MODULE_PACKAGE_STRATEGY.md`
-18. `docs/SCHEMA_EVOLUTION.md`
-19. `fixtures/README.md`
+16. `docs/LOCAL_CONTROL_AUTHORITY.md`
+17. `docs/CONNECTION_HUB_AUTHORITY.md`
+18. `docs/IMPLEMENTATION_PLAN.md`
+19. `docs/MODULE_PACKAGE_STRATEGY.md`
+20. `docs/SCHEMA_EVOLUTION.md`
+21. `fixtures/README.md`
 
 ## Architecture Rules
 
@@ -103,6 +105,24 @@ it must not define Lattice relation semantics or default to legacy
 - Standalone and embedded products must use `rusty-manifold-runtime-host` for
   revisioned review/application, lease expiry, restart, replay, and audit. The
   host is source-only; product adapters and policy stay outside it.
+- Short local-control products compose admission, one generic controller lease,
+  and Runtime Host only through `rusty-manifold-local-control`. The signed
+  platform identity is the trusted installed adapter; a paired browser has a
+  separate non-secret logical controller id. HTTP/WebSocket, discovery,
+  pairing-code material, UI assets, and application effects remain downstream.
+- Durable standalone connection products compose trusted controller records,
+  logical sessions, monotonic transport epochs, separately admitted provider
+  instances, command-closed UI surfaces, derivative surface leases, replay,
+  cleanup, and restart audit through `rusty-manifold-connection-hub`. Its
+  mutation boundary must retain exact admission/product-lock owners, derive
+  per-command parameter schema bindings internally, treat admission expiry as
+  registration-credential expiry rather than provider-process death, and use
+  audited epoch rollover rather than exhausting ordinary-work history. Sliding
+  authenticated deadlines and external command replay use one exact sequence
+  high-water fence per live logical session; reconnect does not consume the
+  sequence and must report the next value. Sockets,
+  Android services, UI documents, pairing secrets, high-rate data, and app
+  effects remain downstream.
 - Broker product features resolve through `rusty-manifold-broker-product` into
   exact commands, streams, modules, permissions, and fingerprint. Generic
   `media_session` is camera-free; `camera_media` explicitly layers capture
@@ -241,9 +261,9 @@ Run the narrow checks before committing:
 cargo fmt --all --check
 cargo test --workspace
 cargo test -p rusty-manifold-peer-runtime-host
-cargo run -p rusty-manifold-fixtures -- validate
-cargo run -p rusty-manifold-fixtures -- simulate --check
-cargo run -p rusty-manifold-fixtures -- diff --check
+cargo run -p rusty-manifold-fixtures --bin rusty-manifold-fixtures -- validate
+cargo run -p rusty-manifold-fixtures --bin rusty-manifold-fixtures -- simulate --check
+cargo run -p rusty-manifold-fixtures --bin rusty-manifold-fixtures -- diff --check
 cargo run -p rusty-manifold-schema -- export --check
 ```
 

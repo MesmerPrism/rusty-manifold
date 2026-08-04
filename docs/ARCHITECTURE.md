@@ -24,6 +24,25 @@ Manifold authority owns accepted mutable state:
 Clients observe or request through typed commands and descriptors. They do not
 mutate accepted state directly.
 
+The standalone Connection Hub is an additive Manifold authority family. It
+owns durable controller trust, logical sessions, transport epochs, admitted
+provider/surface state, derivative surface leases, replay, cleanup, restart,
+and audit. Its owner boundary binds the exact admission authority and packaged
+Broker product lock, fences replay through authority epochs and admission
+revision floors, and binds every command to exact typed-parameter schema bytes.
+Short-lived admission expiry does not end an already admitted live provider;
+explicit Binder/process death cleanup does. Quest owns the foreground service, listener/socket, platform
+identity projection, UI delivery, and effective app receipts. Transport
+replacement advances an epoch inside one logical session; it does not create a
+parallel Java session authority.
+Successful sealed authenticated activity slides the exact controller and
+session deadlines under fixed product policy. One monotonic external-request
+high-water fence per live session survives history rollover and restart;
+authenticated reconnect does not consume it and returns the next sequence.
+This keeps replay state O(active sessions) while allowing long-lived active
+connections. Public Hub wire v1 remains byte-exact compatibility input; the
+additive rollover-safe command/keepalive v2 supplies the monotonic sequence.
+
 Broker Runtime Host leases are derived state, not a second lease authority.
 Normal Broker construction and restart retain a synchronized
 `ManifoldBrokerControlLeaseAuthority` containing the current owner view and

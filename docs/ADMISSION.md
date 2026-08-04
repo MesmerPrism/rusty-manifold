@@ -77,3 +77,17 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\check_all.ps1
 Device adapters must additionally prove a same-signer client lifecycle and a
 differently signed client denial, preserve logcat evidence, then stop and
 uninstall all run-owned packages.
+
+## Retained-authority revocation
+
+`ManifoldAdmissionAdministrativeRevocationRequest` is the authority-owned
+counterpart to client-owned token revocation. It binds the exact admission
+authority id, expected revision, active token id, one-use request id, reason,
+and trusted request time. It never accepts a client identity as substitute
+authority evidence.
+
+The local-control composition uses this path for wearer revocation and
+session/idle expiry. Its admission identity remains the real signed Quest
+adapter package. The paired browser is represented by a separate non-secret
+logical controller id; Manifold never fabricates an Apple/browser signing
+fingerprint. See [LOCAL_CONTROL_AUTHORITY.md](LOCAL_CONTROL_AUTHORITY.md).

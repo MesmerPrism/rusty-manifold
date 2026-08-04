@@ -9,6 +9,8 @@ members = [
     "crates/rusty-manifold-broker-product",
     "crates/rusty-manifold-broker-adapter",
     "crates/rusty-manifold-admission",
+    "crates/rusty-manifold-local-control",
+    "crates/rusty-manifold-connection-hub",
     "crates/rusty-manifold-schema",
     "crates/rusty-manifold-stream-observation",
     "crates/rusty-manifold-zmq",

@@ -1,0 +1,63 @@
+{
+  "$schema": "rusty.manifold.local_control.policy.v1",
+  "authority_id": "authority.quest.local_control",
+  "trusted_adapter_id": "adapter.quest.trusted_local_http",
+  "adapter_identity": {
+    "client_id": "adapter.quest.trusted_local_http",
+    "platform_subject": "io.github.mesmerprism.rustyquest.localcontrol",
+    "signing_fingerprint": "sha256:a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1"
+  },
+  "controller_id": "controller.browser.synthetic_primary",
+  "controller_lease_scope": "player.local_control",
+  "controller_lease_capability_id": "capability.player.local_control",
+  "commands": [
+    {
+      "command_id": "command.player.describe",
+      "capability_id": "capability.command.player.describe",
+      "required_lease_scope": null,
+      "params_type_id": null,
+      "safety_class": "read_only"
+    },
+    {
+      "command_id": "command.player.get_state",
+      "capability_id": "capability.command.player.get_state",
+      "required_lease_scope": null,
+      "params_type_id": null,
+      "safety_class": "read_only"
+    },
+    {
+      "command_id": "command.player.list_videos",
+      "capability_id": "capability.command.player.list_videos",
+      "required_lease_scope": null,
+      "params_type_id": null,
+      "safety_class": "read_only"
+    },
+    {
+      "command_id": "command.player.pause",
+      "capability_id": "capability.command.player.pause",
+      "required_lease_scope": "player.local_control",
+      "params_type_id": null,
+      "safety_class": "bounded_mutation"
+    },
+    {
+      "command_id": "command.player.play",
+      "capability_id": "capability.command.player.play",
+      "required_lease_scope": "player.local_control",
+      "params_type_id": null,
+      "safety_class": "bounded_mutation"
+    },
+    {
+      "command_id": "command.player.select_video",
+      "capability_id": "capability.command.player.select_video",
+      "required_lease_scope": "player.local_control",
+      "params_type_id": "params.player.video_selection",
+      "safety_class": "bounded_mutation"
+    }
+  ],
+  "max_window_ttl_ms": 300000,
+  "max_session_ttl_ms": 300000,
+  "idle_timeout_ms": 60000,
+  "rate_window_ms": 1000,
+  "max_commands_per_window": 8,
+  "allow_debug_shell_operator": false
+}

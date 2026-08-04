@@ -1,0 +1,39 @@
+{
+  "$schema": "rusty.manifold.connection_hub.typed_params_canonical_vectors.v1",
+  "algorithm": "rusty.manifold.connection_hub.canonical_json.v1",
+  "constraints": {
+    "root": "object",
+    "keys": "ascii_sorted_ascending",
+    "values": "null_boolean_safe_integer_ascii_string",
+    "whitespace": "none",
+    "encoding": "utf-8"
+  },
+  "vectors": [
+    {
+      "case_id": "empty_zero_args",
+      "value": {},
+      "canonical_utf8_base64": "e30=",
+      "sha256": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+    },
+    {
+      "case_id": "sorted_scalar_fields",
+      "value": {
+        "enabled": true,
+        "label": "alpha",
+        "offset": -12,
+        "optional": null
+      },
+      "canonical_utf8_base64": "eyJlbmFibGVkIjp0cnVlLCJsYWJlbCI6ImFscGhhIiwib2Zmc2V0IjotMTIsIm9wdGlvbmFsIjpudWxsfQ==",
+      "sha256": "sha256:ef57e715ad61dac140d62165531e74a6978e5fb66cef56cc0dc3ddfbb23c3166"
+    },
+    {
+      "case_id": "sorted_command_fields",
+      "value": {
+        "command": "select",
+        "item_id": "video-01"
+      },
+      "canonical_utf8_base64": "eyJjb21tYW5kIjoic2VsZWN0IiwiaXRlbV9pZCI6InZpZGVvLTAxIn0=",
+      "sha256": "sha256:0883c2ba2d628329334f6c650390dab9b090080ddc5870924c247e87e3f94c0b"
+    }
+  ]
+}

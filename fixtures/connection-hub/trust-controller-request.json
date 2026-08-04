@@ -1,0 +1,20 @@
+{
+  "$schema": "rusty.manifold.connection_hub.request.v3",
+  "request_id": "epoch-1.request.hub.trust-controller.fixture",
+  "authority_epoch": 1,
+  "expected_authority_revision": 1,
+  "requested_at_ms": 1000,
+  "operation": {
+    "type": "trust_controller",
+    "details": {
+      "controller_id": "epoch-1.controller.friend-phone",
+      "public_identity_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "capabilities": [
+        "capability.player.pause",
+        "capability.player.play"
+      ],
+      "operator_evidence_id": "evidence.operator.wearer-action",
+      "requested_ttl_ms": 90000
+    }
+  }
+}

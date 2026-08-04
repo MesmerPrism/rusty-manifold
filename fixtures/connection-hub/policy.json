@@ -1,0 +1,43 @@
+{
+  "$schema": "rusty.manifold.connection_hub.policy.v3",
+  "authority_id": "authority.connection-hub.synthetic",
+  "admission_authority_id": "authority.admission.synthetic",
+  "broker_product_lock_id": "lock.broker.connection-hub.standalone",
+  "broker_product_lock_fingerprint": "fnv1a64-e857d4cede86e709",
+  "broker_product_lock_sha256": "sha256:c3c069f7bbdaf092b38e068588ba04479ad121378ea8f8218673d528c3454cb4",
+  "trusted_operator_evidence_ids": [
+    "evidence.operator.wearer-action"
+  ],
+  "allowed_controller_capabilities": [
+    "capability.player.pause",
+    "capability.player.play"
+  ],
+  "provider_grants": [
+    {
+      "provider_id": "provider.media-player",
+      "client_id": "client.media-player",
+      "client_lock_id": "client-lock.media-player",
+      "client_lock_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "surface_contract_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "allowed_commands": [
+        {
+          "command_id": "command.player.pause",
+          "typed_params_schema_id": "rusty.manifold.connection_hub.typed_params.empty.v1",
+          "typed_params_schema_sha256": "sha256:7eedc1ccca80b83dbd121d1e4bae4f6a6c9c1561e1a08d6d5919c668d5406a51",
+          "required_controller_capability": "capability.player.pause"
+        },
+        {
+          "command_id": "command.player.play",
+          "typed_params_schema_id": "rusty.manifold.connection_hub.typed_params.empty.v1",
+          "typed_params_schema_sha256": "sha256:7eedc1ccca80b83dbd121d1e4bae4f6a6c9c1561e1a08d6d5919c668d5406a51",
+          "required_controller_capability": "capability.player.play"
+        }
+      ]
+    }
+  ],
+  "max_controller_ttl_ms": 100000,
+  "max_session_ttl_ms": 80000,
+  "max_surface_lease_ttl_ms": 60000,
+  "authenticated_activity_controller_ttl_ms": 90000,
+  "authenticated_activity_session_ttl_ms": 70000
+}

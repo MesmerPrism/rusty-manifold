@@ -752,6 +752,7 @@
       "rust_type": "ManifoldBrokerProductSpec",
       "fixture_paths": [
         "fixtures/broker-product/base-standalone.json",
+        "fixtures/broker-product/connection-hub-standalone.json",
         "fixtures/broker-product/media-session-standalone.json",
         "fixtures/broker-product/camera-embedded.json",
         "fixtures/broker-product/direct-p2p-standalone.json",
@@ -766,6 +767,7 @@
       "rust_type": "ManifoldBrokerProductLock",
       "fixture_paths": [
         "fixtures/broker-product/base-standalone.lock.json",
+        "fixtures/broker-product/connection-hub-standalone.lock.json",
         "fixtures/broker-product/media-session-standalone.lock.json",
         "fixtures/broker-product/media-session-embedded.lock.json",
         "fixtures/broker-product/camera-embedded.lock.json",
@@ -1048,6 +1050,13 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.admission.administrative_revocation_request.v1",
+      "rust_type": "ManifoldAdmissionAdministrativeRevocationRequest",
+      "fixture_paths": [
+        "fixtures/admission/administrative-revoke-request.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.admission.receipt.v1",
       "rust_type": "ManifoldAdmissionReceipt",
       "fixture_paths": [
@@ -1058,6 +1067,190 @@
         "fixtures/admission/after-revoke-use-receipt.json",
         "fixtures/admission/wrong-identity-receipt.json",
         "fixtures/admission/capability-escalation-receipt.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.policy.v1",
+      "rust_type": "ManifoldLocalControlPolicy",
+      "fixture_paths": [
+        "fixtures/trusted-local-http-v1/local-control-policy.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.window_request.v1",
+      "rust_type": "ManifoldLocalControlWindowRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.window_receipt.v1",
+      "rust_type": "ManifoldLocalControlWindowReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.controller_evidence.v1",
+      "rust_type": "ManifoldLocalControllerEvidence",
+      "fixture_paths": [
+        "fixtures/trusted-local-http-v1/controller-evidence.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.admission_request.v1",
+      "rust_type": "ManifoldLocalControlAdmissionRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.admission_receipt.v1",
+      "rust_type": "ManifoldLocalControlAdmissionReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.command_request.v1",
+      "rust_type": "ManifoldLocalControlCommandRequest",
+      "fixture_paths": [
+        "fixtures/trusted-local-http-v1/command-request.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.command_receipt.v1",
+      "rust_type": "ManifoldLocalControlCommandReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.revocation_request.v1",
+      "rust_type": "ManifoldLocalControlRevocationRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.revocation_receipt.v1",
+      "rust_type": "ManifoldLocalControlRevocationReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.expiry_request.v1",
+      "rust_type": "ManifoldLocalControlExpiryRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.expiry_receipt.v1",
+      "rust_type": "ManifoldLocalControlExpiryReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.disable_request.v1",
+      "rust_type": "ManifoldLocalControlDisableRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.disable_receipt.v1",
+      "rust_type": "ManifoldLocalControlDisableReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.local_control.safe_status.v1",
+      "rust_type": "ManifoldLocalControlSafeStatus",
+      "fixture_paths": [
+        "fixtures/trusted-local-http-v1/safe-status.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.policy.v1",
+      "rust_type": "LegacyManifoldConnectionHubPolicyV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.request.v1",
+      "rust_type": "LegacyManifoldConnectionHubRequestV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.state.v1",
+      "rust_type": "LegacyManifoldConnectionHubStateV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.snapshot.v1",
+      "rust_type": "LegacyManifoldConnectionHubSnapshotV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.policy.v2",
+      "rust_type": "LegacyManifoldConnectionHubPolicyV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.request.v2",
+      "rust_type": "LegacyManifoldConnectionHubRequestV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.state.v2",
+      "rust_type": "LegacyManifoldConnectionHubStateV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.snapshot.v2",
+      "rust_type": "LegacyManifoldConnectionHubSnapshotV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.policy.v3",
+      "rust_type": "ManifoldConnectionHubPolicy",
+      "fixture_paths": [
+        "fixtures/connection-hub/policy.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.request.v3",
+      "rust_type": "ManifoldConnectionHubRequest",
+      "fixture_paths": [
+        "fixtures/connection-hub/trust-controller-request.json",
+        "fixtures/connection-hub/trust-controller-request.unknown-field.damaged.json",
+        "fixtures/connection-hub/refresh-authenticated-activity-request.json",
+        "fixtures/connection-hub/authorize-command-request.json",
+        "fixtures/connection-hub/authorize-command-request.bad-digest.damaged.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.state.v3",
+      "rust_type": "ManifoldConnectionHubState",
+      "fixture_paths": [
+        "fixtures/connection-hub/initial-snapshot.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.snapshot.v3",
+      "rust_type": "ManifoldConnectionHubSnapshot",
+      "fixture_paths": [
+        "fixtures/connection-hub/initial-snapshot.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.history_checkpoint.v1",
+      "rust_type": "LegacyManifoldConnectionHubHistoryCheckpointV1",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.history_checkpoint.v2",
+      "rust_type": "ManifoldConnectionHubHistoryCheckpoint",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.external_request_fence.v1",
+      "rust_type": "ManifoldConnectionHubExternalRequestFence",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.typed_params.empty.v1",
+      "rust_type": "EmptyTypedParams",
+      "fixture_paths": [
+        "fixtures/connection-hub/typed-params-empty.schema.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.connection_hub.typed_params_canonical_vectors.v1",
+      "rust_type": "CanonicalTypedParamsVectors",
+      "fixture_paths": [
+        "fixtures/connection-hub/typed-params-canonical-vectors.v1.json"
       ]
     },
     {

@@ -1,0 +1,82 @@
+{
+  "fixture_kind": "trusted_local_http_damaged_mappings_v1",
+  "profile_id": "trusted_local_http_v1",
+  "cases": [
+    {
+      "case_id": "second_controller",
+      "active_controller_ids": [
+        "controller.browser.synthetic_primary",
+        "controller.browser.synthetic_second"
+      ],
+      "lease_scope": "player.local_control",
+      "expected_rejection": "busy_scope"
+    },
+    {
+      "case_id": "pair_request_replay",
+      "pair_request_id": "request.local.pair.0001",
+      "consumed_pair_request_ids": [
+        "request.local.pair.0001"
+      ],
+      "expected_rejection": "replayed_request"
+    },
+    {
+      "case_id": "command_use_request_replay",
+      "use_request_id": "request.local.use.select_video.0001",
+      "consumed_use_request_ids": [
+        "request.local.use.select_video.0001"
+      ],
+      "expected_rejection": "replayed_request"
+    },
+    {
+      "case_id": "stale_expected_revision",
+      "expected_authority_revision": 30,
+      "current_authority_revision": 31,
+      "expected_rejection": "stale_authority_revision"
+    },
+    {
+      "case_id": "expired_session",
+      "token_expires_at_ms": 300000,
+      "reviewed_at_ms": 300001,
+      "expected_rejection": "token_expired"
+    },
+    {
+      "case_id": "expired_controller_lease",
+      "lease_expires_at_ms": 310000,
+      "reviewed_at_ms": 310001,
+      "expected_rejection": "expired_lease"
+    },
+    {
+      "case_id": "revoked_session",
+      "token_ref": "token.synthetic.redacted",
+      "revoked_token_refs": [
+        "token.synthetic.redacted"
+      ],
+      "expected_rejection": "token_revoked"
+    },
+    {
+      "case_id": "transport_ack_as_authority",
+      "observed_stages": [
+        "sent",
+        "transport_ok"
+      ],
+      "claimed_event": "command_accepted",
+      "expected_rejection": "missing_authority_acceptance"
+    },
+    {
+      "case_id": "acceptance_as_player_effect",
+      "observed_events": [
+        "command_accepted"
+      ],
+      "claimed_event": "command_applied",
+      "media3_callback_present": false,
+      "expected_rejection": "missing_downstream_application_effect"
+    },
+    {
+      "case_id": "broken_causality",
+      "command_request_id": "request.local.command.select_video.0001",
+      "accepted_request_id": "request.local.command.select_video.other",
+      "applied_request_id": "request.local.command.select_video.0001",
+      "expected_rejection": "request_causality_mismatch"
+    }
+  ]
+}

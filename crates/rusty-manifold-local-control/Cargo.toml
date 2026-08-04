@@ -1,0 +1,20 @@
+[package]
+name = "rusty-manifold-local-control"
+description = "Platform-neutral admission, lease, replay, and receipt authority for bounded local control surfaces."
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+rusty-manifold-admission = { path = "../rusty-manifold-admission" }
+rusty-manifold-model = { path = "../rusty-manifold-model", features = ["serde"] }
+rusty-manifold-runtime-host = { path = "../rusty-manifold-runtime-host" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"
+
+[lints]
+workspace = true

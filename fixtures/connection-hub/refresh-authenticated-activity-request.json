@@ -1,0 +1,17 @@
+{
+  "$schema": "rusty.manifold.connection_hub.request.v3",
+  "request_id": "epoch-1.request.hub.authenticated-activity.fixture",
+  "authority_epoch": 1,
+  "expected_authority_revision": 3,
+  "requested_at_ms": 1200,
+  "operation": {
+    "type": "refresh_authenticated_activity",
+    "details": {
+      "controller_id": "epoch-1.controller.friend-phone",
+      "session_id": "epoch-1.session.friend-phone.primary",
+      "expected_transport_epoch": 1,
+      "external_request_sequence": 1,
+      "external_request_sha256": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+    }
+  }
+}

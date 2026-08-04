@@ -16,6 +16,9 @@ pub const ADMISSION_USE_REQUEST_SCHEMA: &str = "rusty.manifold.admission.use_req
 /// Token revocation request schema.
 pub const ADMISSION_REVOCATION_REQUEST_SCHEMA: &str =
     "rusty.manifold.admission.revocation_request.v1";
+/// Authority-owned token revocation request schema.
+pub const ADMISSION_ADMINISTRATIVE_REVOCATION_REQUEST_SCHEMA: &str =
+    "rusty.manifold.admission.administrative_revocation_request.v1";
 /// Legacy admission token schema accepted only during snapshot migration.
 pub const LEGACY_ADMISSION_TOKEN_V1_SCHEMA: &str = "rusty.manifold.admission.token.v1";
 /// Admission token schema with exact packaged client-lock provenance.
@@ -168,6 +171,31 @@ pub struct ManifoldAdmissionRevocationRequest {
     pub reason: DottedId,
 }
 
+/// Authority-owned request to revoke one active admission token.
+///
+/// This path is distinct from client-owned revocation. It allows a retained
+/// authority owner, such as an on-device wearer control, to revoke a session
+/// without impersonating the admitted client identity.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldAdmissionAdministrativeRevocationRequest {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// One-time revocation request identity.
+    pub request_id: DottedId,
+    /// Exact admission authority requesting revocation.
+    pub authority_id: DottedId,
+    /// Expected admission authority revision.
+    pub expected_authority_revision: Revision,
+    /// Exact active token to revoke.
+    pub token_id: DottedId,
+    /// Stable low-sensitivity authority reason.
+    pub reason: DottedId,
+    /// Trusted authority observation time.
+    pub requested_at_ms: u64,
+}
+
 /// Admission operation recorded by receipts and audit.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -178,6 +206,8 @@ pub enum ManifoldAdmissionOperation {
     AuthorizeUse,
     /// Explicit token revocation.
     RevokeToken,
+    /// Authority-owned token revocation.
+    AdministrativeRevokeToken,
     /// Explicit expired-token sweep.
     ExpireTokens,
 }
@@ -198,6 +228,8 @@ pub enum ManifoldAdmissionRejectionReason {
     UntrustedClient,
     /// Package/signature identity differs from the grant or token.
     IdentityMismatch,
+    /// Administrative revocation named a different admission authority.
+    AuthorityMismatch,
     /// Matching grant is expired.
     GrantExpired,
     /// Matching grant is revoked.
@@ -725,6 +757,81 @@ impl ManifoldAdmissionAuthority {
         )
     }
 
+    /// Revokes one active token as the retained admission authority.
+    ///
+    /// This is the administrative counterpart to [`Self::revoke_token`].
+    /// It never accepts a client identity in place of authority provenance.
+    pub fn administratively_revoke_token(
+        &mut self,
+        request: &ManifoldAdmissionAdministrativeRevocationRequest,
+    ) -> ManifoldAdmissionReceipt {
+        let prior = self.snapshot.authority_revision;
+        if self.snapshot.audit_events.len() >= MAX_ADMISSION_AUDIT_EVENTS {
+            return terminal_rejection(
+                ManifoldAdmissionOperation::AdministrativeRevokeToken,
+                request.request_id.clone(),
+                prior,
+                ManifoldAdmissionRejectionReason::AuthorityCapacityExhausted,
+            );
+        }
+        let token = self
+            .snapshot
+            .active_tokens
+            .iter()
+            .find(|token| token.token_id == request.token_id);
+        let rejection =
+            if request.schema_id.as_str() != ADMISSION_ADMINISTRATIVE_REVOCATION_REQUEST_SCHEMA {
+                Some(ManifoldAdmissionRejectionReason::SchemaMismatch)
+            } else if request.authority_id != self.snapshot.authority_id {
+                Some(ManifoldAdmissionRejectionReason::AuthorityMismatch)
+            } else if request.expected_authority_revision != prior {
+                Some(ManifoldAdmissionRejectionReason::StaleAuthorityRevision)
+            } else if self
+                .snapshot
+                .consumed_request_ids
+                .contains(&request.request_id)
+            {
+                Some(ManifoldAdmissionRejectionReason::ReplayedRequest)
+            } else if self.snapshot.revoked_token_ids.contains(&request.token_id) {
+                Some(ManifoldAdmissionRejectionReason::TokenRevoked)
+            } else if token.is_none() {
+                Some(ManifoldAdmissionRejectionReason::UnknownToken)
+            } else if self.snapshot.revoked_token_ids.len() >= MAX_ADMISSION_RECORDS
+                || self.snapshot.consumed_request_ids.len() >= MAX_ADMISSION_RECORDS
+            {
+                Some(ManifoldAdmissionRejectionReason::AuthorityCapacityExhausted)
+            } else if prior.next().is_none() {
+                Some(ManifoldAdmissionRejectionReason::RevisionExhausted)
+            } else {
+                None
+            };
+        let mut removed = Vec::new();
+        if rejection.is_none() {
+            self.snapshot
+                .active_tokens
+                .retain(|token| token.token_id != request.token_id);
+            self.snapshot
+                .revoked_token_ids
+                .push(request.token_id.clone());
+            self.snapshot.revoked_token_ids.sort();
+            self.snapshot
+                .consumed_request_ids
+                .push(request.request_id.clone());
+            self.snapshot.consumed_request_ids.sort();
+            self.snapshot.authority_revision = prior.next().unwrap_or(prior);
+            removed.push(request.token_id.clone());
+        }
+        self.finish(
+            ManifoldAdmissionOperation::AdministrativeRevokeToken,
+            request.request_id.clone(),
+            prior,
+            None,
+            removed,
+            rejection,
+            None,
+        )
+    }
+
     /// Explicitly expires tokens and advances revision only when state changes.
     pub fn expire_tokens(
         &mut self,
@@ -1086,6 +1193,7 @@ fn validate_legacy_admission_snapshot(
                     event.operation,
                     ManifoldAdmissionOperation::IssueToken
                         | ManifoldAdmissionOperation::RevokeToken
+                        | ManifoldAdmissionOperation::AdministrativeRevokeToken
                 )
         })
         .map(|event| event.request_id.clone())
@@ -1374,6 +1482,7 @@ fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), Manifol
                     event.operation,
                     ManifoldAdmissionOperation::IssueToken
                         | ManifoldAdmissionOperation::RevokeToken
+                        | ManifoldAdmissionOperation::AdministrativeRevokeToken
                 )
         })
         .map(|event| event.request_id.clone())
@@ -1420,7 +1529,9 @@ fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), Manifol
     for (index, event) in snapshot.audit_events.iter().enumerate() {
         let sequence = (index as u64) + 1;
         let operation_valid = match event.operation {
-            ManifoldAdmissionOperation::IssueToken | ManifoldAdmissionOperation::RevokeToken
+            ManifoldAdmissionOperation::IssueToken
+            | ManifoldAdmissionOperation::RevokeToken
+            | ManifoldAdmissionOperation::AdministrativeRevokeToken
                 if event.applied =>
             {
                 seen_applied_requests.insert(event.request_id.clone())
@@ -1680,6 +1791,107 @@ mod tests {
             Some(ManifoldAdmissionRejectionReason::TokenRevoked)
         );
         assert_eq!(authority.snapshot().authority_revision.get(), 4);
+    }
+
+    #[test]
+    fn retained_authority_can_revoke_without_impersonating_client() {
+        let mut authority = authority();
+        let issued = authority.issue_token(&admission(1), [8; 32], 2_000);
+        let token = issued.token.expect("token");
+        let request = ManifoldAdmissionAdministrativeRevocationRequest {
+            schema_id: schema_id(ADMISSION_ADMINISTRATIVE_REVOCATION_REQUEST_SCHEMA),
+            request_id: id("request.admission.administrative-revoke"),
+            authority_id: id("authority.admission.quest"),
+            expected_authority_revision: Revision::new(2).expect("revision"),
+            token_id: token.token_id.clone(),
+            reason: id("reason.wearer.revoked"),
+            requested_at_ms: 3_000,
+        };
+
+        let receipt = authority.administratively_revoke_token(&request);
+        assert!(receipt.applied);
+        assert_eq!(
+            receipt.operation,
+            ManifoldAdmissionOperation::AdministrativeRevokeToken
+        );
+        assert_eq!(receipt.removed_token_ids, vec![token.token_id.clone()]);
+        assert!(authority.snapshot().active_tokens.is_empty());
+
+        let restarted = ManifoldAdmissionAuthority::restart_from_json(
+            &authority.snapshot_json().expect("json"),
+        )
+        .expect("restart");
+        assert_eq!(restarted.snapshot(), authority.snapshot());
+
+        let post_revoke = ManifoldAdmissionUseRequest {
+            schema_id: schema_id(ADMISSION_USE_REQUEST_SCHEMA),
+            request_id: id("request.admission.after-administrative-revoke"),
+            expected_authority_revision: Revision::new(3).expect("revision"),
+            token_id: token.token_id.clone(),
+            identity: identity(),
+            capability_id: id("capability.command.session.list"),
+            issued_at_ms: 3_000,
+            expires_at_ms: 6_000,
+        };
+        let mut restarted = restarted;
+        assert_eq!(
+            restarted
+                .authorize_use(&post_revoke, 4_000)
+                .rejection_reason,
+            Some(ManifoldAdmissionRejectionReason::TokenRevoked)
+        );
+        let mut replay = request.clone();
+        replay.expected_authority_revision = Revision::new(3).expect("revision");
+        assert_eq!(
+            restarted
+                .administratively_revoke_token(&replay)
+                .rejection_reason,
+            Some(ManifoldAdmissionRejectionReason::ReplayedRequest)
+        );
+    }
+
+    #[test]
+    fn administrative_revoke_rejects_authority_substitution() {
+        let mut authority = authority();
+        let issued = authority.issue_token(&admission(1), [9; 32], 2_000);
+        let token = issued.token.expect("token");
+        let request = ManifoldAdmissionAdministrativeRevocationRequest {
+            schema_id: schema_id(ADMISSION_ADMINISTRATIVE_REVOCATION_REQUEST_SCHEMA),
+            request_id: id("request.admission.administrative-revoke.substitute"),
+            authority_id: id("authority.admission.substitute"),
+            expected_authority_revision: Revision::new(2).expect("revision"),
+            token_id: token.token_id,
+            reason: id("reason.wearer.revoked"),
+            requested_at_ms: 3_000,
+        };
+
+        assert_eq!(
+            authority
+                .administratively_revoke_token(&request)
+                .rejection_reason,
+            Some(ManifoldAdmissionRejectionReason::AuthorityMismatch)
+        );
+        assert_eq!(authority.snapshot().authority_revision.get(), 2);
+        assert_eq!(authority.snapshot().active_tokens.len(), 1);
+    }
+
+    #[test]
+    fn administrative_revoke_fixture_is_strict() {
+        let json = include_str!("../../../fixtures/admission/administrative-revoke-request.json");
+        let request: ManifoldAdmissionAdministrativeRevocationRequest =
+            serde_json::from_str(json).expect("administrative revoke fixture");
+        assert_eq!(
+            request.schema_id.as_str(),
+            ADMISSION_ADMINISTRATIVE_REVOCATION_REQUEST_SCHEMA
+        );
+        let damaged = json.replace(
+            "\"requested_at_ms\": 4000",
+            "\"requested_at_ms\": 4000, \"client_identity\": \"forbidden\"",
+        );
+        assert!(
+            serde_json::from_str::<ManifoldAdmissionAdministrativeRevocationRequest>(&damaged)
+                .is_err()
+        );
     }
 
     #[test]
