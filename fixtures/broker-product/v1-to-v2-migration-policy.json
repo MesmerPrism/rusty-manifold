@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.broker.product_lock_migration_policy.v1",
+  "policy_id": "policy.product.v1_to_v2",
+  "source_schema_id": "rusty.manifold.broker.product_lock.v1",
+  "target_schema_id": "rusty.manifold.broker.product_lock.v2",
+  "forbid_pmb_target": true
+  ,"policy_fingerprint": "sha256:ad5ef9f789cbf4c7b3e57db6acb6f3c1fb1851c37a51ed63da21851530d008d3"
+}

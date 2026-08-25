@@ -1,0 +1,8 @@
+{
+  "$schema": "rusty.manifold.broker.pmb_neutral_ingress.v1",
+  "ingress_id": "ingress.pmb.vector3",
+  "descriptor_id": "feature.projected_motion_breath",
+  "resolved_descriptor_fingerprint": "sha256:16741cecae442dd62822c1f874b35f42e76a8dd4f672864761c7f8111fb95085",
+  "stream_id": "stream.motion.vector3",
+  "source_module_id": "module.motion.vector_provider"
+}

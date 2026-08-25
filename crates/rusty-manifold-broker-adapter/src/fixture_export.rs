@@ -42,6 +42,31 @@ pub fn export_broker_adapter_fixtures(out: &Path) -> Result<(), Box<dyn std::err
     }
     export_lease_projection(out)?;
     export_runtime_evidence(out)?;
+    export_pmb_v3(out)?;
+    Ok(())
+}
+
+fn export_pmb_v3(out: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let generated = crate::generate_pmb_v3_fixture_bytes(include_bytes!(
+        "../../../fixtures/broker-product/pmb-v2-product-lock.json"
+    ))
+    .map_err(|error| std::io::Error::other(format!("PMB V3 fixture generation: {error:?}")))?;
+    fs::write(
+        out.join("pmb-v3-standalone-config.json"),
+        generated.standalone_config,
+    )?;
+    fs::write(
+        out.join("pmb-v3-standalone-receipt.json"),
+        generated.standalone_receipt,
+    )?;
+    fs::write(
+        out.join("pmb-v3-embedded-config.json"),
+        generated.embedded_config,
+    )?;
+    fs::write(
+        out.join("pmb-v3-embedded-receipt.json"),
+        generated.embedded_receipt,
+    )?;
     Ok(())
 }
 

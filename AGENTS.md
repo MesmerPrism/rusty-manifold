@@ -128,6 +128,12 @@ it must not define Lattice relation semantics or default to legacy
   `media_session` is camera-free; `camera_media` explicitly layers capture
   authority over it. Downstream manifests project the lock and must not expand
   it.
+- ProductLock V2 is placement-neutral: a source-pinned descriptor resolves one
+  canonical command/stream/module/effect closure and permits a closed placement
+  set, while each V3 adapter config selects exactly one permitted placement.
+  PMB V2 pins its package commit/tree/manifest bytes, admits no ambient
+  permission/effect, and both placement configs preserve the same Runtime Host
+  receipts. Pending-operation cancellation is not an adapter feature.
 - `spec_fingerprint` is the deterministic semantic closure fingerprint. It is
   not the exact packaged-file hash. Broker adapter configs and receipts carry
   separately named `product_lock_sha256` evidence for the accepted bytes.

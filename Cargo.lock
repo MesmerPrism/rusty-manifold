@@ -633,6 +633,7 @@ dependencies = [
  "rusty-manifold-model",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -651,6 +652,8 @@ dependencies = [
 name = "rusty-manifold-fixtures"
 version = "0.1.0"
 dependencies = [
+ "rusty-manifold-broker-adapter",
+ "rusty-manifold-broker-product",
  "rusty-manifold-model",
  "rusty-manifold-runtime-host",
  "serde",

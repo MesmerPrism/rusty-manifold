@@ -5,6 +5,7 @@ mod fixture_export;
 mod lease_authority;
 mod lease_lifecycle;
 mod lease_projection;
+mod pmb_v3;
 mod runtime;
 
 #[cfg(feature = "fixture-export")]
@@ -13,6 +14,7 @@ pub use fixture_export::export_broker_adapter_fixtures;
 pub use lease_authority::*;
 pub use lease_lifecycle::*;
 pub use lease_projection::*;
+pub use pmb_v3::*;
 pub use runtime::*;
 
 use rusty_manifold_broker_product::{ManifoldBrokerProductLock, BROKER_PRODUCT_LOCK_SCHEMA};
