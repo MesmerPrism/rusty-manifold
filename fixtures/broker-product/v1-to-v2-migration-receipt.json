@@ -1,0 +1,11 @@
+{
+  "$schema": "rusty.manifold.broker.product_lock_migration_receipt.v1",
+  "source_schema_id": "rusty.manifold.broker.product_lock.v1",
+  "source_lock_sha256": "sha256:54860e727c7a47689566d8659961b03f46668a348dd7e64822539598efb901a6",
+  "source_lock_fingerprint": "fnv1a64-cafaa41fe6e653c5",
+  "policy_id": "policy.product.v1_to_v2",
+  "policy_fingerprint": "sha256:ad5ef9f789cbf4c7b3e57db6acb6f3c1fb1851c37a51ed63da21851530d008d3",
+  "target_schema_id": "rusty.manifold.broker.product_lock.v2",
+  "target_lock_sha256": "sha256:135282ec63a085324f9e5bd2f5ab815a9a2d00f2ee85289b5712dc1116d3493b",
+  "target_lock_fingerprint": "sha256:7ddb20cefd4659a5babee5c938f792cc051aa79ffd15b1c1441f6328469ab6e9"
+}

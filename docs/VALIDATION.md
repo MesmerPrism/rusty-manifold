@@ -37,6 +37,9 @@ advances preserve independent clients' pending uses while exact-token
 revocation/expiry removes only derived uses. The Runtime Host suite covers
 canonical typed-parameter digest binding through request, dispatch, and
 application plus tamper and 4096-byte limit damage.
+It also covers PMB V2/V3 same-byte standalone/embedded parity, package-source
+pin drift, empty permission/effect closure, descriptor lease mapping, and
+neutral-ingress/config damage without a platform runtime.
 The broker-adapter suite also validates the source-only control-lease
 projection against exact prior snapshot and application lineage, including
 derived review/application/audit ids, one-to-one lease identity, retained

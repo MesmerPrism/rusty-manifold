@@ -7,6 +7,7 @@ mod expiry;
 mod host_manifest;
 mod leases;
 mod module_runtime;
+mod pmb;
 mod streams;
 mod synthetic;
 
@@ -17,6 +18,7 @@ use self::expiry::push_expiry_checks;
 use self::host_manifest::push_host_manifest_checks;
 use self::leases::push_lease_checks;
 use self::module_runtime::push_module_runtime_checks;
+use self::pmb::push_pmb_checks;
 use self::streams::{push_damaged_stream_checks, push_stream_checks};
 use self::synthetic::push_synthetic_checks;
 
@@ -40,6 +42,7 @@ pub(super) fn validate_repo(repo_root: &Path) -> Result<ValidationReport, CliErr
     )?;
     push_coordination_checks(repo_root, &mut checks)?;
     push_synthetic_checks(repo_root, &mut checks)?;
+    push_pmb_checks(repo_root, &mut checks)?;
 
     let failed = checks.iter().any(|check| check.status == "fail");
     Ok(ValidationReport {

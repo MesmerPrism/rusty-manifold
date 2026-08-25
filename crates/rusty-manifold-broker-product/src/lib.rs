@@ -1,5 +1,7 @@
 //! Exact, deterministic broker product specifications and locks.
 
+pub mod pmb_v2;
+
 use rusty_manifold_model::{DottedId, SchemaId};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;

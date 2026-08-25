@@ -1,0 +1,30 @@
+{
+  "$schema": "rusty.manifold.broker.product_spec.v2",
+  "product_id": "product.projected_motion_breath",
+  "descriptors": [{
+    "$schema": "rusty.manifold.broker.feature_descriptor.v2",
+    "descriptor_id": "feature.projected_motion_breath",
+    "package_repository": "MesmerPrism/rusty-manifold-packages",
+    "source_commit": "99024f7d1d50aeb628255c1efd357c0f57965feb",
+    "source_tree": "e7ac519547ae34ad4ec7df944dc1da02157de76b",
+    "package_manifest_path": "packages/projected-motion-breath/manifests/package.manifold.json",
+    "package_manifest_git_blob": "0be9890395ca06743cfa8c449d491d6177280c4f",
+    "package_manifest_sha256": "sha256:ca426641f9ae0e0f118e7d273809eb72cf1c3f2e227f55dcdd9099aed0ad9987",
+    "package_id": "package.projected_motion_breath",
+    "package_version": "0.1.0",
+    "module_ids": ["module.breath.dynamics", "module.breath.feedback_sink", "module.breath.projected_motion", "module.breath.state_value", "module.motion.object_pose_provider", "module.motion.vector_provider"],
+    "command_ids": ["command.breath.begin_calibration", "command.breath.configure", "command.breath.reset_calibration", "command.breath.set_profile", "command.breath.status"],
+    "command_bindings": [
+      {"command_id":"command.breath.begin_calibration","target_id":"module.breath.projected_motion","required_capability_id":"capability.pmb.control","safety":"bounded_mutation","required_lease_scope":"module.breath.projected_motion"},
+      {"command_id":"command.breath.configure","target_id":"module.breath.projected_motion","required_capability_id":"capability.pmb.control","safety":"bounded_mutation","required_lease_scope":"module.breath.projected_motion"},
+      {"command_id":"command.breath.reset_calibration","target_id":"module.breath.projected_motion","required_capability_id":"capability.pmb.control","safety":"bounded_mutation","required_lease_scope":"module.breath.projected_motion"},
+      {"command_id":"command.breath.set_profile","target_id":"module.breath.projected_motion","required_capability_id":"capability.pmb.control","safety":"bounded_mutation","required_lease_scope":"module.breath.projected_motion"},
+      {"command_id":"command.breath.status","target_id":"module.breath.projected_motion","required_capability_id":null,"safety":"read_only","required_lease_scope":null}
+    ],
+    "stream_ids": ["stream.motion.object_pose", "stream.motion.vector3"],
+    "stream_bindings": [{"stream_id":"stream.motion.object_pose","source_module_id":"module.motion.object_pose_provider"},{"stream_id":"stream.motion.vector3","source_module_id":"module.motion.vector_provider"}],
+    "permission_ids": [],
+    "effect_ids": []
+  }],
+  "permitted_placements": ["embedded", "standalone"]
+}

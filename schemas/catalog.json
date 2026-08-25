@@ -748,6 +748,41 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.broker.feature_descriptor.v2",
+      "rust_type": "ManifoldBrokerFeatureDescriptorV2",
+      "fixture_paths": [
+        "fixtures/broker-product/pmb-v2-product-spec.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.product_spec.v2",
+      "rust_type": "ManifoldBrokerProductSpecV2",
+      "fixture_paths": [
+        "fixtures/broker-product/pmb-v2-product-spec.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.product_lock.v2",
+      "rust_type": "ManifoldBrokerProductLockV2",
+      "fixture_paths": [
+        "fixtures/broker-product/pmb-v2-product-lock.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.product_lock_migration_policy.v1",
+      "rust_type": "ManifoldBrokerProductLockV1MigrationPolicy",
+      "fixture_paths": [
+        "fixtures/broker-product/v1-to-v2-migration-policy.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.product_lock_migration_receipt.v1",
+      "rust_type": "ManifoldBrokerProductLockV1MigrationReceipt",
+      "fixture_paths": [
+        "fixtures/broker-product/v1-to-v2-migration-receipt.json"
+      ]
+    },
+    {
       "schema_id": "rusty.manifold.broker.product_spec.v1",
       "rust_type": "ManifoldBrokerProductSpec",
       "fixture_paths": [
@@ -774,6 +809,30 @@
         "fixtures/broker-product/direct-p2p-standalone.lock.json",
         "fixtures/broker-product/ble-embedded.lock.json",
         "fixtures/broker-product/legacy-camera-p2p-standalone.lock.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.adapter_config.v3",
+      "rust_type": "ManifoldBrokerAdapterConfigV3",
+      "fixture_paths": [
+        "fixtures/broker-adapter/pmb-v3-standalone-config.json",
+        "fixtures/broker-adapter/pmb-v3-embedded-config.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.adapter_receipt.v3",
+      "rust_type": "ManifoldBrokerAdapterReceiptV3",
+      "fixture_paths": [
+        "fixtures/broker-adapter/pmb-v3-standalone-receipt.json",
+        "fixtures/broker-adapter/pmb-v3-embedded-receipt.json"
+      ]
+    },
+    {
+      "schema_id": "rusty.manifold.broker.pmb_neutral_ingress.v1",
+      "rust_type": "ManifoldBrokerNeutralIngressV1",
+      "fixture_paths": [
+        "fixtures/broker-adapter/pmb-neutral-vector3-ingress.json",
+        "fixtures/damaged/pmb-neutral-ingress-unadmitted-stream.json"
       ]
     },
     {

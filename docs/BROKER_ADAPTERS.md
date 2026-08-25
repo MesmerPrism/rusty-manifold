@@ -1,5 +1,23 @@
 # Broker Adapters
 
+## PMB V3 placement parity
+
+PMB V3 standalone and embedded configs differ only in their selected permitted
+placement and non-authoritative adapter identity. The singular
+`selected_placement` field must name one permitted canonical member; missing,
+duplicate, legacy plural, and non-permitted selections reject. Both validate one identical
+V2 lock byte sequence and route the five package-declared commands through the
+same Runtime Host. Configure, profile, calibration-start, and calibration-reset
+require the package-declared `module.breath.projected_motion` lease; status is
+read-only. A validation-only neutral ingress accepts only object-pose or
+vector3 with their exact descriptor fingerprint, descriptor id, and source
+module binding; duplicate active stream ownership rejects (no federation is
+admitted). Restart revalidates lock, package/registry, host and lease bindings
+before restoring the snapshot, returning the unchanged input snapshot as
+failure evidence. No adapter creates cancellation results: the synchronous Host
+has no pending operation state. A later thin product runtime wrapper may invoke
+typed commands only; it must not expose the crate-private mutation gate.
+
 `rusty-manifold-broker-adapter` is the shared adoption boundary between an
 accepted broker product lock and `rusty-manifold-runtime-host`. Standalone and
 embedded describe process placement only. They do not select different command

@@ -1,5 +1,24 @@
 # Broker Product Specifications And Locks
 
+## Placement-neutral ProductLock V2
+
+V2 separates product closure from one runtime instance's placement. A
+canonical lock permits a sorted closed set of placements; the V3 adapter config
+selects exactly one member and binds the exact lock bytes, fingerprint, and
+SHA-256. PMB V2 pins its public package repository, commit, tree, manifest
+path/blob/SHA-256, and descriptor closure. It admits only the declared PMB
+modules, command registry, neutral motion streams, and an empty canonical
+permission/effect union. V1 remains a separately named migration input and is
+never silently reinterpreted as V2. The V2 wire shape is generic: it carries a
+canonical collection of source-pinned feature descriptors, not a PMB-specific
+source variant. `resolved_descriptor_fingerprint` and `spec_fingerprint` use
+versioned, domain-separated canonical bytes; packaged-lock SHA-256 remains a
+separate exact-byte binding. The V1 compatibility API decodes the supplied
+bytes, validates them under a caller-bound V1 spec, independently resolves the
+caller-bound V2 target and policy, and records both schemas, SHAs, fingerprints
+and policy identity. PMB is native V2 and cannot be relabelled through that
+migration route.
+
 `rusty-manifold-broker-product` owns deterministic broker feature resolution.
 The product spec selects exactly one runtime mode—standalone or embedded—and
 explicit optional feature families. Resolution produces the exact sorted

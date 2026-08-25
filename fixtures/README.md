@@ -31,6 +31,14 @@ media session, independent camera, direct-P2P, and BLE profiles, the explicit
 legacy camera-plus-P2P compatibility product, exactly-one standalone/embedded
 mode, committed lock parity, stale specs, and union-permission rejection.
 
+The PMB V2/V3 fixtures additionally register generic source-pinned descriptor,
+lock, migration-policy/receipt, config, receipt, and neutral-ingress wire
+families. Standalone and embedded select from the same exact PMB lock bytes;
+production fixture validation regenerates all V3 config/receipt bytes through
+the generic constructor and shared Runtime Host. Raw damaged placement inputs
+cover missing, duplicate, legacy plural (empty/multiple and singular-plus-
+plural), unknown authority, and non-permitted selections before normalization.
+
 Fixtures are committed contract examples. They should be small, deterministic,
 and safe to use in tests, generated schemas, documentation, and clients.
 

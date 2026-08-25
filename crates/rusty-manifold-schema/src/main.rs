@@ -423,6 +423,30 @@ fn local_control_entries() -> Vec<SchemaEntry> {
 fn broker_adapter_entries() -> Vec<SchemaEntry> {
     vec![
         entry(
+            "rusty.manifold.broker.adapter_config.v3",
+            "ManifoldBrokerAdapterConfigV3",
+            &[
+                "fixtures/broker-adapter/pmb-v3-standalone-config.json",
+                "fixtures/broker-adapter/pmb-v3-embedded-config.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.broker.adapter_receipt.v3",
+            "ManifoldBrokerAdapterReceiptV3",
+            &[
+                "fixtures/broker-adapter/pmb-v3-standalone-receipt.json",
+                "fixtures/broker-adapter/pmb-v3-embedded-receipt.json",
+            ],
+        ),
+        entry(
+            "rusty.manifold.broker.pmb_neutral_ingress.v1",
+            "ManifoldBrokerNeutralIngressV1",
+            &[
+                "fixtures/broker-adapter/pmb-neutral-vector3-ingress.json",
+                "fixtures/damaged/pmb-neutral-ingress-unadmitted-stream.json",
+            ],
+        ),
+        entry(
             "rusty.manifold.broker.adapter_config.v1",
             "LegacyBrokerAdapterConfigV1",
             &["fixtures/broker-adapter/legacy-v1-standalone-config.json"],
@@ -647,6 +671,31 @@ fn broker_adapter_entries() -> Vec<SchemaEntry> {
 
 fn broker_product_entries() -> Vec<SchemaEntry> {
     vec![
+        entry(
+            "rusty.manifold.broker.feature_descriptor.v2",
+            "ManifoldBrokerFeatureDescriptorV2",
+            &["fixtures/broker-product/pmb-v2-product-spec.json"],
+        ),
+        entry(
+            "rusty.manifold.broker.product_spec.v2",
+            "ManifoldBrokerProductSpecV2",
+            &["fixtures/broker-product/pmb-v2-product-spec.json"],
+        ),
+        entry(
+            "rusty.manifold.broker.product_lock.v2",
+            "ManifoldBrokerProductLockV2",
+            &["fixtures/broker-product/pmb-v2-product-lock.json"],
+        ),
+        entry(
+            "rusty.manifold.broker.product_lock_migration_policy.v1",
+            "ManifoldBrokerProductLockV1MigrationPolicy",
+            &["fixtures/broker-product/v1-to-v2-migration-policy.json"],
+        ),
+        entry(
+            "rusty.manifold.broker.product_lock_migration_receipt.v1",
+            "ManifoldBrokerProductLockV1MigrationReceipt",
+            &["fixtures/broker-product/v1-to-v2-migration-receipt.json"],
+        ),
         entry(
             "rusty.manifold.broker.product_spec.v1",
             "ManifoldBrokerProductSpec",

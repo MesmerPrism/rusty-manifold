@@ -63,6 +63,12 @@ authority snapshot v2, and cannot be reused as a holder release. Runtime Host
 adoption v2 revalidates the complete generic application against its exact
 prior snapshot and applies the same lease delta once.
 
+The PMB ProductLock V2 fixture is placement-neutral and pins the public
+package source commit/tree and exact manifest bytes. Its empty effect and
+permission union stays empty; standalone and embedded configs select one
+permitted placement from the same packaged lock bytes and retain the same
+Runtime Host receipts.
+
 Normal Broker construction and restart accept no raw Runtime Host lease
 collection. The synchronized Broker owner retains exact generic transitions,
 and runtime evidence v5 joins owner evidence v3, Runtime Host state, admission,

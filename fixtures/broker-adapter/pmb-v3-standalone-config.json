@@ -1,0 +1,10 @@
+{
+  "$schema": "rusty.manifold.broker.adapter_config.v3",
+  "adapter_id": "adapter.pmb.standalone",
+  "selected_placement": "standalone",
+  "product_lock_id": "lock.product.projected_motion_breath",
+  "product_lock_fingerprint": "sha256:e53faaf3ba9553839d3a243f9a5fe5b6d8b164f812b6d2584d271dcd01882a13",
+  "product_lock_sha256": "sha256:f4fbb6d4cb64fd3723fc47130d22bc9da84d5afc5ad66dc76bf3bacf66cf6865",
+  "authority_host_id": "host.pmb.parity",
+  "authority_owner_id": "module.runtime.host"
+}
