@@ -754,6 +754,14 @@ fn lease_scope_for_command(command_id: &DottedId) -> Option<DottedId> {
     let value = command_id.as_str();
     let scope = if value.starts_with("command.media.session.") {
         Some("lease.media.session")
+    } else if matches!(
+        value,
+        "command.remote_camera.get_status"
+            | "command.remote_camera.start_receiver"
+            | "command.remote_camera.start_sender"
+            | "command.remote_camera.stop"
+    ) {
+        Some("lease.media.session")
     } else if value.starts_with("command.topology.p2p.") {
         Some("lease.topology.p2p")
     } else if value.starts_with("command.rendezvous.ble.") {
@@ -883,6 +891,20 @@ mod tests {
         .expect("product lock")
     }
 
+    fn qcl100_legacy_camera_p2p_lock() -> ManifoldBrokerProductLock {
+        resolve_broker_product(&ManifoldBrokerProductSpec {
+            schema_id: schema_id(BROKER_PRODUCT_SPEC_SCHEMA),
+            product_id: id("broker.legacy_camera_p2p.standalone"),
+            standalone_enabled: true,
+            embedded_enabled: false,
+            requested_features: vec![
+                ManifoldBrokerFeature::CameraMedia,
+                ManifoldBrokerFeature::DirectP2p,
+            ],
+        })
+        .expect("qcl100 legacy product lock")
+    }
+
     fn config(
         mode: ManifoldBrokerAdapterMode,
         lock: &ManifoldBrokerProductLock,
@@ -990,6 +1012,18 @@ mod tests {
         }
     }
 
+    fn qcl100_legacy_adapter(
+        authority: &ManifoldBrokerControlLeaseAuthority,
+    ) -> ManifoldBrokerAdapter {
+        let lock = qcl100_legacy_camera_p2p_lock();
+        ManifoldBrokerAdapter::new(
+            config(ManifoldBrokerAdapterMode::Standalone, &lock),
+            &lock_bytes(&lock),
+            authority,
+        )
+        .expect("qcl100 legacy adapter")
+    }
+
     fn pair() -> (ManifoldBrokerAdapter, ManifoldBrokerAdapter) {
         let standalone_lock = lock(ManifoldBrokerAdapterMode::Standalone);
         let embedded_lock = lock(ManifoldBrokerAdapterMode::Embedded);
@@ -1058,6 +1092,87 @@ mod tests {
             );
             assert_eq!(adapter.host_snapshot().authority_revision.get(), 1);
         }
+    }
+
+    #[test]
+    fn qcl100_remote_camera_commands_require_exact_media_lease() {
+        const COMMANDS: [&str; 4] = [
+            "command.remote_camera.get_status",
+            "command.remote_camera.start_receiver",
+            "command.remote_camera.start_sender",
+            "command.remote_camera.stop",
+        ];
+        let media_scope = id("lease.media.session");
+        for command in COMMANDS {
+            assert_eq!(
+                lease_scope_for_command(&id(command)),
+                Some(media_scope.clone())
+            );
+
+            let mut adapter = qcl100_legacy_adapter(&lease_authority(Some(&lease())));
+            let accepted = adapter
+                .handle_command(&request(command, Some("lease.media.session.client")), 2_000);
+            assert!(accepted.application.applied, "{command}");
+
+            let mut missing = qcl100_legacy_adapter(&lease_authority(None));
+            let missing_receipt = missing.handle_command(&request(command, None), 2_000);
+            assert_eq!(
+                missing_receipt.application.rejection_reason,
+                Some(ManifoldRuntimeRejectionReason::MissingLease),
+                "{command}"
+            );
+            assert_eq!(
+                missing.host_snapshot().authority_revision.get(),
+                1,
+                "{command}"
+            );
+
+            let mut wrong = qcl100_legacy_adapter(&lease_authority(Some(&lease())));
+            let wrong_receipt =
+                wrong.handle_command(&request(command, Some("lease.media.session.wrong")), 2_000);
+            assert_eq!(
+                wrong_receipt.application.rejection_reason,
+                Some(ManifoldRuntimeRejectionReason::UnknownLease),
+                "{command}"
+            );
+            assert_eq!(
+                wrong.host_snapshot().authority_revision.get(),
+                1,
+                "{command}"
+            );
+
+            let mut expired = qcl100_legacy_adapter(&lease_authority(Some(&lease())));
+            let lease_expiry_ms = expired.host_snapshot().leases[0].expires_at_ms;
+            let mut expired_request = request(command, Some("lease.media.session.client"));
+            expired_request.expires_at_ms = lease_expiry_ms + 1;
+            let expired_receipt = expired.handle_command(&expired_request, lease_expiry_ms);
+            assert_eq!(
+                expired_receipt.application.rejection_reason,
+                Some(ManifoldRuntimeRejectionReason::ExpiredLease),
+                "{command}"
+            );
+            assert_eq!(
+                expired.host_snapshot().authority_revision.get(),
+                1,
+                "{command}"
+            );
+        }
+
+        let mut topology_lease = lease();
+        topology_lease.scope = id("lease.topology.p2p");
+        let mut wrong_scope = qcl100_legacy_adapter(&lease_authority(Some(&topology_lease)));
+        let wrong_scope_receipt = wrong_scope.handle_command(
+            &request(
+                "command.remote_camera.start_receiver",
+                Some("lease.media.session.client"),
+            ),
+            2_000,
+        );
+        assert_eq!(
+            wrong_scope_receipt.application.rejection_reason,
+            Some(ManifoldRuntimeRejectionReason::LeaseScopeMismatch)
+        );
+        assert_eq!(wrong_scope.host_snapshot().authority_revision.get(), 1);
     }
 
     #[test]

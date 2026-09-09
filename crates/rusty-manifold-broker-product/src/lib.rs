@@ -9,6 +9,14 @@ pub const BROKER_PRODUCT_SPEC_SCHEMA: &str = "rusty.manifold.broker.product_spec
 /// Broker product lock schema.
 pub const BROKER_PRODUCT_LOCK_SCHEMA: &str = "rusty.manifold.broker.product_lock.v1";
 
+const QCL100_LEGACY_CAMERA_P2P_PRODUCT_ID: &str = "broker.legacy_camera_p2p.standalone";
+const QCL100_REMOTE_CAMERA_COMMANDS: [&str; 4] = [
+    "command.remote_camera.get_status",
+    "command.remote_camera.start_receiver",
+    "command.remote_camera.start_sender",
+    "command.remote_camera.stop",
+];
+
 /// Optional broker feature families.
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -290,7 +298,23 @@ fn resolve_feature_closure(
             }
         }
     }
+    if is_qcl100_legacy_camera_p2p_product(spec, feature_set) {
+        commands.extend(ids(QCL100_REMOTE_CAMERA_COMMANDS));
+    }
     (commands, streams, modules, permissions)
+}
+
+fn is_qcl100_legacy_camera_p2p_product(
+    spec: &ManifoldBrokerProductSpec,
+    feature_set: &BTreeSet<ManifoldBrokerFeature>,
+) -> bool {
+    spec.product_id.as_str() == QCL100_LEGACY_CAMERA_P2P_PRODUCT_ID
+        && spec.standalone_enabled
+        && !spec.embedded_enabled
+        && feature_set.len() == 3
+        && feature_set.contains(&ManifoldBrokerFeature::MediaSession)
+        && feature_set.contains(&ManifoldBrokerFeature::CameraMedia)
+        && feature_set.contains(&ManifoldBrokerFeature::DirectP2p)
 }
 
 fn ids<const N: usize>(values: [&str; N]) -> BTreeSet<DottedId> {
@@ -455,6 +479,112 @@ mod tests {
             resolve_broker_product(&duplicate),
             Err(ManifoldBrokerProductError::DuplicateFeature)
         );
+    }
+
+    #[test]
+    fn qcl100_legacy_camera_p2p_has_exact_remote_camera_delta() {
+        let legacy_spec = spec("legacy-camera-p2p-standalone");
+        let legacy = resolve_broker_product(&legacy_spec).expect("legacy lock");
+        assert_eq!(
+            legacy.command_ids,
+            ids([
+                "command.media.session.start",
+                "command.media.session.stop",
+                "command.peer.status.get",
+                "command.remote_camera.get_status",
+                "command.remote_camera.start_receiver",
+                "command.remote_camera.start_sender",
+                "command.remote_camera.stop",
+                "command.session.list",
+                "command.topology.p2p.close",
+                "command.topology.p2p.open",
+            ])
+            .into_iter()
+            .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            legacy.features,
+            vec![
+                ManifoldBrokerFeature::MediaSession,
+                ManifoldBrokerFeature::CameraMedia,
+                ManifoldBrokerFeature::DirectP2p,
+            ]
+        );
+        assert_eq!(
+            legacy.module_ids,
+            ids([
+                "module.media.camera",
+                "module.media.session",
+                "module.runtime.host",
+                "module.transport.direct_p2p",
+            ])
+            .into_iter()
+            .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            legacy.stream_ids,
+            ids([
+                "stream.media.video",
+                "stream.peer.status",
+                "stream.topology.status",
+            ])
+            .into_iter()
+            .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            legacy.permissions,
+            vec![
+                ManifoldBrokerPermission::Internet,
+                ManifoldBrokerPermission::UserNotifications,
+                ManifoldBrokerPermission::BackgroundService,
+                ManifoldBrokerPermission::BackgroundDataSync,
+                ManifoldBrokerPermission::BackgroundCamera,
+                ManifoldBrokerPermission::Camera,
+                ManifoldBrokerPermission::NetworkStateObservation,
+                ManifoldBrokerPermission::NearbyWifiDevices,
+                ManifoldBrokerPermission::ChangeWifiState,
+                ManifoldBrokerPermission::AccessWifiState,
+            ]
+        );
+
+        let mut stale = legacy;
+        stale
+            .command_ids
+            .retain(|command| command.as_str() != "command.remote_camera.get_status");
+        assert_eq!(
+            validate_broker_product_lock(&legacy_spec, &stale),
+            Err(ManifoldBrokerProductError::StaleOrExpandedLock)
+        );
+    }
+
+    #[test]
+    fn qcl100_remote_camera_commands_do_not_widen_other_products() {
+        let mut legacy_camera_only = spec("legacy-camera-p2p-standalone");
+        legacy_camera_only.requested_features = vec![ManifoldBrokerFeature::CameraMedia];
+        let mut legacy_p2p_only = spec("legacy-camera-p2p-standalone");
+        legacy_p2p_only.requested_features = vec![ManifoldBrokerFeature::DirectP2p];
+        let mut legacy_embedded = spec("legacy-camera-p2p-standalone");
+        legacy_embedded.standalone_enabled = false;
+        legacy_embedded.embedded_enabled = true;
+
+        for (name, product) in [
+            ("media-session-standalone", spec("media-session-standalone")),
+            ("camera-embedded", spec("camera-embedded")),
+            ("direct-p2p-standalone", spec("direct-p2p-standalone")),
+            ("legacy-camera-only", legacy_camera_only),
+            ("legacy-p2p-only", legacy_p2p_only),
+            ("legacy-embedded", legacy_embedded),
+        ] {
+            let lock = resolve_broker_product(&product).expect("other product lock");
+            for command in QCL100_REMOTE_CAMERA_COMMANDS {
+                assert!(
+                    !lock
+                        .command_ids
+                        .contains(&DottedId::new(command).expect("static command")),
+                    "{name} unexpectedly contains {command}"
+                );
+            }
+        }
     }
 
     #[test]

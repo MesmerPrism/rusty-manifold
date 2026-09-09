@@ -13,6 +13,10 @@
     "command.media.session.start",
     "command.media.session.stop",
     "command.peer.status.get",
+    "command.remote_camera.get_status",
+    "command.remote_camera.start_receiver",
+    "command.remote_camera.start_sender",
+    "command.remote_camera.stop",
     "command.session.list",
     "command.topology.p2p.close",
     "command.topology.p2p.open"
@@ -40,5 +44,5 @@
     "change_wifi_state",
     "access_wifi_state"
   ],
-  "spec_fingerprint": "fnv1a64-f7f04d252038e792"
+  "spec_fingerprint": "fnv1a64-e636c97479ab0bed"
 }
