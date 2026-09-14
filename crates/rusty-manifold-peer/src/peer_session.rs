@@ -4,8 +4,11 @@ use rusty_manifold_model::{DottedId, Revision, SchemaId};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    validate_current_rendezvous_receipt, ManifoldAcceptedPeerState, ManifoldPeerAvailability,
-    ManifoldPeerEnrollmentState, ManifoldPeerRole, ManifoldRendezvousAuthorityState,
+    validate_current_reciprocal_ed25519_receipt_v3, validate_current_rendezvous_receipt,
+    ManifoldAcceptedPeerState, ManifoldCommonLanReciprocalEd25519Receipt,
+    ManifoldCommonLanTransportBinding, ManifoldPeerAvailability, ManifoldPeerEnrollmentState,
+    ManifoldPeerRole, ManifoldReciprocalEd25519AuthorityStateV3,
+    ManifoldReciprocalEd25519ReceiptV3, ManifoldRendezvousAuthorityState,
     ManifoldRendezvousReceipt, ManifoldRendezvousReceiptValidationError,
 };
 
@@ -13,6 +16,17 @@ use crate::{
 pub const PEER_SESSION_PROPOSAL_SCHEMA: &str = "rusty.manifold.peer.session_proposal.v1";
 /// Peer-session accepted snapshot schema.
 pub const PEER_SESSION_SNAPSHOT_SCHEMA: &str = "rusty.manifold.peer.session_state.v1";
+/// Active mixed-topology peer-session state.
+pub const PEER_SESSION_STATE_V2_SCHEMA: &str = "rusty.manifold.peer.session_state.v2";
+/// Common-LAN session proposal schema.
+pub const COMMON_LAN_PEER_SESSION_PROPOSAL_SCHEMA: &str =
+    "rusty.manifold.peer.common_lan_session_proposal.v1";
+/// Common-LAN signed topology schema.
+pub const COMMON_LAN_SIGNED_PEER_TOPOLOGY_AUTHORIZATION_SCHEMA: &str =
+    "rusty.manifold.peer.common_lan_signed_topology_authorization.v1";
+/// Mixed current-session receipt schema.
+pub const PEER_SESSION_CURRENT_RECEIPT_V2_SCHEMA: &str =
+    "rusty.manifold.peer.session_current_receipt.v2";
 /// Peer-session review-case schema.
 pub const PEER_SESSION_REVIEW_SCHEMA: &str = "rusty.manifold.peer.session_review.v1";
 /// Peer-session decision schema.
@@ -179,6 +193,348 @@ pub struct ManifoldPeerSessionState {
     pub applied_proposal_ids: Vec<DottedId>,
     /// Explicitly revoked session identities.
     pub revoked_session_ids: Vec<DottedId>,
+}
+
+/// Neutral two-peer common-LAN session proposal.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldCommonLanPeerSessionProposal {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Replay-protected proposal.
+    pub proposal_id: DottedId,
+    /// Session subject.
+    pub session_id: DottedId,
+    /// Expected shared authority revision.
+    pub expected_authority_revision: Revision,
+    /// Stable local/subject peer.
+    pub subject_peer_id: DottedId,
+    /// Stable remote/candidate peer.
+    pub candidate_peer_id: DottedId,
+    /// Neutral initiating peer.
+    pub initiator_peer_id: DottedId,
+    /// Neutral responding peer.
+    pub responder_peer_id: DottedId,
+    /// Requested low-rate capabilities.
+    pub requested_capability_ids: Vec<DottedId>,
+    /// Exact signed carrier binding.
+    pub transport: ManifoldCommonLanTransportBinding,
+    /// Session expiry.
+    pub expires_at_ms: u64,
+}
+
+/// Accepted common-LAN peer session.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldAcceptedCommonLanPeerSession {
+    /// Applied proposal.
+    pub proposal: ManifoldCommonLanPeerSessionProposal,
+    /// Decision identity.
+    pub decision_id: DottedId,
+    /// Revocation state.
+    pub revoked: bool,
+    /// Exact reciprocal receipt.
+    pub reciprocal_receipt_id: DottedId,
+}
+
+/// Closed mixed accepted-session payload.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(
+    tag = "topology_kind",
+    content = "record",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum ManifoldAcceptedPeerSessionV2 {
+    /// Exact legacy Wi-Fi Direct session.
+    WifiDirect(ManifoldAcceptedPeerSession),
+    /// Common-LAN session.
+    CommonLan(ManifoldAcceptedCommonLanPeerSession),
+}
+
+impl ManifoldAcceptedPeerSessionV2 {
+    /// Stable session identity.
+    #[must_use]
+    pub fn session_id(&self) -> &DottedId {
+        match self {
+            Self::WifiDirect(v) => &v.proposal.session_id,
+            Self::CommonLan(v) => &v.proposal.session_id,
+        }
+    }
+    /// Accepting decision identity.
+    #[must_use]
+    pub fn decision_id(&self) -> &DottedId {
+        match self {
+            Self::WifiDirect(v) => &v.decision_id,
+            Self::CommonLan(v) => &v.decision_id,
+        }
+    }
+    /// Whether explicitly revoked.
+    #[must_use]
+    pub fn revoked(&self) -> bool {
+        match self {
+            Self::WifiDirect(v) => v.revoked,
+            Self::CommonLan(v) => v.revoked,
+        }
+    }
+}
+
+/// Active mixed peer-session state.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldPeerSessionAuthorityStateV2 {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Shared authority revision.
+    pub authority_revision: Revision,
+    /// Mixed sessions.
+    pub sessions: Vec<ManifoldAcceptedPeerSessionV2>,
+    /// Shared replay guard.
+    pub applied_proposal_ids: Vec<DottedId>,
+    /// Shared revocation guard.
+    pub revoked_session_ids: Vec<DottedId>,
+}
+
+impl ManifoldPeerSessionAuthorityStateV2 {
+    /// Empty active mixed state.
+    #[must_use]
+    pub fn empty() -> Self {
+        migrate_peer_session_state_v1_to_v2(ManifoldPeerSessionState {
+            schema_id: schema(PEER_SESSION_SNAPSHOT_SCHEMA),
+            authority_revision: Revision::INITIAL,
+            sessions: Vec::new(),
+            applied_proposal_ids: Vec::new(),
+            revoked_session_ids: Vec::new(),
+        })
+    }
+}
+
+/// Lossless legacy-session migration.
+#[must_use]
+pub fn migrate_peer_session_state_v1_to_v2(
+    legacy: ManifoldPeerSessionState,
+) -> ManifoldPeerSessionAuthorityStateV2 {
+    ManifoldPeerSessionAuthorityStateV2 {
+        schema_id: schema(PEER_SESSION_STATE_V2_SCHEMA),
+        authority_revision: legacy.authority_revision,
+        sessions: legacy
+            .sessions
+            .into_iter()
+            .map(ManifoldAcceptedPeerSessionV2::WifiDirect)
+            .collect(),
+        applied_proposal_ids: legacy.applied_proposal_ids,
+        revoked_session_ids: legacy.revoked_session_ids,
+    }
+}
+
+/// Bounded exact Wi-Fi Direct projection for unchanged direct-lane consumers.
+#[must_use]
+pub fn wifi_direct_peer_session_projection(
+    state: &ManifoldPeerSessionAuthorityStateV2,
+) -> ManifoldPeerSessionState {
+    ManifoldPeerSessionState {
+        schema_id: schema(PEER_SESSION_SNAPSHOT_SCHEMA),
+        authority_revision: state.authority_revision,
+        sessions: state
+            .sessions
+            .iter()
+            .filter_map(|session| match session {
+                ManifoldAcceptedPeerSessionV2::WifiDirect(value) => Some(value.clone()),
+                ManifoldAcceptedPeerSessionV2::CommonLan(_) => None,
+            })
+            .collect(),
+        applied_proposal_ids: state.applied_proposal_ids.clone(),
+        revoked_session_ids: state.revoked_session_ids.clone(),
+    }
+}
+
+/// Structural checks for mixed state and shared identity guards.
+#[must_use]
+pub fn peer_session_state_v2_is_well_formed(state: &ManifoldPeerSessionAuthorityStateV2) -> bool {
+    use std::collections::BTreeSet;
+    let proposals = state.applied_proposal_ids.iter().collect::<BTreeSet<_>>();
+    let revoked = state.revoked_session_ids.iter().collect::<BTreeSet<_>>();
+    let session_ids = state
+        .sessions
+        .iter()
+        .map(|session| match session {
+            ManifoldAcceptedPeerSessionV2::WifiDirect(value) => &value.proposal.session_id,
+            ManifoldAcceptedPeerSessionV2::CommonLan(value) => &value.proposal.session_id,
+        })
+        .collect::<BTreeSet<_>>();
+    let records_valid = state.sessions.iter().all(|session| match session {
+        ManifoldAcceptedPeerSessionV2::WifiDirect(value) => {
+            value.proposal.schema_id.as_str() == PEER_SESSION_PROPOSAL_SCHEMA
+                && value.decision_id
+                    == derived("decision.peer-session", &value.proposal.proposal_id)
+                && value.proposal.subject_peer_id != value.proposal.candidate_peer_id
+                && value.proposal.group_owner_peer_id != value.proposal.client_peer_id
+                && state
+                    .applied_proposal_ids
+                    .contains(&value.proposal.proposal_id)
+                && (value.revoked
+                    == state
+                        .revoked_session_ids
+                        .contains(&value.proposal.session_id))
+        }
+        ManifoldAcceptedPeerSessionV2::CommonLan(value) => {
+            value.proposal.schema_id.as_str() == COMMON_LAN_PEER_SESSION_PROPOSAL_SCHEMA
+                && value.decision_id
+                    == derived(
+                        "decision.common-lan-peer-session",
+                        &value.proposal.proposal_id,
+                    )
+                && value.proposal.subject_peer_id != value.proposal.candidate_peer_id
+                && value.proposal.initiator_peer_id != value.proposal.responder_peer_id
+                && value.proposal.requested_capability_ids.len() <= MAX_SESSION_CAPABILITIES
+                && value
+                    .proposal
+                    .requested_capability_ids
+                    .windows(2)
+                    .all(|pair| pair[0] < pair[1])
+                && value.proposal.transport.endpoints.len() == 2
+                && value.proposal.transport.endpoints[0].peer_id
+                    < value.proposal.transport.endpoints[1].peer_id
+                && state
+                    .applied_proposal_ids
+                    .contains(&value.proposal.proposal_id)
+                && (value.revoked
+                    == state
+                        .revoked_session_ids
+                        .contains(&value.proposal.session_id))
+        }
+    });
+    state.schema_id.as_str() == PEER_SESSION_STATE_V2_SCHEMA
+        && proposals.len() == state.applied_proposal_ids.len()
+        && revoked.len() == state.revoked_session_ids.len()
+        && session_ids.len() == state.sessions.len()
+        && records_valid
+}
+
+/// Borrowed common-LAN signed review inputs.
+#[derive(Clone, Copy, Debug)]
+pub struct ManifoldCommonLanSignedPeerSessionReviewCase<'a> {
+    /// Current accepted peers.
+    pub accepted_peers: &'a ManifoldAcceptedPeerState,
+    /// Current mixed state.
+    pub current_state: &'a ManifoldPeerSessionAuthorityStateV2,
+    /// Proposed session.
+    pub proposal: &'a ManifoldCommonLanPeerSessionProposal,
+    /// Exact reciprocal receipt.
+    pub reciprocal_receipt: &'a ManifoldCommonLanReciprocalEd25519Receipt,
+    /// Current enrollment.
+    pub current_enrollment: &'a ManifoldPeerEnrollmentState,
+    /// Current reciprocal state.
+    pub current_reciprocal_state: &'a ManifoldReciprocalEd25519AuthorityStateV3,
+    /// Review time.
+    pub now_ms: u64,
+}
+
+/// Borrowed closed mixed signed review.
+#[derive(Clone, Copy, Debug)]
+pub enum ManifoldSignedPeerSessionReviewV2<'a> {
+    /// Existing signed Wi-Fi review.
+    WifiDirect(&'a ManifoldSignedPeerSessionReviewCase),
+    /// Common-LAN review.
+    CommonLan(ManifoldCommonLanSignedPeerSessionReviewCase<'a>),
+}
+
+/// Common result fields for one active mixed review.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldCommonLanPeerSessionDecision {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Decision identity.
+    pub decision_id: DottedId,
+    /// Proposal identity.
+    pub proposal_id: DottedId,
+    /// Whether state advanced.
+    pub applied: bool,
+    /// Stable rejection reason.
+    pub rejection_reason: Option<ManifoldPeerSessionRejectionReason>,
+    /// Prior shared revision.
+    pub prior_authority_revision: Revision,
+    /// Resulting shared revision.
+    pub resulting_authority_revision: Revision,
+}
+
+/// Closed mixed peer-session decision.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(
+    tag = "topology_kind",
+    content = "record",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum ManifoldPeerSessionDecisionV2 {
+    /// Existing Wi-Fi decision payload.
+    WifiDirect(ManifoldPeerSessionDecision),
+    /// Common-LAN decision payload.
+    CommonLan(ManifoldCommonLanPeerSessionDecision),
+}
+
+/// Closed mixed topology authorization, including revocation receipts.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(
+    tag = "topology_kind",
+    content = "record",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum ManifoldPeerTopologyAuthorizationV2 {
+    /// Existing Wi-Fi authorization.
+    WifiDirect(ManifoldPeerTopologyAuthorization),
+    /// Common-LAN signed authorization.
+    CommonLan(ManifoldCommonLanPeerTopologyAuthorization),
+}
+
+/// Non-signing common-LAN authorization result used by revocation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldCommonLanPeerTopologyAuthorization {
+    /// Session identity.
+    pub session_id: DottedId,
+    /// Decision or revocation identity.
+    pub decision_id: DottedId,
+    /// Shared authority revision.
+    pub authority_revision: Revision,
+    /// Exact transport binding.
+    pub transport: ManifoldCommonLanTransportBinding,
+    /// Whether topology remains authorized.
+    pub authorized: bool,
+    /// Result time.
+    pub valid_from_ms: u64,
+    /// Expiry.
+    pub expires_at_ms: u64,
+}
+
+/// Mixed current-session readback.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldPeerSessionCurrentReceiptV2 {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Session subject.
+    pub session_id: DottedId,
+    /// Whether all current checks passed.
+    pub current: bool,
+    /// Stable rejection reason.
+    pub rejection_reason: Option<ManifoldPeerSessionCurrentRejectionReason>,
+    /// Session decision.
+    pub decision_id: Option<DottedId>,
+    /// Canonical pair.
+    pub peer_ids: Vec<DottedId>,
+    /// Exact topology contract.
+    pub topology_contract_id: Option<DottedId>,
+    /// Validation time.
+    pub validated_at_ms: u64,
+    /// Effective expiry.
+    pub expires_at_ms: Option<u64>,
 }
 
 /// Review envelope binding peer authority and peer-session authority.
@@ -353,6 +709,85 @@ pub struct ManifoldSignedPeerTopologyAuthorization {
     pub enrollment_authority_revision: Revision,
     /// Enrolled key ids used by the pair.
     pub signer_key_ids: Vec<DottedId>,
+}
+
+/// Signed common-LAN topology retained from an accepted session.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldCommonLanSignedPeerTopologyAuthorization {
+    /// Schema identifier.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Session decision.
+    pub decision_id: DottedId,
+    /// Session identity.
+    pub session_id: DottedId,
+    /// Proposal identity.
+    pub proposal_id: DottedId,
+    /// Shared session authority revision.
+    pub authority_revision: Revision,
+    /// Initiator peer.
+    pub initiator_peer_id: DottedId,
+    /// Responder peer.
+    pub responder_peer_id: DottedId,
+    /// Exact signed transport.
+    pub transport: ManifoldCommonLanTransportBinding,
+    /// Reciprocal receipt.
+    pub reciprocal_receipt_id: DottedId,
+    /// Reciprocal authority revision.
+    pub reciprocal_authority_revision: Revision,
+    /// Enrollment revision.
+    pub enrollment_authority_revision: Revision,
+    /// Current signer keys.
+    pub signer_key_ids: Vec<DottedId>,
+    /// Authorization start.
+    pub valid_from_ms: u64,
+    /// Authorization expiry.
+    pub expires_at_ms: u64,
+    /// Whether topology is authorized.
+    pub authorized: bool,
+}
+
+/// Closed mixed signed-topology payload.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(
+    tag = "topology_kind",
+    content = "record",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum ManifoldSignedPeerTopologyAuthorizationV2 {
+    /// Exact legacy signed Wi-Fi topology.
+    WifiDirect(ManifoldSignedPeerTopologyAuthorization),
+    /// Signed common-LAN topology.
+    CommonLan(ManifoldCommonLanSignedPeerTopologyAuthorization),
+}
+
+impl ManifoldSignedPeerTopologyAuthorizationV2 {
+    /// Authorized session subject.
+    #[must_use]
+    pub fn session_id(&self) -> &DottedId {
+        match self {
+            Self::WifiDirect(v) => &v.topology_authorization.session_id,
+            Self::CommonLan(v) => &v.session_id,
+        }
+    }
+    /// Authorizing decision.
+    #[must_use]
+    pub fn decision_id(&self) -> &DottedId {
+        match self {
+            Self::WifiDirect(v) => &v.topology_authorization.decision_id,
+            Self::CommonLan(v) => &v.decision_id,
+        }
+    }
+    /// Exact legacy payload when this is Wi-Fi Direct.
+    #[must_use]
+    pub fn as_wifi_direct(&self) -> Option<&ManifoldSignedPeerTopologyAuthorization> {
+        match self {
+            Self::WifiDirect(v) => Some(v),
+            Self::CommonLan(_) => None,
+        }
+    }
 }
 
 /// Stable current-peer-session rejection family.
@@ -751,6 +1186,482 @@ pub fn revoke_peer_session(
     Ok((next, receipt))
 }
 
+/// Reviews one signed session against the active shared mixed authority.
+#[must_use]
+pub fn review_and_apply_signed_peer_session_v2(
+    state: &ManifoldPeerSessionAuthorityStateV2,
+    review: ManifoldSignedPeerSessionReviewV2<'_>,
+) -> (
+    ManifoldPeerSessionAuthorityStateV2,
+    ManifoldPeerSessionDecisionV2,
+    ManifoldSignedPeerTopologyAuthorizationV2,
+) {
+    match review {
+        ManifoldSignedPeerSessionReviewV2::WifiDirect(case) => {
+            let mut projected = case.clone();
+            projected.session_review.current_state = wifi_direct_peer_session_projection(state);
+            let (decision, topology) = review_and_apply_signed_peer_session(&projected);
+            let mut next = state.clone();
+            if decision.applied {
+                next.authority_revision = decision.resulting_authority_revision;
+                next.applied_proposal_ids.push(decision.proposal_id.clone());
+                if let Some(accepted) = decision.accepted_state.as_ref().and_then(|accepted| {
+                    accepted
+                        .sessions
+                        .iter()
+                        .find(|session| session.proposal.proposal_id == decision.proposal_id)
+                }) {
+                    next.sessions
+                        .push(ManifoldAcceptedPeerSessionV2::WifiDirect(accepted.clone()));
+                }
+            }
+            (
+                next,
+                ManifoldPeerSessionDecisionV2::WifiDirect(decision),
+                ManifoldSignedPeerTopologyAuthorizationV2::WifiDirect(topology),
+            )
+        }
+        ManifoldSignedPeerSessionReviewV2::CommonLan(case) => {
+            review_and_apply_common_lan_session(state, case)
+        }
+    }
+}
+
+fn review_and_apply_common_lan_session(
+    state: &ManifoldPeerSessionAuthorityStateV2,
+    case: ManifoldCommonLanSignedPeerSessionReviewCase<'_>,
+) -> (
+    ManifoldPeerSessionAuthorityStateV2,
+    ManifoldPeerSessionDecisionV2,
+    ManifoldSignedPeerTopologyAuthorizationV2,
+) {
+    let proposal = case.proposal;
+    let prior = state.authority_revision;
+    let mut rejection = None;
+    let pair = [&proposal.initiator_peer_id, &proposal.responder_peer_id];
+    if !peer_session_state_v2_is_well_formed(state)
+        || proposal.schema_id.as_str() != COMMON_LAN_PEER_SESSION_PROPOSAL_SCHEMA
+    {
+        rejection = Some(ManifoldPeerSessionRejectionReason::SchemaMismatch);
+    } else if proposal.expected_authority_revision != prior {
+        rejection = Some(ManifoldPeerSessionRejectionReason::StaleAuthorityRevision);
+    } else if state.applied_proposal_ids.contains(&proposal.proposal_id) {
+        rejection = Some(ManifoldPeerSessionRejectionReason::ReplayedProposal);
+    } else if state.revoked_session_ids.contains(&proposal.session_id) {
+        rejection = Some(ManifoldPeerSessionRejectionReason::RevokedSession);
+    } else if proposal.subject_peer_id == proposal.candidate_peer_id
+        || proposal.initiator_peer_id == proposal.responder_peer_id
+        || !pair.contains(&&proposal.subject_peer_id)
+        || !pair.contains(&&proposal.candidate_peer_id)
+        || proposal
+            .transport
+            .endpoints
+            .iter()
+            .map(|v| &v.peer_id)
+            .collect::<std::collections::BTreeSet<_>>()
+            != pair.into_iter().collect()
+    {
+        rejection = Some(ManifoldPeerSessionRejectionReason::InvalidPeerPair);
+    } else if proposal.expires_at_ms <= case.now_ms
+        || proposal.expires_at_ms > case.reciprocal_receipt.expires_at_ms
+    {
+        rejection = Some(ManifoldPeerSessionRejectionReason::SessionOutlivesEvidence);
+    } else if proposal.requested_capability_ids.is_empty()
+        || proposal.requested_capability_ids.len() > MAX_SESSION_CAPABILITIES
+    {
+        rejection = Some(ManifoldPeerSessionRejectionReason::CapabilityLimitExceeded);
+    } else if proposal
+        .requested_capability_ids
+        .windows(2)
+        .any(|pair| pair[0] >= pair[1])
+    {
+        rejection = Some(ManifoldPeerSessionRejectionReason::InvalidCapabilitySet);
+    } else if proposal
+        .requested_capability_ids
+        .iter()
+        .any(|capability| ManifoldPeerSessionLowRateCapability::from_id(capability).is_none())
+    {
+        rejection = Some(ManifoldPeerSessionRejectionReason::HighRateCapability);
+    } else if case.reciprocal_receipt.transport != proposal.transport
+        || validate_current_reciprocal_ed25519_receipt_v3(
+            case.current_reciprocal_state,
+            case.current_enrollment,
+            &ManifoldReciprocalEd25519ReceiptV3::CommonLan(case.reciprocal_receipt.clone()),
+            &proposal.initiator_peer_id,
+            &proposal.responder_peer_id,
+            case.now_ms,
+        )
+        .is_err()
+    {
+        rejection = Some(ManifoldPeerSessionRejectionReason::SignedRendezvousMismatch);
+    } else if pair.iter().any(|peer_id| {
+        case.accepted_peers
+            .peers
+            .iter()
+            .find(|peer| &peer.identity.peer_id == *peer_id)
+            .map_or(true, |peer| {
+                peer.status.availability != ManifoldPeerAvailability::Ready
+                    || peer.status.observed_at_ms > case.now_ms
+                    || peer.status.expires_at_ms <= case.now_ms
+                    || proposal.expires_at_ms > peer.status.expires_at_ms
+                    || !peer.identity.roles.contains(&ManifoldPeerRole::Rendezvous)
+                    || proposal
+                        .requested_capability_ids
+                        .iter()
+                        .any(|capability| !peer.status.capability_ids.contains(capability))
+            })
+    }) {
+        rejection = Some(ManifoldPeerSessionRejectionReason::PeerNotAcceptedForRendezvous);
+    } else if state.sessions.iter().any(|session| match session {
+        ManifoldAcceptedPeerSessionV2::WifiDirect(value) => {
+            value.proposal.session_id == proposal.session_id && !value.revoked
+        }
+        ManifoldAcceptedPeerSessionV2::CommonLan(value) => {
+            value.proposal.session_id == proposal.session_id
+                && !value.revoked
+                && value.proposal != *proposal
+        }
+    }) {
+        rejection = Some(ManifoldPeerSessionRejectionReason::SessionIdentityCollision);
+    }
+    let resulting = rejection
+        .as_ref()
+        .map_or_else(|| prior.next().unwrap_or(prior), |_| prior);
+    let decision_id = derived("decision.common-lan-peer-session", &proposal.proposal_id);
+    let decision = ManifoldCommonLanPeerSessionDecision {
+        schema_id: schema("rusty.manifold.peer.common_lan_session_decision.v1"),
+        decision_id: decision_id.clone(),
+        proposal_id: proposal.proposal_id.clone(),
+        applied: rejection.is_none() && resulting != prior,
+        rejection_reason: rejection.clone(),
+        prior_authority_revision: prior,
+        resulting_authority_revision: resulting,
+    };
+    let topology = ManifoldCommonLanSignedPeerTopologyAuthorization {
+        schema_id: schema(COMMON_LAN_SIGNED_PEER_TOPOLOGY_AUTHORIZATION_SCHEMA),
+        decision_id: decision_id.clone(),
+        session_id: proposal.session_id.clone(),
+        proposal_id: proposal.proposal_id.clone(),
+        authority_revision: resulting,
+        initiator_peer_id: proposal.initiator_peer_id.clone(),
+        responder_peer_id: proposal.responder_peer_id.clone(),
+        transport: proposal.transport.clone(),
+        reciprocal_receipt_id: case.reciprocal_receipt.receipt_id.clone(),
+        reciprocal_authority_revision: case.current_reciprocal_state.authority_revision,
+        enrollment_authority_revision: case.current_enrollment.authority_revision,
+        signer_key_ids: case.reciprocal_receipt.signer_key_ids.clone(),
+        valid_from_ms: case.now_ms,
+        expires_at_ms: proposal.expires_at_ms,
+        authorized: decision.applied,
+    };
+    if !decision.applied {
+        return (
+            state.clone(),
+            ManifoldPeerSessionDecisionV2::CommonLan(decision),
+            ManifoldSignedPeerTopologyAuthorizationV2::CommonLan(topology),
+        );
+    }
+    let mut next = state.clone();
+    next.authority_revision = resulting;
+    next.applied_proposal_ids.push(proposal.proposal_id.clone());
+    next.applied_proposal_ids.sort();
+    let accepted = ManifoldAcceptedPeerSessionV2::CommonLan(ManifoldAcceptedCommonLanPeerSession {
+        proposal: proposal.clone(),
+        decision_id,
+        revoked: false,
+        reciprocal_receipt_id: case.reciprocal_receipt.receipt_id.clone(),
+    });
+    if let Some(existing) = next
+        .sessions
+        .iter_mut()
+        .find(|session| session.session_id() == &proposal.session_id)
+    {
+        *existing = accepted;
+    } else {
+        next.sessions.push(accepted);
+    }
+    (
+        next,
+        ManifoldPeerSessionDecisionV2::CommonLan(decision),
+        ManifoldSignedPeerTopologyAuthorizationV2::CommonLan(topology),
+    )
+}
+
+/// Revalidates either retained session variant against current authority.
+#[must_use]
+pub fn validate_current_peer_session_v2(
+    accepted_peers: &ManifoldAcceptedPeerState,
+    enrollment: &ManifoldPeerEnrollmentState,
+    reciprocal: &ManifoldReciprocalEd25519AuthorityStateV3,
+    sessions: &ManifoldPeerSessionAuthorityStateV2,
+    topologies: &[ManifoldSignedPeerTopologyAuthorizationV2],
+    session_id: &DottedId,
+    now_ms: u64,
+) -> ManifoldPeerSessionCurrentReceiptV2 {
+    let rejected = |reason| ManifoldPeerSessionCurrentReceiptV2 {
+        schema_id: schema(PEER_SESSION_CURRENT_RECEIPT_V2_SCHEMA),
+        session_id: session_id.clone(),
+        current: false,
+        rejection_reason: Some(reason),
+        decision_id: None,
+        peer_ids: Vec::new(),
+        topology_contract_id: None,
+        validated_at_ms: now_ms,
+        expires_at_ms: None,
+    };
+    let Some(session) = sessions.sessions.iter().find(|value| match value {
+        ManifoldAcceptedPeerSessionV2::WifiDirect(v) => &v.proposal.session_id == session_id,
+        ManifoldAcceptedPeerSessionV2::CommonLan(v) => &v.proposal.session_id == session_id,
+    }) else {
+        return rejected(ManifoldPeerSessionCurrentRejectionReason::NotFound);
+    };
+    match session {
+        ManifoldAcceptedPeerSessionV2::WifiDirect(value) => {
+            if value.revoked || sessions.revoked_session_ids.contains(session_id) {
+                return rejected(ManifoldPeerSessionCurrentRejectionReason::Revoked);
+            }
+            let Some(receipt_id) = value.rendezvous_receipt_id.as_ref() else {
+                return rejected(ManifoldPeerSessionCurrentRejectionReason::RendezvousNotCurrent);
+            };
+            let Some(topology) = topologies.iter().find_map(|candidate| match candidate {
+                ManifoldSignedPeerTopologyAuthorizationV2::WifiDirect(v)
+                    if v.topology_authorization.session_id == *session_id
+                        && v.topology_authorization.decision_id == value.decision_id =>
+                {
+                    Some(v)
+                }
+                _ => None,
+            }) else {
+                return rejected(ManifoldPeerSessionCurrentRejectionReason::NotFound);
+            };
+            let Some(receipt) =
+                reciprocal
+                    .accepted_receipts
+                    .iter()
+                    .find(|candidate| match candidate {
+                        ManifoldReciprocalEd25519ReceiptV3::WifiDirect(v) => {
+                            &v.receipt_id == receipt_id
+                        }
+                        ManifoldReciprocalEd25519ReceiptV3::CommonLan(_) => false,
+                    })
+            else {
+                return rejected(ManifoldPeerSessionCurrentRejectionReason::RendezvousNotCurrent);
+            };
+            let mut peers = vec![
+                value.proposal.group_owner_peer_id.clone(),
+                value.proposal.client_peer_id.clone(),
+            ];
+            peers.sort();
+            if value.proposal.expires_at_ms <= now_ms
+                || topology.topology_authorization.expires_at_ms <= now_ms
+            {
+                return rejected(ManifoldPeerSessionCurrentRejectionReason::Expired);
+            }
+            if topology.rendezvous_receipt_id != *receipt_id
+                || !topology.topology_authorization.authorized
+                || topology.topology_authorization.denial_reason.is_some()
+                || topology.topology_authorization.proposal_id != value.proposal.proposal_id
+                || topology.topology_authorization.group_owner_peer_id
+                    != value.proposal.group_owner_peer_id
+                || topology.topology_authorization.client_peer_id != value.proposal.client_peer_id
+                || topology.topology_authorization.topology_contract_id
+                    != value.proposal.topology_contract_id
+                || topology.topology_authorization.valid_from_ms > now_ms
+                || topology.signer_key_ids
+                    != match receipt {
+                        ManifoldReciprocalEd25519ReceiptV3::WifiDirect(v) => {
+                            v.signer_key_ids.clone()
+                        }
+                        _ => Vec::new(),
+                    }
+                || validate_current_reciprocal_ed25519_receipt_v3(
+                    reciprocal, enrollment, receipt, &peers[0], &peers[1], now_ms,
+                )
+                .is_err()
+                || peers.iter().any(|peer_id| {
+                    accepted_peers
+                        .peers
+                        .iter()
+                        .find(|peer| &peer.identity.peer_id == peer_id)
+                        .map_or(true, |peer| {
+                            peer.status.availability != ManifoldPeerAvailability::Ready
+                                || peer.status.observed_at_ms > now_ms
+                                || peer.status.expires_at_ms <= now_ms
+                        })
+                })
+            {
+                return rejected(ManifoldPeerSessionCurrentRejectionReason::RendezvousNotCurrent);
+            }
+            ManifoldPeerSessionCurrentReceiptV2 {
+                schema_id: schema(PEER_SESSION_CURRENT_RECEIPT_V2_SCHEMA),
+                session_id: session_id.clone(),
+                current: true,
+                rejection_reason: None,
+                decision_id: Some(value.decision_id.clone()),
+                peer_ids: peers,
+                topology_contract_id: Some(value.proposal.topology_contract_id.clone()),
+                validated_at_ms: now_ms,
+                expires_at_ms: Some(
+                    value
+                        .proposal
+                        .expires_at_ms
+                        .min(topology.topology_authorization.expires_at_ms),
+                ),
+            }
+        }
+        ManifoldAcceptedPeerSessionV2::CommonLan(value) => {
+            if value.revoked || sessions.revoked_session_ids.contains(session_id) {
+                return rejected(ManifoldPeerSessionCurrentRejectionReason::Revoked);
+            }
+            let Some(topology) =
+                topologies
+                    .iter()
+                    .find_map(|value_topology| match value_topology {
+                        ManifoldSignedPeerTopologyAuthorizationV2::CommonLan(v)
+                            if v.session_id == *session_id
+                                && v.decision_id == value.decision_id =>
+                        {
+                            Some(v)
+                        }
+                        _ => None,
+                    })
+            else {
+                return rejected(ManifoldPeerSessionCurrentRejectionReason::NotFound);
+            };
+            let receipt = reciprocal
+                .accepted_receipts
+                .iter()
+                .find_map(|receipt| match receipt {
+                    ManifoldReciprocalEd25519ReceiptV3::CommonLan(v)
+                        if v.receipt_id == value.reciprocal_receipt_id =>
+                    {
+                        Some((receipt, v))
+                    }
+                    _ => None,
+                });
+            let mut peers = vec![
+                value.proposal.initiator_peer_id.clone(),
+                value.proposal.responder_peer_id.clone(),
+            ];
+            peers.sort();
+            if value.proposal.expires_at_ms <= now_ms || topology.expires_at_ms <= now_ms {
+                return rejected(ManifoldPeerSessionCurrentRejectionReason::Expired);
+            }
+            if !topology.authorized
+                || topology.schema_id.as_str()
+                    != COMMON_LAN_SIGNED_PEER_TOPOLOGY_AUTHORIZATION_SCHEMA
+                || topology.proposal_id != value.proposal.proposal_id
+                || topology.initiator_peer_id != value.proposal.initiator_peer_id
+                || topology.responder_peer_id != value.proposal.responder_peer_id
+                || topology.transport != value.proposal.transport
+                || topology.valid_from_ms > now_ms
+                || receipt.map_or(true, |(receipt, common_receipt)| {
+                    topology.reciprocal_receipt_id != common_receipt.receipt_id
+                        || topology.reciprocal_authority_revision
+                            != common_receipt.resulting_authority_revision
+                        || topology.enrollment_authority_revision
+                            != common_receipt.enrollment_authority_revision
+                        || topology.signer_key_ids != common_receipt.signer_key_ids
+                        || topology.transport != common_receipt.transport
+                        || common_receipt.initiator_peer_id != value.proposal.initiator_peer_id
+                        || common_receipt.responder_peer_id != value.proposal.responder_peer_id
+                        || validate_current_reciprocal_ed25519_receipt_v3(
+                            reciprocal, enrollment, receipt, &peers[0], &peers[1], now_ms,
+                        )
+                        .is_err()
+                })
+                || peers.iter().any(|peer_id| {
+                    accepted_peers
+                        .peers
+                        .iter()
+                        .find(|peer| &peer.identity.peer_id == peer_id)
+                        .map_or(true, |peer| {
+                            peer.status.availability != ManifoldPeerAvailability::Ready
+                                || peer.status.observed_at_ms > now_ms
+                                || peer.status.expires_at_ms <= now_ms
+                        })
+                })
+            {
+                return rejected(ManifoldPeerSessionCurrentRejectionReason::RendezvousNotCurrent);
+            }
+            ManifoldPeerSessionCurrentReceiptV2 {
+                schema_id: schema(PEER_SESSION_CURRENT_RECEIPT_V2_SCHEMA),
+                session_id: session_id.clone(),
+                current: true,
+                rejection_reason: None,
+                decision_id: Some(value.decision_id.clone()),
+                peer_ids: peers,
+                topology_contract_id: Some(value.proposal.transport.topology_contract_id.clone()),
+                validated_at_ms: now_ms,
+                expires_at_ms: Some(value.proposal.expires_at_ms.min(topology.expires_at_ms)),
+            }
+        }
+    }
+}
+
+/// Revokes either session variant under one shared revision/replay history.
+pub fn revoke_peer_session_v2(
+    state: &ManifoldPeerSessionAuthorityStateV2,
+    request: &ManifoldPeerSessionRevocation,
+    now_ms: u64,
+) -> Result<
+    (
+        ManifoldPeerSessionAuthorityStateV2,
+        ManifoldPeerTopologyAuthorizationV2,
+    ),
+    String,
+> {
+    if request.schema_id.as_str() != PEER_SESSION_REVOCATION_SCHEMA
+        || request.expected_authority_revision != state.authority_revision
+    {
+        return Err("peer-session revocation schema or revision mismatch".to_string());
+    }
+    let Some(index) = state
+        .sessions
+        .iter()
+        .position(|value| value.session_id() == &request.session_id && !value.revoked())
+    else {
+        return Err("active peer session not found".to_string());
+    };
+    let resulting = state
+        .authority_revision
+        .next()
+        .ok_or_else(|| "peer-session authority revision overflow".to_string())?;
+    let mut next = state.clone();
+    let authorization = match &mut next.sessions[index] {
+        ManifoldAcceptedPeerSessionV2::WifiDirect(value) => {
+            value.revoked = true;
+            ManifoldPeerTopologyAuthorizationV2::WifiDirect(authorization(
+                &value.proposal,
+                request.revocation_id.clone(),
+                resulting,
+                now_ms,
+                false,
+                Some(ManifoldPeerSessionRejectionReason::RevokedSession),
+            ))
+        }
+        ManifoldAcceptedPeerSessionV2::CommonLan(value) => {
+            value.revoked = true;
+            ManifoldPeerTopologyAuthorizationV2::CommonLan(
+                ManifoldCommonLanPeerTopologyAuthorization {
+                    decision_id: request.revocation_id.clone(),
+                    session_id: value.proposal.session_id.clone(),
+                    authority_revision: resulting,
+                    transport: value.proposal.transport.clone(),
+                    valid_from_ms: now_ms,
+                    expires_at_ms: value.proposal.expires_at_ms,
+                    authorized: false,
+                },
+            )
+        }
+    };
+    next.authority_revision = resulting;
+    if !next.revoked_session_ids.contains(&request.session_id) {
+        next.revoked_session_ids.push(request.session_id.clone());
+    }
+    Ok((next, authorization))
+}
+
 fn validate_review(
     case: &ManifoldPeerSessionReviewCase,
     signed_reciprocal_evidence_validated: bool,
@@ -1079,6 +1990,190 @@ mod tests {
             output.push(char::from(HEX[usize::from(byte & 0x0f)]));
         }
         output
+    }
+
+    fn common_lan_current_case() -> (
+        ManifoldAcceptedPeerState,
+        ManifoldPeerEnrollmentState,
+        ManifoldReciprocalEd25519AuthorityStateV3,
+        ManifoldPeerSessionAuthorityStateV2,
+        Vec<ManifoldSignedPeerTopologyAuthorizationV2>,
+    ) {
+        let fixture = signed_case();
+        let endpoints = vec![
+            crate::ManifoldCommonLanEndpointBinding {
+                peer_id: DottedId::new("peer.alpha").unwrap(),
+                endpoint_id: DottedId::new("endpoint.alpha.video").unwrap(),
+                listen_ip_address: "192.168.49.2".into(),
+                listen_port: 46000,
+            },
+            crate::ManifoldCommonLanEndpointBinding {
+                peer_id: DottedId::new("peer.beta").unwrap(),
+                endpoint_id: DottedId::new("endpoint.beta.video").unwrap(),
+                listen_ip_address: "192.168.49.3".into(),
+                listen_port: 46000,
+            },
+        ];
+        let transport = ManifoldCommonLanTransportBinding {
+            topology_contract_id: DottedId::new(crate::COMMON_LAN_PAIR_TOPOLOGY_CONTRACT_ID)
+                .unwrap(),
+            transport_contract_id: DottedId::new(crate::COMMON_LAN_TCP_TRANSPORT_CONTRACT_ID)
+                .unwrap(),
+            network_scope_id: DottedId::new("network.scope.test").unwrap(),
+            endpoints,
+            route_configuration_sha256: format!("sha256:{}", "22".repeat(32)),
+        };
+        let request_id = DottedId::new("request.common-lan.receipt.001").unwrap();
+        let receipt = ManifoldCommonLanReciprocalEd25519Receipt {
+            schema_id: schema(crate::COMMON_LAN_RECIPROCAL_ED25519_RECEIPT_SCHEMA),
+            receipt_id: derived("receipt.common-lan-reciprocal-ed25519", &request_id),
+            request_id: request_id.clone(),
+            correlation_id: DottedId::new("correlation.common-lan.001").unwrap(),
+            trust_policy_id: DottedId::new("policy.peer.test").unwrap(),
+            trust_policy_revision: Revision::INITIAL,
+            context_sha256: format!("sha256:{}", "33".repeat(32)),
+            device_nonce_sha256: vec![
+                format!("sha256:{}", "44".repeat(32)),
+                format!("sha256:{}", "55".repeat(32)),
+            ],
+            accepted: true,
+            rejection_reason: None,
+            peer_ids: vec![
+                DottedId::new("peer.alpha").unwrap(),
+                DottedId::new("peer.beta").unwrap(),
+            ],
+            initiator_peer_id: DottedId::new("peer.alpha").unwrap(),
+            responder_peer_id: DottedId::new("peer.beta").unwrap(),
+            signer_key_ids: vec![
+                DottedId::new("key.peer.alpha.001").unwrap(),
+                DottedId::new("key.peer.beta.001").unwrap(),
+            ],
+            transport: transport.clone(),
+            coordinator_epoch: 1,
+            enrollment_authority_revision: fixture.current_enrollment.authority_revision,
+            prior_authority_revision: Revision::INITIAL,
+            resulting_authority_revision: Revision::new(2).unwrap(),
+            expires_at_ms: 50_000,
+        };
+        let reciprocal = ManifoldReciprocalEd25519AuthorityStateV3 {
+            schema_id: schema(crate::RECIPROCAL_ED25519_STATE_V3_SCHEMA),
+            authority_revision: Revision::new(2).unwrap(),
+            applied_request_ids: vec![request_id],
+            consumed_correlation_ids: vec![receipt.correlation_id.clone()],
+            consumed_context_sha256: vec![receipt.context_sha256.clone()],
+            consumed_nonce_sha256: receipt.device_nonce_sha256.clone(),
+            accepted_receipts: vec![ManifoldReciprocalEd25519ReceiptV3::CommonLan(
+                receipt.clone(),
+            )],
+        };
+        let proposal_id = DottedId::new("proposal.common-lan.001").unwrap();
+        let session_id = DottedId::new("session.common-lan.001").unwrap();
+        let decision_id = derived("decision.common-lan-peer-session", &proposal_id);
+        let proposal = ManifoldCommonLanPeerSessionProposal {
+            schema_id: schema(COMMON_LAN_PEER_SESSION_PROPOSAL_SCHEMA),
+            proposal_id: proposal_id.clone(),
+            session_id: session_id.clone(),
+            expected_authority_revision: Revision::INITIAL,
+            subject_peer_id: DottedId::new("peer.alpha").unwrap(),
+            candidate_peer_id: DottedId::new("peer.beta").unwrap(),
+            initiator_peer_id: DottedId::new("peer.alpha").unwrap(),
+            responder_peer_id: DottedId::new("peer.beta").unwrap(),
+            requested_capability_ids: Vec::new(),
+            transport: transport.clone(),
+            expires_at_ms: 40_000,
+        };
+        let sessions = ManifoldPeerSessionAuthorityStateV2 {
+            schema_id: schema(PEER_SESSION_STATE_V2_SCHEMA),
+            authority_revision: Revision::new(2).unwrap(),
+            sessions: vec![ManifoldAcceptedPeerSessionV2::CommonLan(
+                ManifoldAcceptedCommonLanPeerSession {
+                    proposal: proposal.clone(),
+                    decision_id: decision_id.clone(),
+                    revoked: false,
+                    reciprocal_receipt_id: receipt.receipt_id.clone(),
+                },
+            )],
+            applied_proposal_ids: vec![proposal_id.clone()],
+            revoked_session_ids: Vec::new(),
+        };
+        let topology = ManifoldCommonLanSignedPeerTopologyAuthorization {
+            schema_id: schema(COMMON_LAN_SIGNED_PEER_TOPOLOGY_AUTHORIZATION_SCHEMA),
+            decision_id,
+            session_id,
+            proposal_id,
+            authority_revision: Revision::new(2).unwrap(),
+            initiator_peer_id: DottedId::new("peer.alpha").unwrap(),
+            responder_peer_id: DottedId::new("peer.beta").unwrap(),
+            transport,
+            reciprocal_receipt_id: receipt.receipt_id,
+            reciprocal_authority_revision: reciprocal.authority_revision,
+            enrollment_authority_revision: fixture.current_enrollment.authority_revision,
+            signer_key_ids: receipt.signer_key_ids,
+            valid_from_ms: 100,
+            expires_at_ms: 40_000,
+            authorized: true,
+        };
+        (
+            fixture.session_review.accepted_peers,
+            fixture.current_enrollment,
+            reciprocal,
+            sessions,
+            vec![ManifoldSignedPeerTopologyAuthorizationV2::CommonLan(
+                topology,
+            )],
+        )
+    }
+
+    #[test]
+    fn common_lan_current_session_rejects_retained_topology_tamper() {
+        let (peers, enrollment, reciprocal, sessions, topologies) = common_lan_current_case();
+        let session_id = sessions.sessions[0].session_id().clone();
+        assert!(
+            validate_current_peer_session_v2(
+                &peers,
+                &enrollment,
+                &reciprocal,
+                &sessions,
+                &topologies,
+                &session_id,
+                1_000
+            )
+            .current
+        );
+        let mut damaged = topologies.clone();
+        let ManifoldSignedPeerTopologyAuthorizationV2::CommonLan(topology) = &mut damaged[0] else {
+            unreachable!()
+        };
+        topology.transport.route_configuration_sha256 = format!("sha256:{}", "aa".repeat(32));
+        assert!(
+            !validate_current_peer_session_v2(
+                &peers,
+                &enrollment,
+                &reciprocal,
+                &sessions,
+                &damaged,
+                &session_id,
+                1_000
+            )
+            .current
+        );
+        let mut damaged = sessions.clone();
+        let ManifoldAcceptedPeerSessionV2::CommonLan(session) = &mut damaged.sessions[0] else {
+            unreachable!()
+        };
+        session.reciprocal_receipt_id = DottedId::new("receipt.wrong").unwrap();
+        assert!(
+            !validate_current_peer_session_v2(
+                &peers,
+                &enrollment,
+                &reciprocal,
+                &damaged,
+                &topologies,
+                &session_id,
+                1_000
+            )
+            .current
+        );
     }
 
     #[test]

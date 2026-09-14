@@ -363,6 +363,146 @@
       ]
     },
     {
+      "schema_id": "rusty.manifold.media.route_leg_descriptor.v1",
+      "rust_type": "ManifoldMediaRouteLegDescriptor",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.reciprocal_ed25519_state.v3",
+      "rust_type": "ManifoldReciprocalEd25519AuthorityStateV3",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.common_lan_reciprocal_ed25519_context.v1",
+      "rust_type": "ManifoldCommonLanReciprocalEd25519Context",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.common_lan_reciprocal_ed25519_signature.v1",
+      "rust_type": "ManifoldCommonLanReciprocalEd25519Signature",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.common_lan_reciprocal_ed25519_review.v1",
+      "rust_type": "ManifoldCommonLanReciprocalEd25519ReviewRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.common_lan_reciprocal_ed25519_receipt.v1",
+      "rust_type": "ManifoldCommonLanReciprocalEd25519Receipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.session_state.v2",
+      "rust_type": "ManifoldPeerSessionAuthorityStateV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.common_lan_session_proposal.v1",
+      "rust_type": "ManifoldCommonLanPeerSessionProposal",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.common_lan_signed_topology_authorization.v1",
+      "rust_type": "ManifoldCommonLanSignedPeerTopologyAuthorization",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.session_current_receipt.v2",
+      "rust_type": "ManifoldPeerSessionCurrentReceiptV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_state.v2",
+      "rust_type": "ManifoldPairMediaRouteAuthorityStateV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_request.v2",
+      "rust_type": "ManifoldPairMediaRouteRequestV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_record.v2",
+      "rust_type": "ManifoldAcceptedPairMediaRouteV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_receipt.v2",
+      "rust_type": "ManifoldPairMediaRouteReceiptV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_current_receipt.v2",
+      "rust_type": "ManifoldPairMediaRouteCurrentReceiptV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_termination_request.v2",
+      "rust_type": "ManifoldPairMediaRouteTerminationRequestV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_mutation_receipt.v2",
+      "rust_type": "ManifoldPairMediaRouteMutationReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_cleanup_request.v2",
+      "rust_type": "ManifoldPairMediaRouteCleanupCompletionRequestV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_cleanup_receipt.v2",
+      "rust_type": "ManifoldPairMediaRouteCleanupReceiptV2",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_state.v1",
+      "rust_type": "ManifoldPairMediaRouteState",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_request.v1",
+      "rust_type": "ManifoldPairMediaRouteRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_record.v1",
+      "rust_type": "ManifoldAcceptedPairMediaRoute",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_receipt.v1",
+      "rust_type": "ManifoldPairMediaRouteReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_termination_request.v1",
+      "rust_type": "ManifoldPairMediaRouteTerminationRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_mutation_receipt.v1",
+      "rust_type": "ManifoldPairMediaRouteMutationReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_current_receipt.v1",
+      "rust_type": "ManifoldPairMediaRouteCurrentReceipt",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_cleanup_request.v1",
+      "rust_type": "ManifoldPairMediaRouteCleanupCompletionRequest",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.pair_media_route_cleanup_receipt.v1",
+      "rust_type": "ManifoldPairMediaRouteCleanupReceipt",
+      "fixture_paths": []
+    },
+    {
       "schema_id": "rusty.manifold.peer.identity.v1",
       "rust_type": "ManifoldPeerIdentity",
       "fixture_paths": [
@@ -445,6 +585,11 @@
     },
     {
       "schema_id": "rusty.manifold.peer.runtime_host.snapshot.v3",
+      "rust_type": "ManifoldPeerRuntimeHostSnapshot",
+      "fixture_paths": []
+    },
+    {
+      "schema_id": "rusty.manifold.peer.runtime_host.snapshot.v4",
       "rust_type": "ManifoldPeerRuntimeHostSnapshot",
       "fixture_paths": []
     },

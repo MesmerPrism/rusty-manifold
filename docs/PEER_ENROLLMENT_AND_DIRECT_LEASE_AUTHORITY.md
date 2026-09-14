@@ -62,3 +62,13 @@ reciprocal roles, contract mismatch, rotation/revocation invalidation,
 retained-receipt provenance, signed-session binding, exact mesh membership,
 advisory-route rejection, revision drift, accepted media scope, duplicate
 issuance, revocation replay, current-lease revalidation, and expiry.
+
+The active reciprocal v3 state is carrier-neutral and keeps the unchanged v2
+Wi-Fi Direct request, receipt, signing bytes, and compatibility API as one
+closed variant. The additive common-LAN variant signs stable enrolled peer and
+key identities, neutral initiator/responder roles, distinct decoded nonces,
+both advertised listening endpoints, the fixed TCP contract, a peer-agreed
+network-scope id, and the exact packaged configuration digest. Both variants
+advance one top-level revision and consume the same request, correlation,
+context, and nonce replay guards. Mixed Wi-Fi → LAN → Wi-Fi acceptance is
+therefore contiguous and cannot reuse evidence across carriers.

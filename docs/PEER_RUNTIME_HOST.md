@@ -12,11 +12,13 @@ One durable snapshot retains:
 - accepted low-rate peer identity and status;
 - operator-mediated public credentials and enrollment replay ids;
 - accepted reciprocal signed-rendezvous receipts, evidence ids, and nonce
-  digests;
-- accepted/revoked peer sessions and signed topology authorizations;
+  digests across the closed Wi-Fi Direct and common-LAN variants;
+- accepted/revoked peer sessions and signed topology authorizations across the
+  same mixed authority revision, replay, revocation, and capacity boundary;
 - accepted/revoked/expired N-peer mesh membership and ranked direct routes;
 - real direct-lane leases and their replay-protected mutations;
-- product-bound media-session decisions, the embedded media-command Runtime
+- product-bound media-session decisions, directional pair-media-route grants
+  with retained cleanup obligations, the embedded media-command Runtime
   Host, and retained outer-broker-to-inner-lease admission/release history;
 - exact Broker revocation-barrier convergence, media cleanup obligations,
   derivative Runtime Host lease-removal receipts, and terminal cleanup
@@ -40,7 +42,19 @@ reimplement enrollment, signature, session, mesh, route, or lease decisions.
   new session or lease can advance.
 - Signed topology authorizations are retained only from accepted signed peer
   sessions. Direct-lane issuance resolves the topology from the host-owned
-  session instead of accepting a caller-provided authority substitute.
+  session instead of accepting a caller-provided authority substitute. Legacy
+  direct-lane callers receive a bounded Wi-Fi-only projection; common-LAN
+  sessions never enter that legacy API.
+- Snapshot v5 stores mixed reciprocal v3, peer-session v2, pair-route v2, and
+  tagged signed-topology records. Migration from v4 wraps every retained
+  legacy record exactly once as `wifi_direct` while preserving revisions,
+  replay sets, provider identity, audit sequence, cleanup history, and all
+  unrelated authority state. V1-v3 first retain their existing migration
+  rules and then cross the same v4-to-v5 boundary without invented LAN facts.
+- Common-LAN review is pure authority. It retains two signed advertised
+  listening endpoints, the peer-agreed network-scope identity, and the exact
+  route-configuration digest; it opens no socket and treats none of those
+  values as observed operating-system state.
 - Mesh expiry ids are replay-protected by the host audit sequence because the
   pure mesh sweep intentionally owns only membership mutation. Direct-lane
   sweep ids remain protected by the lease authority itself.
@@ -53,7 +67,21 @@ reimplement enrollment, signature, session, mesh, route, or lease decisions.
   commits both states only on success. Stop/revoke precedes replay-guarded
   release. A fresh bounded use may start the same immutable grant again after
   release while older generations remain audit history.
-- Snapshot v3 joins an exact converged Broker barrier by provider epoch,
+- Pair-route issue and current readback join the exact live Broker provider
+  epoch, client, control lease, media-session decision, current mixed peer
+  session/topology, platform runtime specification, and retained resource leg.
+  A Broker-derived Runtime Host lease is never treated as ordinary when its
+  active retained admission is missing: every live route operation must join
+  that admission to the actual current Broker evidence. The legacy v1 route
+  API accepts only Wi-Fi Direct records, preserves the original v1 typed
+  command digests, and rejects common-LAN records with a schema mismatch.
+  Stop and revoke retain unresolved platform cleanup. While the original lease
+  remains current its authorized client may complete cleanup; after expiry or
+  revocation, cleanup requires a fresh current trusted-revoker command bound to
+  the exact retained grant, provider epoch, runtime specification, resources,
+  command digest, and effect receipt. Wrong-target, stale, or replayed cleanup
+  leaves the pending handle unchanged.
+- The Runtime Host joins an exact converged Broker barrier by provider epoch,
   application, lease, and consumer identity. It revokes dependent peer media
   decisions, sessions, routes, and streams, then atomically removes complete
   byte-equal derivative leases through Runtime Host v4. Each Broker-backed
@@ -99,14 +127,17 @@ owner.
 ## Validation
 
 ```powershell
-cargo test -p rusty-manifold-peer-runtime-host
-cargo clippy -p rusty-manifold-peer-runtime-host --all-targets --no-deps -- -D warnings
+cargo test --locked -p rusty-manifold-peer-runtime-host
+cargo clippy --locked -p rusty-manifold-peer-runtime-host --all-targets --no-deps -- -D warnings
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\check_all.ps1
 ```
 
 The focused tests cover snapshot restart and damage, exact current revisions,
 rendezvous/session/direct-lane replay, key rotation recovery, credential
-revocation invalidation, split-brain rejection, expiry/sweep replay, a real
-peer-session-scoped direct-lane lease, Broker-barrier convergence, derivative
+revocation invalidation, split-brain rejection, expiry/sweep replay, mixed
+Wi-Fi-to-LAN-to-Wi-Fi ordering, v4 migration and restart damage, a real
+peer-session-scoped direct-lane lease, Broker-backed pair-route issue/current/
+terminal cleanup including expired and revoked original leases, wrong-target
+trusted-revoker rejection, Broker-barrier convergence, derivative
 lease lineage and complete-set removal, legacy binding backfill, damaged
 binding rejection, and replay-protected terminal cleanup completion.

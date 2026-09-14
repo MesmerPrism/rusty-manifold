@@ -2,12 +2,14 @@
 
 mod direct_lane_lease;
 mod enrollment;
+mod pair_media_route;
 mod peer_mesh;
 mod peer_session;
 mod reciprocal_ed25519;
 
 pub use direct_lane_lease::*;
 pub use enrollment::*;
+pub use pair_media_route::*;
 pub use peer_mesh::*;
 pub use peer_session::*;
 pub use reciprocal_ed25519::*;

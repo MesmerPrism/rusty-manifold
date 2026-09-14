@@ -40,47 +40,80 @@ use rusty_manifold_model::{
     ManifoldControlLeaseRevocationTombstone, Revision, SchemaId,
 };
 use rusty_manifold_peer::{
+    complete_pair_media_route_cleanup_v1_on_v2, complete_pair_media_route_cleanup_v2,
     direct_lane_state_is_well_formed, enrollment_state_is_well_formed, expire_direct_lane_leases,
-    expire_peer_mesh_members, reciprocal_ed25519_compatibility_receipt,
-    review_and_apply_direct_lane_lease, review_and_apply_peer_enrollment,
-    review_and_apply_peer_mesh, review_and_apply_peer_proposal,
-    review_and_apply_reciprocal_ed25519, review_and_apply_signed_peer_session,
-    review_and_apply_signed_rendezvous, revoke_direct_lane_lease, revoke_peer_mesh_member,
-    revoke_peer_session, validate_current_direct_lane_lease, validate_current_peer_session,
-    validate_current_rendezvous_receipt, ManifoldAcceptedPeerState, ManifoldDirectLaneClientGrant,
-    ManifoldDirectLaneLeaseAuthorityContext, ManifoldDirectLaneLeaseCurrentReceipt,
-    ManifoldDirectLaneLeaseReceipt, ManifoldDirectLaneLeaseRejectionReason,
-    ManifoldDirectLaneLeaseRequest, ManifoldDirectLaneLeaseRevocation,
-    ManifoldDirectLaneLeaseState, ManifoldDirectLaneLeaseUseRequest,
-    ManifoldDirectLaneRuntimeCommandContext, ManifoldPeerApplicationReceipt, ManifoldPeerDecision,
-    ManifoldPeerDecisionOutcome, ManifoldPeerEnrollmentReceipt, ManifoldPeerEnrollmentRequest,
-    ManifoldPeerEnrollmentState, ManifoldPeerMeshDecision, ManifoldPeerMeshMutationReceipt,
-    ManifoldPeerMeshPairEvidence, ManifoldPeerMeshProposal, ManifoldPeerMeshReviewCase,
-    ManifoldPeerMeshRevocation, ManifoldPeerMeshState, ManifoldPeerReviewCase,
-    ManifoldPeerSessionCurrentReceipt, ManifoldPeerSessionDecision, ManifoldPeerSessionProposal,
+    expire_pair_media_routes_v2, expire_peer_mesh_members, migrate_pair_media_route_state_v1_to_v2,
+    migrate_peer_session_state_v1_to_v2, migrate_reciprocal_ed25519_state_v2_to_v3,
+    pair_media_route_cleanup_params_digest, pair_media_route_cleanup_params_digest_v2,
+    pair_media_route_issue_params_digest, pair_media_route_issue_params_digest_v2,
+    pair_media_route_state_v2_is_well_formed, pair_media_route_termination_params_digest,
+    peer_session_state_v2_is_well_formed, reciprocal_ed25519_compatibility_receipt,
+    reciprocal_ed25519_state_v3_is_well_formed, review_and_apply_direct_lane_lease,
+    review_and_apply_pair_media_route_termination_v1_on_v2,
+    review_and_apply_pair_media_route_termination_v2, review_and_apply_pair_media_route_v2,
+    review_and_apply_peer_enrollment, review_and_apply_peer_mesh, review_and_apply_peer_proposal,
+    review_and_apply_reciprocal_ed25519_v3, review_and_apply_signed_peer_session_v2,
+    review_and_apply_signed_rendezvous, revoke_direct_lane_lease,
+    revoke_pair_media_routes_for_media_sessions_v2, revoke_peer_mesh_member,
+    revoke_peer_session_v2, validate_current_direct_lane_lease,
+    validate_current_pair_media_route_v2, validate_current_peer_session,
+    validate_current_peer_session_v2, validate_current_rendezvous_receipt,
+    ManifoldAcceptedPairMediaRouteV2, ManifoldAcceptedPeerSessionV2, ManifoldAcceptedPeerState,
+    ManifoldCommonLanPairMediaRouteRequest, ManifoldCommonLanPeerSessionDecision,
+    ManifoldCommonLanPeerSessionProposal, ManifoldCommonLanReciprocalEd25519Receipt,
+    ManifoldCommonLanSignedPeerSessionReviewCase, ManifoldCommonLanSignedPeerTopologyAuthorization,
+    ManifoldDirectLaneClientGrant, ManifoldDirectLaneLeaseAuthorityContext,
+    ManifoldDirectLaneLeaseCurrentReceipt, ManifoldDirectLaneLeaseReceipt,
+    ManifoldDirectLaneLeaseRejectionReason, ManifoldDirectLaneLeaseRequest,
+    ManifoldDirectLaneLeaseRevocation, ManifoldDirectLaneLeaseState,
+    ManifoldDirectLaneLeaseUseRequest, ManifoldDirectLaneRuntimeCommandContext,
+    ManifoldPairMediaRouteAuthorityContextV2, ManifoldPairMediaRouteAuthorityStateV2,
+    ManifoldPairMediaRouteCleanupCompletionRequest,
+    ManifoldPairMediaRouteCleanupCompletionRequestV2, ManifoldPairMediaRouteCleanupReceipt,
+    ManifoldPairMediaRouteCleanupReceiptV2, ManifoldPairMediaRouteCurrentReceipt,
+    ManifoldPairMediaRouteCurrentReceiptV2, ManifoldPairMediaRouteMutationReceipt,
+    ManifoldPairMediaRouteReceipt, ManifoldPairMediaRouteReceiptV2,
+    ManifoldPairMediaRouteRejectionReason, ManifoldPairMediaRouteRequest,
+    ManifoldPairMediaRouteRequestV2, ManifoldPairMediaRouteRuntimeContext,
+    ManifoldPairMediaRouteState, ManifoldPairMediaRouteTerminationAction,
+    ManifoldPairMediaRouteTerminationRequest, ManifoldPairMediaRouteTerminationRequestV2,
+    ManifoldPeerApplicationReceipt, ManifoldPeerDecision, ManifoldPeerDecisionOutcome,
+    ManifoldPeerEnrollmentReceipt, ManifoldPeerEnrollmentRequest, ManifoldPeerEnrollmentState,
+    ManifoldPeerMeshDecision, ManifoldPeerMeshMutationReceipt, ManifoldPeerMeshPairEvidence,
+    ManifoldPeerMeshProposal, ManifoldPeerMeshReviewCase, ManifoldPeerMeshRevocation,
+    ManifoldPeerMeshState, ManifoldPeerReviewCase, ManifoldPeerSessionAuthorityStateV2,
+    ManifoldPeerSessionCurrentReceipt, ManifoldPeerSessionCurrentReceiptV2,
+    ManifoldPeerSessionDecision, ManifoldPeerSessionDecisionV2, ManifoldPeerSessionProposal,
     ManifoldPeerSessionReviewCase, ManifoldPeerSessionRevocation, ManifoldPeerSessionState,
     ManifoldPeerStatusProposal, ManifoldPeerTopologyAuthorization,
-    ManifoldReciprocalEd25519AuthorityState, ManifoldReciprocalEd25519Receipt,
-    ManifoldReciprocalEd25519ReviewRequest, ManifoldReciprocalEd25519RuntimeContext,
+    ManifoldPeerTopologyAuthorizationV2, ManifoldReciprocalEd25519AuthorityState,
+    ManifoldReciprocalEd25519AuthorityStateV3, ManifoldReciprocalEd25519Receipt,
+    ManifoldReciprocalEd25519ReceiptV3, ManifoldReciprocalEd25519ReviewRequest,
+    ManifoldReciprocalEd25519ReviewRequestV3, ManifoldReciprocalEd25519RuntimeContext,
     ManifoldRendezvousAuthorityState, ManifoldRendezvousReceipt, ManifoldRendezvousReviewRequest,
-    ManifoldSignedPeerSessionReviewCase, ManifoldSignedPeerTopologyAuthorization,
+    ManifoldSignedPeerSessionReviewCase, ManifoldSignedPeerSessionReviewV2,
+    ManifoldSignedPeerTopologyAuthorization, ManifoldSignedPeerTopologyAuthorizationV2,
     DIRECT_LANE_LEASE_ISSUE_COMMAND, DIRECT_LANE_LEASE_REVOKE_COMMAND,
     DIRECT_LANE_LEASE_STATE_SCHEMA, DIRECT_LANE_LEASE_USE_COMMAND, MAX_MESH_PEERS, MIN_MESH_PEERS,
-    PEER_CREDENTIAL_SCHEMA, PEER_ENROLLMENT_STATE_SCHEMA, PEER_MESH_STATE_SCHEMA,
-    PEER_REVIEW_CASE_SCHEMA, PEER_SESSION_PROPOSAL_SCHEMA, PEER_SESSION_REVIEW_SCHEMA,
-    PEER_SESSION_SNAPSHOT_SCHEMA, PEER_SNAPSHOT_SCHEMA, PEER_TOPOLOGY_AUTHORIZATION_SCHEMA,
-    RECIPROCAL_ED25519_STATE_SCHEMA, RENDEZVOUS_AUTHORITY_STATE_SCHEMA, RENDEZVOUS_RECEIPT_SCHEMA,
+    PAIR_MEDIA_ROUTE_CLEANUP_PARAMS_TYPE, PAIR_MEDIA_ROUTE_CLEANUP_PARAMS_V2_TYPE,
+    PAIR_MEDIA_ROUTE_CLEANUP_REQUEST_SCHEMA, PAIR_MEDIA_ROUTE_CLEANUP_REQUEST_V2_SCHEMA,
+    PAIR_MEDIA_ROUTE_REQUEST_SCHEMA, PAIR_MEDIA_ROUTE_TERMINATION_PARAMS_TYPE,
+    PAIR_MEDIA_ROUTE_TERMINATION_PARAMS_V2_TYPE, PAIR_MEDIA_ROUTE_TERMINATION_REQUEST_SCHEMA,
+    PAIR_MEDIA_ROUTE_TERMINATION_REQUEST_V2_SCHEMA, PEER_CREDENTIAL_SCHEMA,
+    PEER_ENROLLMENT_STATE_SCHEMA, PEER_MESH_STATE_SCHEMA, PEER_REVIEW_CASE_SCHEMA,
+    PEER_SESSION_REVIEW_SCHEMA, PEER_SNAPSHOT_SCHEMA, PEER_TOPOLOGY_AUTHORIZATION_SCHEMA,
+    RENDEZVOUS_AUTHORITY_STATE_SCHEMA, RENDEZVOUS_RECEIPT_SCHEMA,
     SIGNED_PEER_SESSION_REVIEW_SCHEMA, SIGNED_PEER_TOPOLOGY_AUTHORIZATION_SCHEMA,
 };
 use rusty_manifold_runtime_host::{
-    ManifoldRuntimeCommandRequest, ManifoldRuntimeDerivativeLeaseBinding,
+    ManifoldRuntimeAuditKind, ManifoldRuntimeCommandRequest, ManifoldRuntimeDerivativeLeaseBinding,
     ManifoldRuntimeDerivativeLeaseRevocationReceipt,
     ManifoldRuntimeDerivativeLeaseRevocationRequest, ManifoldRuntimeDispatchOutcome,
     ManifoldRuntimeHost, ManifoldRuntimeHostSnapshot, ManifoldRuntimeLease,
     ManifoldRuntimeUpstreamRevocationProof, HOST_APPLICATION_RECEIPT_SCHEMA,
     HOST_COMMAND_REQUEST_SCHEMA, HOST_DERIVATIVE_LEASE_BINDING_SCHEMA,
     HOST_DERIVATIVE_LEASE_REVOCATION_REQUEST_SCHEMA, HOST_DISPATCH_RECEIPT_SCHEMA,
-    HOST_SNAPSHOT_SCHEMA,
+    HOST_SNAPSHOT_SCHEMA, MAX_RUNTIME_AUDIT_EVENTS, MAX_RUNTIME_SNAPSHOT_RECORDS,
 };
 use serde::{Deserialize, Serialize};
 
@@ -90,8 +123,14 @@ pub const LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V1_SCHEMA: &str =
 /// Released peer Runtime Host snapshot schema without epoch checkpoints.
 pub const LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V2_SCHEMA: &str =
     "rusty.manifold.peer.runtime_host.snapshot.v2";
+/// Released peer Runtime Host snapshot before pair media route state.
+pub const LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V3_SCHEMA: &str =
+    "rusty.manifold.peer.runtime_host.snapshot.v3";
+/// Released peer Runtime Host snapshot before mixed topology authority.
+pub const LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V4_SCHEMA: &str =
+    "rusty.manifold.peer.runtime_host.snapshot.v4";
 /// Durable peer Runtime Host snapshot schema.
-pub const PEER_RUNTIME_HOST_SNAPSHOT_SCHEMA: &str = "rusty.manifold.peer.runtime_host.snapshot.v3";
+pub const PEER_RUNTIME_HOST_SNAPSHOT_SCHEMA: &str = "rusty.manifold.peer.runtime_host.snapshot.v5";
 /// Unified peer Runtime Host audit-event schema.
 pub const PEER_RUNTIME_HOST_AUDIT_SCHEMA: &str = "rusty.manifold.peer.runtime_host.audit_event.v1";
 /// Immutable/revisioned Runtime Host trust-policy schema.
@@ -244,6 +283,14 @@ pub enum ManifoldPeerRuntimeAuditKind {
     DirectLaneLeaseExpiry,
     /// Explicit direct-lane lease revocation.
     DirectLaneLeaseRevocation,
+    /// Directional pair media route issue.
+    PairMediaRoute,
+    /// Directional pair media route stop or revoke.
+    PairMediaRouteTermination,
+    /// Directional pair media route expiry.
+    PairMediaRouteExpiry,
+    /// Terminal pair media route cleanup acknowledgement.
+    PairMediaRouteCleanup,
 }
 
 /// Append-only audit record spanning all peer authority families.
@@ -293,10 +340,10 @@ pub struct ManifoldPeerRuntimeHostSnapshot {
     /// Accepted signed-rendezvous receipts and replay guards.
     pub rendezvous: ManifoldRendezvousAuthorityState,
     /// Carrier-independent reciprocal Ed25519 v2 receipts and replay guards.
-    #[serde(default = "ManifoldReciprocalEd25519AuthorityState::empty")]
-    pub reciprocal_ed25519: ManifoldReciprocalEd25519AuthorityState,
+    #[serde(default = "ManifoldReciprocalEd25519AuthorityStateV3::empty")]
+    pub reciprocal_ed25519: ManifoldReciprocalEd25519AuthorityStateV3,
     /// Accepted/revoked peer sessions.
-    pub peer_sessions: ManifoldPeerSessionState,
+    pub peer_sessions: ManifoldPeerSessionAuthorityStateV2,
     /// Accepted/revoked/expired N-peer mesh state.
     pub peer_mesh: ManifoldPeerMeshState,
     /// Current product-bound media-session decisions retained by Manifold.
@@ -316,8 +363,10 @@ pub struct ManifoldPeerRuntimeHostSnapshot {
     pub broker_epoch_rollovers: Vec<ManifoldPeerRuntimeBrokerEpochRolloverReceipt>,
     /// Real direct-lane lease state.
     pub direct_lane_leases: ManifoldDirectLaneLeaseState,
+    /// Directional pair media route grants and terminal cleanup history.
+    pub pair_media_routes: ManifoldPairMediaRouteAuthorityStateV2,
     /// Signed topology receipts retained for current-state revalidation.
-    pub signed_topology_authorizations: Vec<ManifoldSignedPeerTopologyAuthorization>,
+    pub signed_topology_authorizations: Vec<ManifoldSignedPeerTopologyAuthorizationV2>,
     /// Append-only cross-authority audit records.
     pub audit_events: Vec<ManifoldPeerRuntimeAuditEvent>,
 }
@@ -647,6 +696,63 @@ struct LegacyManifoldPeerRuntimeHostSnapshotV2 {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyManifoldPeerRuntimeHostSnapshotV3 {
+    #[serde(rename = "$schema")]
+    schema_id: SchemaId,
+    host_id: DottedId,
+    trust_policy: ManifoldPeerRuntimeTrustPolicy,
+    provider_epoch_id: DottedId,
+    event_sequence: u64,
+    accepted_peers: ManifoldAcceptedPeerState,
+    enrollment: ManifoldPeerEnrollmentState,
+    rendezvous: ManifoldRendezvousAuthorityState,
+    reciprocal_ed25519: ManifoldReciprocalEd25519AuthorityState,
+    peer_sessions: ManifoldPeerSessionState,
+    peer_mesh: ManifoldPeerMeshState,
+    media_sessions: ManifoldMediaSessionAcceptanceState,
+    media_command_runtime: ManifoldRuntimeHostSnapshot,
+    broker_lease_admissions: Vec<ManifoldPeerRuntimeBrokerLeaseAdmission>,
+    broker_lease_revocation_convergences:
+        Vec<ManifoldPeerRuntimeBrokerLeaseRevocationConvergenceReceipt>,
+    broker_lease_revocation_cleanup_completions:
+        Vec<ManifoldPeerRuntimeBrokerLeaseRevocationCleanupCompletionReceipt>,
+    broker_epoch_rollovers: Vec<ManifoldPeerRuntimeBrokerEpochRolloverReceipt>,
+    direct_lane_leases: ManifoldDirectLaneLeaseState,
+    signed_topology_authorizations: Vec<ManifoldSignedPeerTopologyAuthorization>,
+    audit_events: Vec<ManifoldPeerRuntimeAuditEvent>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LegacyManifoldPeerRuntimeHostSnapshotV4 {
+    #[serde(rename = "$schema")]
+    schema_id: SchemaId,
+    host_id: DottedId,
+    trust_policy: ManifoldPeerRuntimeTrustPolicy,
+    provider_epoch_id: DottedId,
+    event_sequence: u64,
+    accepted_peers: ManifoldAcceptedPeerState,
+    enrollment: ManifoldPeerEnrollmentState,
+    rendezvous: ManifoldRendezvousAuthorityState,
+    reciprocal_ed25519: ManifoldReciprocalEd25519AuthorityState,
+    peer_sessions: ManifoldPeerSessionState,
+    peer_mesh: ManifoldPeerMeshState,
+    media_sessions: ManifoldMediaSessionAcceptanceState,
+    media_command_runtime: ManifoldRuntimeHostSnapshot,
+    broker_lease_admissions: Vec<ManifoldPeerRuntimeBrokerLeaseAdmission>,
+    broker_lease_revocation_convergences:
+        Vec<ManifoldPeerRuntimeBrokerLeaseRevocationConvergenceReceipt>,
+    broker_lease_revocation_cleanup_completions:
+        Vec<ManifoldPeerRuntimeBrokerLeaseRevocationCleanupCompletionReceipt>,
+    broker_epoch_rollovers: Vec<ManifoldPeerRuntimeBrokerEpochRolloverReceipt>,
+    direct_lane_leases: ManifoldDirectLaneLeaseState,
+    pair_media_routes: ManifoldPairMediaRouteState,
+    signed_topology_authorizations: Vec<ManifoldSignedPeerTopologyAuthorization>,
+    audit_events: Vec<ManifoldPeerRuntimeAuditEvent>,
+}
+
+#[derive(Deserialize)]
 struct PeerRuntimeHostSnapshotSchemaProbe {
     #[serde(rename = "$schema")]
     schema_id: SchemaId,
@@ -688,14 +794,8 @@ impl ManifoldPeerRuntimeHost {
                 },
                 enrollment: ManifoldPeerEnrollmentState::empty(),
                 rendezvous: ManifoldRendezvousAuthorityState::empty(),
-                reciprocal_ed25519: ManifoldReciprocalEd25519AuthorityState::empty(),
-                peer_sessions: ManifoldPeerSessionState {
-                    schema_id: schema(PEER_SESSION_SNAPSHOT_SCHEMA),
-                    authority_revision: Revision::INITIAL,
-                    sessions: Vec::new(),
-                    applied_proposal_ids: Vec::new(),
-                    revoked_session_ids: Vec::new(),
-                },
+                reciprocal_ed25519: ManifoldReciprocalEd25519AuthorityStateV3::empty(),
+                peer_sessions: ManifoldPeerSessionAuthorityStateV2::empty(),
                 peer_mesh: ManifoldPeerMeshState {
                     schema_id: schema(PEER_MESH_STATE_SCHEMA),
                     authority_revision: Revision::INITIAL,
@@ -714,6 +814,7 @@ impl ManifoldPeerRuntimeHost {
                 broker_lease_revocation_cleanup_completions: Vec::new(),
                 broker_epoch_rollovers: Vec::new(),
                 direct_lane_leases: ManifoldDirectLaneLeaseState::empty(),
+                pair_media_routes: ManifoldPairMediaRouteAuthorityStateV2::empty(),
                 signed_topology_authorizations: Vec::new(),
                 audit_events: Vec::new(),
             },
@@ -983,6 +1084,28 @@ impl ManifoldPeerRuntimeHost {
         request: &ManifoldReciprocalEd25519ReviewRequest,
         now_ms: u64,
     ) -> Result<ManifoldReciprocalEd25519Receipt, ManifoldPeerRuntimeHostError> {
+        match self.review_reciprocal_ed25519_v3(
+            &ManifoldReciprocalEd25519ReviewRequestV3::WifiDirect(request.clone()),
+            now_ms,
+        )? {
+            ManifoldReciprocalEd25519ReceiptV3::WifiDirect(receipt) => Ok(receipt),
+            ManifoldReciprocalEd25519ReceiptV3::CommonLan(_) => Err(invalid_snapshot(
+                "Wi-Fi Direct reciprocal review returned a common-LAN receipt",
+            )),
+        }
+    }
+
+    /// Reviews one closed Wi-Fi Direct or common-LAN reciprocal request
+    /// against the shared active revision and replay boundary.
+    ///
+    /// # Errors
+    ///
+    /// Returns event-sequence exhaustion before invoking the pure authority.
+    pub fn review_reciprocal_ed25519_v3(
+        &mut self,
+        request: &ManifoldReciprocalEd25519ReviewRequestV3,
+        now_ms: u64,
+    ) -> Result<ManifoldReciprocalEd25519ReceiptV3, ManifoldPeerRuntimeHostError> {
         self.ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::Rendezvous)?;
         self.ensure_event_capacity()?;
         let runtime = ManifoldReciprocalEd25519RuntimeContext {
@@ -999,45 +1122,63 @@ impl ManifoldPeerRuntimeHost {
                 .direct_lane_leases
                 .authority_revision,
         };
-        let (next, receipt) = review_and_apply_reciprocal_ed25519(
+        let (next, receipt) = review_and_apply_reciprocal_ed25519_v3(
             &self.snapshot.reciprocal_ed25519,
             request,
             runtime,
             now_ms,
         );
-        if receipt.accepted {
-            let compatibility = reciprocal_ed25519_compatibility_receipt(&receipt);
+        let (source_id, prior, resulting, accepted, rejection) = match &receipt {
+            ManifoldReciprocalEd25519ReceiptV3::WifiDirect(value) => (
+                value.request_id.clone(),
+                value.prior_authority_revision,
+                value.resulting_authority_revision,
+                value.accepted,
+                rejection_code(value.rejection_reason.as_ref()),
+            ),
+            ManifoldReciprocalEd25519ReceiptV3::CommonLan(value) => (
+                value.request_id.clone(),
+                value.prior_authority_revision,
+                value.resulting_authority_revision,
+                value.accepted,
+                rejection_code(value.rejection_reason.as_ref()),
+            ),
+        };
+        if accepted {
             self.snapshot.reciprocal_ed25519 = next;
-            self.snapshot.rendezvous.authority_revision =
-                receipt.compatibility_resulting_authority_revision;
-            self.snapshot
-                .rendezvous
-                .applied_request_ids
-                .push(compatibility.request_id.clone());
-            self.snapshot
-                .rendezvous
-                .consumed_evidence_ids
-                .extend(compatibility.evidence_ids.clone());
-            self.snapshot
-                .rendezvous
-                .consumed_nonce_sha256
-                .push(compatibility.nonce_sha256.clone());
-            self.snapshot
-                .rendezvous
-                .accepted_receipts
-                .push(compatibility);
-            self.snapshot
-                .rendezvous
-                .accepted_receipts
-                .sort_by(|left, right| left.receipt_id.cmp(&right.receipt_id));
+            if let ManifoldReciprocalEd25519ReceiptV3::WifiDirect(value) = &receipt {
+                let compatibility = reciprocal_ed25519_compatibility_receipt(value);
+                self.snapshot.rendezvous.authority_revision =
+                    value.compatibility_resulting_authority_revision;
+                self.snapshot
+                    .rendezvous
+                    .applied_request_ids
+                    .push(compatibility.request_id.clone());
+                self.snapshot
+                    .rendezvous
+                    .consumed_evidence_ids
+                    .extend(compatibility.evidence_ids.clone());
+                self.snapshot
+                    .rendezvous
+                    .consumed_nonce_sha256
+                    .push(compatibility.nonce_sha256.clone());
+                self.snapshot
+                    .rendezvous
+                    .accepted_receipts
+                    .push(compatibility);
+                self.snapshot
+                    .rendezvous
+                    .accepted_receipts
+                    .sort_by(|left, right| left.receipt_id.cmp(&right.receipt_id));
+            }
         }
         self.record(
             ManifoldPeerRuntimeAuditKind::ReciprocalEd25519,
-            request.request_id.clone(),
-            receipt.prior_authority_revision,
-            receipt.resulting_authority_revision,
-            receipt.accepted,
-            rejection_code(receipt.rejection_reason.as_ref()),
+            source_id,
+            prior,
+            resulting,
+            accepted,
+            rejection,
         )?;
         Ok(receipt)
     }
@@ -1067,7 +1208,9 @@ impl ManifoldPeerRuntimeHost {
             session_review: ManifoldPeerSessionReviewCase {
                 schema_id: schema(PEER_SESSION_REVIEW_SCHEMA),
                 accepted_peers: self.snapshot.accepted_peers.clone(),
-                current_state: self.snapshot.peer_sessions.clone(),
+                current_state: rusty_manifold_peer::wifi_direct_peer_session_projection(
+                    &self.snapshot.peer_sessions,
+                ),
                 proposal,
                 trusted_adapter_ids: self.snapshot.trust_policy.trusted_adapter_ids.clone(),
                 now_ms,
@@ -1076,19 +1219,27 @@ impl ManifoldPeerRuntimeHost {
             current_enrollment: self.snapshot.enrollment.clone(),
             current_rendezvous_state: self.snapshot.rendezvous.clone(),
         };
-        let (decision, topology) = review_and_apply_signed_peer_session(&case);
-        if let Some(state) = decision.accepted_state.clone() {
-            self.snapshot.peer_sessions = state;
+        let (next, decision_v2, topology_v2) = review_and_apply_signed_peer_session_v2(
+            &self.snapshot.peer_sessions,
+            ManifoldSignedPeerSessionReviewV2::WifiDirect(&case),
+        );
+        let (
+            ManifoldPeerSessionDecisionV2::WifiDirect(decision),
+            ManifoldSignedPeerTopologyAuthorizationV2::WifiDirect(topology),
+        ) = (decision_v2, topology_v2.clone())
+        else {
+            return Err(invalid_snapshot(
+                "Wi-Fi Direct session review returned a common-LAN result",
+            ));
+        };
+        if decision.applied {
+            self.snapshot.peer_sessions = next;
             self.snapshot
                 .signed_topology_authorizations
-                .push(topology.clone());
+                .push(topology_v2);
             self.snapshot
                 .signed_topology_authorizations
-                .sort_by(|left, right| {
-                    left.topology_authorization
-                        .decision_id
-                        .cmp(&right.topology_authorization.decision_id)
-                });
+                .sort_by(|left, right| left.decision_id().cmp(right.decision_id()));
         }
         self.record(
             ManifoldPeerRuntimeAuditKind::SignedPeerSession,
@@ -1101,8 +1252,70 @@ impl ManifoldPeerRuntimeHost {
         Ok((decision, topology))
     }
 
-    /// Explicitly revokes one active peer session and invalidates its retained
-    /// signed topology authorization.
+    /// Reviews a common-LAN session against the current mixed reciprocal and
+    /// peer-session authorities and retains its signed topology on success.
+    ///
+    /// # Errors
+    ///
+    /// Returns event-sequence exhaustion before invoking the pure authority.
+    pub fn review_common_lan_peer_session(
+        &mut self,
+        proposal: &ManifoldCommonLanPeerSessionProposal,
+        reciprocal_receipt: &ManifoldCommonLanReciprocalEd25519Receipt,
+        now_ms: u64,
+    ) -> Result<
+        (
+            ManifoldCommonLanPeerSessionDecision,
+            ManifoldCommonLanSignedPeerTopologyAuthorization,
+        ),
+        ManifoldPeerRuntimeHostError,
+    > {
+        self.ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::Rendezvous)?;
+        self.ensure_event_capacity()?;
+        let review = ManifoldCommonLanSignedPeerSessionReviewCase {
+            accepted_peers: &self.snapshot.accepted_peers,
+            current_state: &self.snapshot.peer_sessions,
+            proposal,
+            reciprocal_receipt,
+            current_enrollment: &self.snapshot.enrollment,
+            current_reciprocal_state: &self.snapshot.reciprocal_ed25519,
+            now_ms,
+        };
+        let (next, decision_v2, topology_v2) = review_and_apply_signed_peer_session_v2(
+            &self.snapshot.peer_sessions,
+            ManifoldSignedPeerSessionReviewV2::CommonLan(review),
+        );
+        let (
+            ManifoldPeerSessionDecisionV2::CommonLan(decision),
+            ManifoldSignedPeerTopologyAuthorizationV2::CommonLan(topology),
+        ) = (decision_v2, topology_v2.clone())
+        else {
+            return Err(invalid_snapshot(
+                "common-LAN session review returned a Wi-Fi Direct result",
+            ));
+        };
+        if decision.applied {
+            self.snapshot.peer_sessions = next;
+            self.snapshot
+                .signed_topology_authorizations
+                .push(topology_v2);
+            self.snapshot
+                .signed_topology_authorizations
+                .sort_by(|left, right| left.decision_id().cmp(right.decision_id()));
+        }
+        self.record(
+            ManifoldPeerRuntimeAuditKind::SignedPeerSession,
+            proposal.proposal_id.clone(),
+            decision.prior_authority_revision,
+            decision.resulting_authority_revision,
+            decision.applied,
+            rejection_code(decision.rejection_reason.as_ref()),
+        )?;
+        Ok((decision, topology))
+    }
+
+    /// Explicitly revokes one active peer session and invalidates current use
+    /// of its retained signed topology authorization.
     ///
     /// # Errors
     ///
@@ -1113,15 +1326,31 @@ impl ManifoldPeerRuntimeHost {
         request: &ManifoldPeerSessionRevocation,
         now_ms: u64,
     ) -> Result<ManifoldPeerTopologyAuthorization, ManifoldPeerRuntimeHostError> {
+        match self.revoke_peer_session_v2(request, now_ms)? {
+            ManifoldPeerTopologyAuthorizationV2::WifiDirect(topology) => Ok(topology),
+            ManifoldPeerTopologyAuthorizationV2::CommonLan(_) => Err(invalid_snapshot(
+                "Wi-Fi Direct session revocation targeted a common-LAN session",
+            )),
+        }
+    }
+
+    /// Revokes either retained session variant through the shared authority.
+    ///
+    /// # Errors
+    ///
+    /// Returns a typed host error for replay, stale revision, missing session,
+    /// authority failure, or event-sequence exhaustion.
+    pub fn revoke_peer_session_v2(
+        &mut self,
+        request: &ManifoldPeerSessionRevocation,
+        now_ms: u64,
+    ) -> Result<ManifoldPeerTopologyAuthorizationV2, ManifoldPeerRuntimeHostError> {
         self.ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::Rendezvous)?;
         self.ensure_event_capacity()?;
         let prior = self.snapshot.peer_sessions.authority_revision;
-        match revoke_peer_session(&self.snapshot.peer_sessions, request, now_ms) {
+        match revoke_peer_session_v2(&self.snapshot.peer_sessions, request, now_ms) {
             Ok((next, topology)) => {
                 self.snapshot.peer_sessions = next;
-                self.snapshot
-                    .signed_topology_authorizations
-                    .retain(|value| value.topology_authorization.session_id != request.session_id);
                 let resulting = self.snapshot.peer_sessions.authority_revision;
                 self.record(
                     ManifoldPeerRuntimeAuditKind::PeerSessionRevocation,
@@ -2005,6 +2234,25 @@ impl ManifoldPeerRuntimeHost {
         }
         let resulting_media_authority_revision = next.snapshot.media_sessions.authority_revision;
 
+        if !revoked_media_decision_ids.is_empty() {
+            let (pair_media_routes, route_mutation) =
+                revoke_pair_media_routes_for_media_sessions_v2(
+                    &next.snapshot.pair_media_routes,
+                    request.convergence_id.clone(),
+                    next.snapshot.pair_media_routes.authority_revision,
+                    &revoked_media_decision_ids,
+                    request.converged_at_ms,
+                )
+                .map_err(|reason| {
+                    ManifoldPeerRuntimeHostError::Authority(format!(
+                        "Broker revocation route convergence rejected: {reason:?}"
+                    ))
+                })?;
+            if route_mutation.applied {
+                next.snapshot.pair_media_routes = pair_media_routes;
+            }
+        }
+
         let prior_direct_lane_authority_revision =
             next.snapshot.direct_lane_leases.authority_revision;
         let mut revoked_direct_lane_lease_ids = Vec::new();
@@ -2378,6 +2626,12 @@ impl ManifoldPeerRuntimeHost {
             || self.snapshot.media_sessions.sessions.iter().any(|session| {
                 session.lifecycle_status == ManifoldMediaSessionLifecycleStatus::Current
             })
+            || self.snapshot.pair_media_routes.routes.iter().any(|route| {
+                *route.lifecycle_status()
+                    == rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Current
+                    || *route.cleanup_status()
+                        == rusty_manifold_peer::ManifoldPairMediaRouteCleanupStatus::Pending
+            })
         {
             return Err(ManifoldPeerRuntimeHostError::Authority(
                 "peer Broker epoch rollover is stale, replayed, or not drained".to_owned(),
@@ -2615,6 +2869,673 @@ impl ManifoldPeerRuntimeHost {
         Ok(receipt)
     }
 
+    /// Issues one Wi-Fi Direct media route through the mixed authority.
+    ///
+    /// # Errors
+    /// Returns a host error when the command requires a live Broker join or
+    /// route authority, replay, or capacity validation rejects the request.
+    pub fn review_pair_media_route(
+        &mut self,
+        request: &ManifoldPairMediaRouteRequest,
+        command_request: &ManifoldRuntimeCommandRequest,
+        now_ms: u64,
+    ) -> Result<ManifoldPairMediaRouteReceipt, ManifoldPeerRuntimeHostError> {
+        let receipt = self.review_pair_media_route_v2(
+            &ManifoldPairMediaRouteRequestV2::WifiDirect(request.clone()),
+            command_request,
+            now_ms,
+        )?;
+        match receipt {
+            ManifoldPairMediaRouteReceiptV2::WifiDirect(receipt) => Ok(receipt),
+            ManifoldPairMediaRouteReceiptV2::CommonLan(_) => Err(invalid_snapshot(
+                "Wi-Fi route review returned a common-LAN receipt",
+            )),
+        }
+    }
+
+    /// Issues one mixed-topology media route using current retained authority.
+    ///
+    /// # Errors
+    /// Returns without authority mutation when the command lease requires a live
+    /// Broker join, an authority check rejects, or retained capacity is exhausted.
+    pub fn review_pair_media_route_v2(
+        &mut self,
+        request: &ManifoldPairMediaRouteRequestV2,
+        command_request: &ManifoldRuntimeCommandRequest,
+        now_ms: u64,
+    ) -> Result<ManifoldPairMediaRouteReceiptV2, ManifoldPeerRuntimeHostError> {
+        self.ensure_runtime_lease_does_not_require_live_broker(
+            command_request.lease_id.as_ref(),
+            "pair media route issuance",
+        )?;
+        self.review_pair_media_route_v2_inner(request, command_request, now_ms)
+    }
+
+    /// Issues a route after joining the command and accepted media leases to
+    /// the actual current Broker runtime.
+    ///
+    /// # Errors
+    /// Returns a host error when either Broker join or route review fails.
+    pub fn review_pair_media_route_v2_with_live_broker_runtime(
+        &mut self,
+        broker_runtime: &ManifoldBrokerRuntime,
+        request: &ManifoldPairMediaRouteRequestV2,
+        command_request: &ManifoldRuntimeCommandRequest,
+        now_ms: u64,
+    ) -> Result<ManifoldPairMediaRouteReceiptV2, ManifoldPeerRuntimeHostError> {
+        self.validate_runtime_lease_against_live_broker(
+            broker_runtime,
+            command_request.lease_id.as_ref(),
+        )?;
+        let media_decision = match request {
+            ManifoldPairMediaRouteRequestV2::WifiDirect(request) => {
+                &request.media_session_decision_id
+            }
+            ManifoldPairMediaRouteRequestV2::CommonLan(request) => {
+                &request.request.media_session_decision_id
+            }
+        };
+        self.validate_runtime_lease_against_live_broker(
+            broker_runtime,
+            self.media_runtime_lease_for_decision(Some(media_decision)),
+        )?;
+        self.review_pair_media_route_v2_inner(request, command_request, now_ms)
+    }
+
+    fn review_pair_media_route_v2_inner(
+        &mut self,
+        request: &ManifoldPairMediaRouteRequestV2,
+        command_request: &ManifoldRuntimeCommandRequest,
+        now_ms: u64,
+    ) -> Result<ManifoldPairMediaRouteReceiptV2, ManifoldPeerRuntimeHostError> {
+        self.ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::MediaSession)?;
+        if !pair_media_route_state_v2_is_well_formed(&self.snapshot.pair_media_routes) {
+            return Err(invalid_snapshot("damaged pair media route authority state"));
+        }
+        let mut runtime =
+            ManifoldRuntimeHost::from_snapshot(self.snapshot.media_command_runtime.clone())
+                .map_err(|error| ManifoldPeerRuntimeHostError::Authority(error.to_string()))?;
+        let dispatch = runtime.review_command(command_request, now_ms);
+        let application = runtime.apply_dispatch(command_request, &dispatch, now_ms);
+        let runtime_snapshot = runtime.snapshot().clone();
+        let runtime_context = ManifoldPairMediaRouteRuntimeContext {
+            authority_host_id: &runtime_snapshot.host_id,
+            live_authority_provider_epoch_id: &self.snapshot.provider_epoch_id,
+            media_client_grants: &self.snapshot.trust_policy.media_client_grants,
+            trusted_media_revoker_ids: &self.snapshot.trust_policy.trusted_media_revoker_ids,
+            command_request,
+            runtime_lease: command_request.lease_id.as_ref().and_then(|lease_id| {
+                runtime_snapshot
+                    .leases
+                    .iter()
+                    .find(|lease| lease.lease_id == *lease_id)
+            }),
+            required_runtime_lease_scope_id: &self
+                .snapshot
+                .trust_policy
+                .media_runtime_lease_scope_id,
+            dispatch: &dispatch,
+            application: &application,
+        };
+        let (next, receipt) = review_and_apply_pair_media_route_v2(
+            &self.snapshot.pair_media_routes,
+            request,
+            runtime_context,
+            self.pair_media_route_authority_context_v2(),
+            now_ms,
+        );
+        self.ensure_pair_transition_capacity(&runtime_snapshot, &next)?;
+        let (request_id, prior, resulting, applied, rejection) = match &receipt {
+            ManifoldPairMediaRouteReceiptV2::WifiDirect(value) => (
+                value.request_id.clone(),
+                value.prior_authority_revision,
+                value.resulting_authority_revision,
+                value.accepted,
+                rejection_code(value.rejection_reason.as_ref()),
+            ),
+            ManifoldPairMediaRouteReceiptV2::CommonLan(value) => (
+                value.request_id.clone(),
+                value.prior_authority_revision,
+                value.resulting_authority_revision,
+                value.route.is_some(),
+                rejection_code(value.rejection_reason.as_ref()),
+            ),
+        };
+        self.snapshot.media_command_runtime = runtime_snapshot;
+        self.snapshot.pair_media_routes = next;
+        self.record(
+            ManifoldPeerRuntimeAuditKind::PairMediaRoute,
+            request_id,
+            prior,
+            resulting,
+            applied,
+            rejection,
+        )?;
+        Ok(receipt)
+    }
+
+    /// Revalidates a retained Wi-Fi route and preserves the legacy receipt API.
+    #[must_use]
+    pub fn validate_pair_media_route(
+        &self,
+        grant_id: &DottedId,
+        now_ms: u64,
+    ) -> ManifoldPairMediaRouteCurrentReceipt {
+        let receipt = self.validate_pair_media_route_v2(grant_id, now_ms);
+        let (current, rejection_reason, route) = match receipt.route {
+            Some(ManifoldAcceptedPairMediaRouteV2::WifiDirect(route)) => {
+                (receipt.current, receipt.rejection_reason, Some(route))
+            }
+            Some(ManifoldAcceptedPairMediaRouteV2::CommonLan(_)) => (
+                false,
+                Some(ManifoldPairMediaRouteRejectionReason::SchemaMismatch),
+                None,
+            ),
+            None => (receipt.current, receipt.rejection_reason, None),
+        };
+        ManifoldPairMediaRouteCurrentReceipt {
+            schema_id: schema(rusty_manifold_peer::PAIR_MEDIA_ROUTE_CURRENT_RECEIPT_SCHEMA),
+            grant_id: receipt.grant_id,
+            current,
+            rejection_reason,
+            route,
+            validated_at_ms: receipt.validated_at_ms,
+        }
+    }
+
+    /// Revalidates a retained route of either topology against current peer,
+    /// media, provider-epoch, and command-lease authority.
+    #[must_use]
+    pub fn validate_pair_media_route_v2(
+        &self,
+        grant_id: &DottedId,
+        now_ms: u64,
+    ) -> ManifoldPairMediaRouteCurrentReceiptV2 {
+        let mut receipt = validate_current_pair_media_route_v2(
+            &self.snapshot.pair_media_routes,
+            self.pair_media_route_authority_context_v2(),
+            grant_id,
+            &self.snapshot.provider_epoch_id,
+            now_ms,
+        );
+        if receipt.current
+            && receipt.route.as_ref().is_some_and(|route| {
+                self.active_broker_admission_for_runtime_lease(route.authority_runtime_lease_id())
+                    .is_some()
+                    || !self
+                        .snapshot
+                        .media_command_runtime
+                        .leases
+                        .iter()
+                        .any(|lease| {
+                            lease.lease_id == *route.authority_runtime_lease_id()
+                                && lease.holder_id == *route.authority_client_id()
+                                && lease.scope
+                                    == self.snapshot.trust_policy.media_runtime_lease_scope_id
+                                && lease.expires_at_ms > now_ms
+                                && lease.derivative_binding.is_none()
+                        })
+            })
+        {
+            receipt.current = false;
+            receipt.rejection_reason =
+                Some(ManifoldPairMediaRouteRejectionReason::ClientNotAuthorized);
+        }
+        receipt
+    }
+
+    /// Revalidates a route after joining its command lease and accepted media
+    /// lease to the actual current Broker runtime.
+    ///
+    /// # Errors
+    /// Returns a host error when the route is absent or a live Broker join fails.
+    pub fn validate_pair_media_route_v2_with_live_broker_runtime(
+        &self,
+        broker_runtime: &ManifoldBrokerRuntime,
+        grant_id: &DottedId,
+        now_ms: u64,
+    ) -> Result<ManifoldPairMediaRouteCurrentReceiptV2, ManifoldPeerRuntimeHostError> {
+        let route = self
+            .snapshot
+            .pair_media_routes
+            .routes
+            .iter()
+            .find(|route| route.grant_id() == grant_id)
+            .ok_or_else(|| {
+                ManifoldPeerRuntimeHostError::Authority("pair route is absent".to_owned())
+            })?;
+        self.validate_runtime_lease_against_live_broker(
+            broker_runtime,
+            Some(route.authority_runtime_lease_id()),
+        )?;
+        self.validate_runtime_lease_against_live_broker(
+            broker_runtime,
+            self.media_runtime_lease_for_decision(Some(route.media_session_decision_id())),
+        )?;
+        Ok(validate_current_pair_media_route_v2(
+            &self.snapshot.pair_media_routes,
+            self.pair_media_route_authority_context_v2(),
+            grant_id,
+            &self.snapshot.provider_epoch_id,
+            now_ms,
+        ))
+    }
+
+    /// Stops or revokes a Wi-Fi route through the mixed route authority.
+    ///
+    /// # Errors
+    /// Returns a host error when the command requires a live Broker join or
+    /// route termination validation rejects the request.
+    pub fn review_pair_media_route_termination(
+        &mut self,
+        request: &ManifoldPairMediaRouteTerminationRequest,
+        command_request: &ManifoldRuntimeCommandRequest,
+        now_ms: u64,
+    ) -> Result<ManifoldPairMediaRouteMutationReceipt, ManifoldPeerRuntimeHostError> {
+        self.ensure_runtime_lease_does_not_require_live_broker(
+            command_request.lease_id.as_ref(),
+            "pair route terminal command",
+        )?;
+        self.ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::MediaSession)?;
+        if !pair_media_route_state_v2_is_well_formed(&self.snapshot.pair_media_routes) {
+            return Err(invalid_snapshot("damaged pair media route authority state"));
+        }
+        let mut runtime =
+            ManifoldRuntimeHost::from_snapshot(self.snapshot.media_command_runtime.clone())
+                .map_err(|error| ManifoldPeerRuntimeHostError::Authority(error.to_string()))?;
+        let dispatch = runtime.review_command(command_request, now_ms);
+        let application = runtime.apply_dispatch(command_request, &dispatch, now_ms);
+        let runtime_snapshot = runtime.snapshot().clone();
+        let (next, receipt) = review_and_apply_pair_media_route_termination_v1_on_v2(
+            &self.snapshot.pair_media_routes,
+            request,
+            ManifoldPairMediaRouteRuntimeContext {
+                authority_host_id: &runtime_snapshot.host_id,
+                live_authority_provider_epoch_id: &self.snapshot.provider_epoch_id,
+                media_client_grants: &self.snapshot.trust_policy.media_client_grants,
+                trusted_media_revoker_ids: &self.snapshot.trust_policy.trusted_media_revoker_ids,
+                command_request,
+                runtime_lease: command_request.lease_id.as_ref().and_then(|lease_id| {
+                    runtime_snapshot
+                        .leases
+                        .iter()
+                        .find(|lease| lease.lease_id == *lease_id)
+                }),
+                required_runtime_lease_scope_id: &self
+                    .snapshot
+                    .trust_policy
+                    .media_runtime_lease_scope_id,
+                dispatch: &dispatch,
+                application: &application,
+            },
+            now_ms,
+        );
+        self.ensure_pair_transition_capacity(&runtime_snapshot, &next)?;
+        self.snapshot.media_command_runtime = runtime_snapshot;
+        self.snapshot.pair_media_routes = next;
+        self.record(
+            ManifoldPeerRuntimeAuditKind::PairMediaRouteTermination,
+            request.request_id.clone(),
+            receipt.prior_authority_revision,
+            receipt.resulting_authority_revision,
+            receipt.applied,
+            rejection_code(receipt.rejection_reason.as_ref()),
+        )?;
+        Ok(receipt)
+    }
+
+    /// Stops or revokes a retained route with an exact target binding.
+    ///
+    /// # Errors
+    /// Returns a host error when the command requires a live Broker join or
+    /// the target, command, replay, clock, or capacity check fails.
+    pub fn review_pair_media_route_termination_v2(
+        &mut self,
+        request: &ManifoldPairMediaRouteTerminationRequestV2,
+        command_request: &ManifoldRuntimeCommandRequest,
+        now_ms: u64,
+    ) -> Result<ManifoldPairMediaRouteMutationReceipt, ManifoldPeerRuntimeHostError> {
+        self.ensure_runtime_lease_does_not_require_live_broker(
+            command_request.lease_id.as_ref(),
+            "pair route terminal command",
+        )?;
+        self.review_pair_media_route_termination_v2_inner(request, command_request, now_ms)
+    }
+
+    /// Stops or revokes a route after joining the current command lease to the
+    /// actual live Broker state. This preserves ordinary client cleanup while
+    /// its Broker-derived lease remains current.
+    ///
+    /// # Errors
+    /// Returns a host error when the live Broker join or route termination fails.
+    pub fn review_pair_media_route_termination_v2_with_live_broker_runtime(
+        &mut self,
+        broker_runtime: &ManifoldBrokerRuntime,
+        request: &ManifoldPairMediaRouteTerminationRequestV2,
+        command_request: &ManifoldRuntimeCommandRequest,
+        now_ms: u64,
+    ) -> Result<ManifoldPairMediaRouteMutationReceipt, ManifoldPeerRuntimeHostError> {
+        self.validate_runtime_lease_against_live_broker(
+            broker_runtime,
+            command_request.lease_id.as_ref(),
+        )?;
+        self.review_pair_media_route_termination_v2_inner(request, command_request, now_ms)
+    }
+
+    fn review_pair_media_route_termination_v2_inner(
+        &mut self,
+        request: &ManifoldPairMediaRouteTerminationRequestV2,
+        command_request: &ManifoldRuntimeCommandRequest,
+        now_ms: u64,
+    ) -> Result<ManifoldPairMediaRouteMutationReceipt, ManifoldPeerRuntimeHostError> {
+        self.ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::MediaSession)?;
+        if !pair_media_route_state_v2_is_well_formed(&self.snapshot.pair_media_routes) {
+            return Err(invalid_snapshot("damaged pair media route authority state"));
+        }
+        let mut runtime =
+            ManifoldRuntimeHost::from_snapshot(self.snapshot.media_command_runtime.clone())
+                .map_err(|error| ManifoldPeerRuntimeHostError::Authority(error.to_string()))?;
+        let dispatch = runtime.review_command(command_request, now_ms);
+        let application = runtime.apply_dispatch(command_request, &dispatch, now_ms);
+        let runtime_snapshot = runtime.snapshot().clone();
+        let (next, receipt) = review_and_apply_pair_media_route_termination_v2(
+            &self.snapshot.pair_media_routes,
+            request,
+            ManifoldPairMediaRouteRuntimeContext {
+                authority_host_id: &runtime_snapshot.host_id,
+                live_authority_provider_epoch_id: &self.snapshot.provider_epoch_id,
+                media_client_grants: &self.snapshot.trust_policy.media_client_grants,
+                trusted_media_revoker_ids: &self.snapshot.trust_policy.trusted_media_revoker_ids,
+                command_request,
+                runtime_lease: command_request.lease_id.as_ref().and_then(|lease_id| {
+                    runtime_snapshot
+                        .leases
+                        .iter()
+                        .find(|lease| lease.lease_id == *lease_id)
+                }),
+                required_runtime_lease_scope_id: &self
+                    .snapshot
+                    .trust_policy
+                    .media_runtime_lease_scope_id,
+                dispatch: &dispatch,
+                application: &application,
+            },
+            now_ms,
+        );
+        self.ensure_pair_transition_capacity(&runtime_snapshot, &next)?;
+        self.snapshot.media_command_runtime = runtime_snapshot;
+        self.snapshot.pair_media_routes = next;
+        self.record(
+            ManifoldPeerRuntimeAuditKind::PairMediaRouteTermination,
+            request.request_id.clone(),
+            receipt.prior_authority_revision,
+            receipt.resulting_authority_revision,
+            receipt.applied,
+            rejection_code(receipt.rejection_reason.as_ref()),
+        )?;
+        Ok(receipt)
+    }
+
+    /// Expires all due routes in the shared mixed authority revision.
+    ///
+    /// # Errors
+    /// Returns a host error for replay, stale authority, clock, or capacity failure.
+    pub fn expire_pair_media_routes(
+        &mut self,
+        sweep_id: DottedId,
+        expected_authority_revision: Revision,
+        now_ms: u64,
+    ) -> Result<ManifoldPairMediaRouteMutationReceipt, ManifoldPeerRuntimeHostError> {
+        self.ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::MediaSession)?;
+        let prior = self.snapshot.pair_media_routes.authority_revision;
+        match expire_pair_media_routes_v2(
+            &self.snapshot.pair_media_routes,
+            sweep_id.clone(),
+            expected_authority_revision,
+            now_ms,
+        ) {
+            Ok((next, receipt)) => {
+                self.ensure_pair_transition_capacity(&self.snapshot.media_command_runtime, &next)?;
+                self.snapshot.pair_media_routes = next;
+                self.record(
+                    ManifoldPeerRuntimeAuditKind::PairMediaRouteExpiry,
+                    sweep_id,
+                    receipt.prior_authority_revision,
+                    receipt.resulting_authority_revision,
+                    true,
+                    None,
+                )?;
+                Ok(receipt)
+            }
+            Err(reason) => {
+                self.record(
+                    ManifoldPeerRuntimeAuditKind::PairMediaRouteExpiry,
+                    sweep_id,
+                    prior,
+                    prior,
+                    false,
+                    rejection_code(Some(&reason)),
+                )?;
+                Err(ManifoldPeerRuntimeHostError::Authority(format!(
+                    "{reason:?}"
+                )))
+            }
+        }
+    }
+
+    /// Completes Wi-Fi route cleanup through the mixed authority.
+    ///
+    /// # Errors
+    /// Returns a host error when the command requires a live Broker join or
+    /// the cleanup evidence, target, replay, clock, or capacity check fails.
+    pub fn complete_pair_media_route_cleanup(
+        &mut self,
+        request: &ManifoldPairMediaRouteCleanupCompletionRequest,
+        command_request: &ManifoldRuntimeCommandRequest,
+        now_ms: u64,
+    ) -> Result<ManifoldPairMediaRouteCleanupReceipt, ManifoldPeerRuntimeHostError> {
+        self.ensure_runtime_lease_does_not_require_live_broker(
+            command_request.lease_id.as_ref(),
+            "pair route cleanup command",
+        )?;
+        self.ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::MediaSession)?;
+        if !pair_media_route_state_v2_is_well_formed(&self.snapshot.pair_media_routes) {
+            return Err(invalid_snapshot("damaged pair media route authority state"));
+        }
+        let mut runtime =
+            ManifoldRuntimeHost::from_snapshot(self.snapshot.media_command_runtime.clone())
+                .map_err(|error| ManifoldPeerRuntimeHostError::Authority(error.to_string()))?;
+        let dispatch = runtime.review_command(command_request, now_ms);
+        let application = runtime.apply_dispatch(command_request, &dispatch, now_ms);
+        let runtime_snapshot = runtime.snapshot().clone();
+        let prior = self.snapshot.pair_media_routes.authority_revision;
+        let outcome = complete_pair_media_route_cleanup_v1_on_v2(
+            &self.snapshot.pair_media_routes,
+            request,
+            ManifoldPairMediaRouteRuntimeContext {
+                authority_host_id: &runtime_snapshot.host_id,
+                live_authority_provider_epoch_id: &self.snapshot.provider_epoch_id,
+                media_client_grants: &self.snapshot.trust_policy.media_client_grants,
+                trusted_media_revoker_ids: &self.snapshot.trust_policy.trusted_media_revoker_ids,
+                command_request,
+                runtime_lease: command_request.lease_id.as_ref().and_then(|lease_id| {
+                    runtime_snapshot
+                        .leases
+                        .iter()
+                        .find(|lease| lease.lease_id == *lease_id)
+                }),
+                required_runtime_lease_scope_id: &self
+                    .snapshot
+                    .trust_policy
+                    .media_runtime_lease_scope_id,
+                dispatch: &dispatch,
+                application: &application,
+            },
+            now_ms,
+        );
+        match outcome {
+            Ok((next, ManifoldPairMediaRouteCleanupReceiptV2::WifiDirect(receipt))) => {
+                self.ensure_pair_transition_capacity(&runtime_snapshot, &next)?;
+                let resulting = next.authority_revision;
+                self.snapshot.media_command_runtime = runtime_snapshot;
+                self.snapshot.pair_media_routes = next;
+                self.record(
+                    ManifoldPeerRuntimeAuditKind::PairMediaRouteCleanup,
+                    request.request_id.clone(),
+                    prior,
+                    resulting,
+                    true,
+                    None,
+                )?;
+                Ok(receipt)
+            }
+            Ok((_, ManifoldPairMediaRouteCleanupReceiptV2::CommonLan(_))) => Err(invalid_snapshot(
+                "legacy cleanup returned common-LAN receipt",
+            )),
+            Err(reason) => {
+                self.snapshot.media_command_runtime = runtime_snapshot;
+                self.record(
+                    ManifoldPeerRuntimeAuditKind::PairMediaRouteCleanup,
+                    request.request_id.clone(),
+                    prior,
+                    prior,
+                    false,
+                    rejection_code(Some(&reason)),
+                )?;
+                Err(ManifoldPeerRuntimeHostError::Authority(format!(
+                    "{reason:?}"
+                )))
+            }
+        }
+    }
+
+    /// Completes pending cleanup for either topology. A still-current original
+    /// client may complete it with its exact lease; after lease loss a fresh
+    /// trusted-revoker command may complete the same retained target.
+    ///
+    /// # Errors
+    /// Returns a host error when the command requires a live Broker join or
+    /// cleanup validation rejects the exact retained target and evidence.
+    pub fn complete_pair_media_route_cleanup_v2(
+        &mut self,
+        request: &ManifoldPairMediaRouteCleanupCompletionRequestV2,
+        command_request: &ManifoldRuntimeCommandRequest,
+        now_ms: u64,
+    ) -> Result<ManifoldPairMediaRouteCleanupReceiptV2, ManifoldPeerRuntimeHostError> {
+        self.ensure_runtime_lease_does_not_require_live_broker(
+            command_request.lease_id.as_ref(),
+            "pair route cleanup command",
+        )?;
+        self.complete_pair_media_route_cleanup_v2_inner(request, command_request, now_ms)
+    }
+
+    /// Completes route cleanup after joining the original client's current
+    /// command lease to actual live Broker evidence.
+    ///
+    /// # Errors
+    /// Returns a host error when the live Broker join or cleanup validation fails.
+    pub fn complete_pair_media_route_cleanup_v2_with_live_broker_runtime(
+        &mut self,
+        broker_runtime: &ManifoldBrokerRuntime,
+        request: &ManifoldPairMediaRouteCleanupCompletionRequestV2,
+        command_request: &ManifoldRuntimeCommandRequest,
+        now_ms: u64,
+    ) -> Result<ManifoldPairMediaRouteCleanupReceiptV2, ManifoldPeerRuntimeHostError> {
+        self.validate_runtime_lease_against_live_broker(
+            broker_runtime,
+            command_request.lease_id.as_ref(),
+        )?;
+        self.complete_pair_media_route_cleanup_v2_inner(request, command_request, now_ms)
+    }
+
+    fn complete_pair_media_route_cleanup_v2_inner(
+        &mut self,
+        request: &ManifoldPairMediaRouteCleanupCompletionRequestV2,
+        command_request: &ManifoldRuntimeCommandRequest,
+        now_ms: u64,
+    ) -> Result<ManifoldPairMediaRouteCleanupReceiptV2, ManifoldPeerRuntimeHostError> {
+        self.ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::MediaSession)?;
+        if !pair_media_route_state_v2_is_well_formed(&self.snapshot.pair_media_routes) {
+            return Err(invalid_snapshot("damaged pair media route authority state"));
+        }
+        let mut runtime =
+            ManifoldRuntimeHost::from_snapshot(self.snapshot.media_command_runtime.clone())
+                .map_err(|error| ManifoldPeerRuntimeHostError::Authority(error.to_string()))?;
+        let dispatch = runtime.review_command(command_request, now_ms);
+        let application = runtime.apply_dispatch(command_request, &dispatch, now_ms);
+        let runtime_snapshot = runtime.snapshot().clone();
+        let prior = self.snapshot.pair_media_routes.authority_revision;
+        let outcome = complete_pair_media_route_cleanup_v2(
+            &self.snapshot.pair_media_routes,
+            request,
+            ManifoldPairMediaRouteRuntimeContext {
+                authority_host_id: &runtime_snapshot.host_id,
+                live_authority_provider_epoch_id: &self.snapshot.provider_epoch_id,
+                media_client_grants: &self.snapshot.trust_policy.media_client_grants,
+                trusted_media_revoker_ids: &self.snapshot.trust_policy.trusted_media_revoker_ids,
+                command_request,
+                runtime_lease: command_request.lease_id.as_ref().and_then(|lease_id| {
+                    runtime_snapshot
+                        .leases
+                        .iter()
+                        .find(|lease| lease.lease_id == *lease_id)
+                }),
+                required_runtime_lease_scope_id: &self
+                    .snapshot
+                    .trust_policy
+                    .media_runtime_lease_scope_id,
+                dispatch: &dispatch,
+                application: &application,
+            },
+            now_ms,
+        );
+        match outcome {
+            Ok((next, receipt)) => {
+                self.ensure_pair_transition_capacity(&runtime_snapshot, &next)?;
+                let resulting = next.authority_revision;
+                self.snapshot.media_command_runtime = runtime_snapshot;
+                self.snapshot.pair_media_routes = next;
+                self.record(
+                    ManifoldPeerRuntimeAuditKind::PairMediaRouteCleanup,
+                    request.request_id.clone(),
+                    prior,
+                    resulting,
+                    true,
+                    None,
+                )?;
+                Ok(receipt)
+            }
+            Err(reason) => {
+                self.snapshot.media_command_runtime = runtime_snapshot;
+                self.record(
+                    ManifoldPeerRuntimeAuditKind::PairMediaRouteCleanup,
+                    request.request_id.clone(),
+                    prior,
+                    prior,
+                    false,
+                    rejection_code(Some(&reason)),
+                )?;
+                Err(ManifoldPeerRuntimeHostError::Authority(format!(
+                    "{reason:?}"
+                )))
+            }
+        }
+    }
+
+    fn pair_media_route_authority_context_v2(
+        &self,
+    ) -> ManifoldPairMediaRouteAuthorityContextV2<'_> {
+        ManifoldPairMediaRouteAuthorityContextV2 {
+            accepted_peers: &self.snapshot.accepted_peers,
+            enrollment: &self.snapshot.enrollment,
+            rendezvous: &self.snapshot.rendezvous,
+            reciprocal: &self.snapshot.reciprocal_ed25519,
+            peer_sessions: &self.snapshot.peer_sessions,
+            signed_topologies: &self.snapshot.signed_topology_authorizations,
+            media_sessions: &self.snapshot.media_sessions,
+        }
+    }
+
     /// Emits a subject-scoped current peer-session/topology receipt after
     /// rechecking live peer status, signer keys, reciprocal receipt, expiry,
     /// and revocation. Unrelated authority mutations do not stale the subject.
@@ -2624,10 +3545,37 @@ impl ManifoldPeerRuntimeHost {
         session_id: &DottedId,
         now_ms: u64,
     ) -> ManifoldPeerSessionCurrentReceipt {
+        let sessions =
+            rusty_manifold_peer::wifi_direct_peer_session_projection(&self.snapshot.peer_sessions);
+        let topologies = self
+            .snapshot
+            .signed_topology_authorizations
+            .iter()
+            .filter_map(ManifoldSignedPeerTopologyAuthorizationV2::as_wifi_direct)
+            .cloned()
+            .collect::<Vec<_>>();
         validate_current_peer_session(
             &self.snapshot.accepted_peers,
             &self.snapshot.enrollment,
             &self.snapshot.rendezvous,
+            &sessions,
+            &topologies,
+            session_id,
+            now_ms,
+        )
+    }
+
+    /// Emits a mixed current-session receipt for either retained topology.
+    #[must_use]
+    pub fn validate_peer_session_v2(
+        &self,
+        session_id: &DottedId,
+        now_ms: u64,
+    ) -> ManifoldPeerSessionCurrentReceiptV2 {
+        validate_current_peer_session_v2(
+            &self.snapshot.accepted_peers,
+            &self.snapshot.enrollment,
+            &self.snapshot.reciprocal_ed25519,
             &self.snapshot.peer_sessions,
             &self.snapshot.signed_topology_authorizations,
             session_id,
@@ -2794,12 +3742,14 @@ impl ManifoldPeerRuntimeHost {
             .ok_or_else(|| {
                 ManifoldPeerRuntimeHostError::MissingTopology(request.peer_session_id.clone())
             })?;
+        let peer_sessions =
+            rusty_manifold_peer::wifi_direct_peer_session_projection(&self.snapshot.peer_sessions);
         let authority = ManifoldDirectLaneLeaseAuthorityContext {
             accepted_peers: &self.snapshot.accepted_peers,
             enrollment: &self.snapshot.enrollment,
             rendezvous: &self.snapshot.rendezvous,
             mesh: &self.snapshot.peer_mesh,
-            peer_sessions: &self.snapshot.peer_sessions,
+            peer_sessions: &peer_sessions,
             topology: &topology,
             media_sessions: &self.snapshot.media_sessions,
             live_provider_epoch_id: &self.snapshot.provider_epoch_id,
@@ -2930,6 +3880,8 @@ impl ManifoldPeerRuntimeHost {
         let topology = self
             .topology_for_session(&lease.peer_session_id)
             .ok_or(ManifoldDirectLaneLeaseRejectionReason::TopologyNotAuthorized)?;
+        let peer_sessions =
+            rusty_manifold_peer::wifi_direct_peer_session_projection(&self.snapshot.peer_sessions);
         validate_current_direct_lane_lease(
             &self.snapshot.direct_lane_leases,
             &ManifoldDirectLaneLeaseAuthorityContext {
@@ -2937,7 +3889,7 @@ impl ManifoldPeerRuntimeHost {
                 enrollment: &self.snapshot.enrollment,
                 rendezvous: &self.snapshot.rendezvous,
                 mesh: &self.snapshot.peer_mesh,
-                peer_sessions: &self.snapshot.peer_sessions,
+                peer_sessions: &peer_sessions,
                 topology,
                 media_sessions: &self.snapshot.media_sessions,
                 live_provider_epoch_id: &self.snapshot.provider_epoch_id,
@@ -3122,15 +4074,15 @@ impl ManifoldPeerRuntimeHost {
             .peer_sessions
             .sessions
             .iter()
-            .find(|session| session.proposal.session_id == *session_id && !session.revoked)
-            .map(|session| &session.decision_id)?;
+            .find(|session| session.session_id() == session_id && !session.revoked())
+            .map(ManifoldAcceptedPeerSessionV2::decision_id)?;
         self.snapshot
             .signed_topology_authorizations
             .iter()
             .find(|topology| {
-                topology.topology_authorization.decision_id == *decision_id
-                    && topology.topology_authorization.session_id == *session_id
+                topology.decision_id() == decision_id && topology.session_id() == session_id
             })
+            .and_then(ManifoldSignedPeerTopologyAuthorizationV2::as_wifi_direct)
     }
 
     fn active_broker_admission_for_runtime_lease(
@@ -3167,6 +4119,12 @@ impl ManifoldPeerRuntimeHost {
         if runtime_lease_id.is_some_and(|lease_id| {
             self.active_broker_admission_for_runtime_lease(lease_id)
                 .is_some()
+                || self
+                    .snapshot
+                    .media_command_runtime
+                    .leases
+                    .iter()
+                    .any(|lease| lease.lease_id == *lease_id && lease.derivative_binding.is_some())
         }) {
             return Err(ManifoldPeerRuntimeHostError::Authority(format!(
                 "live Broker join required for Broker-derived {operation}"
@@ -3180,11 +4138,25 @@ impl ManifoldPeerRuntimeHost {
         broker_runtime: &ManifoldBrokerRuntime,
         runtime_lease_id: Option<&DottedId>,
     ) -> Result<(), ManifoldPeerRuntimeHostError> {
-        let Some(admission) = runtime_lease_id
-            .and_then(|lease_id| self.active_broker_admission_for_runtime_lease(lease_id))
-        else {
+        let Some(runtime_lease) = runtime_lease_id.and_then(|lease_id| {
+            self.snapshot
+                .media_command_runtime
+                .leases
+                .iter()
+                .find(|lease| lease.lease_id == *lease_id)
+        }) else {
             return Ok(());
         };
+        if runtime_lease.derivative_binding.is_none() {
+            return Ok(());
+        }
+        let admission = self
+            .active_broker_admission_for_runtime_lease(&runtime_lease.lease_id)
+            .ok_or_else(|| {
+                ManifoldPeerRuntimeHostError::Authority(
+                    "Broker-derived Runtime Host lease has no active Broker admission".to_owned(),
+                )
+            })?;
         let evidence = broker_runtime.evidence();
         if evidence.provider_epoch_id != self.snapshot.provider_epoch_id {
             return Err(ManifoldPeerRuntimeHostError::Authority(
@@ -3214,16 +4186,70 @@ impl ManifoldPeerRuntimeHost {
     }
 
     fn ensure_event_capacity(&self) -> Result<(), ManifoldPeerRuntimeHostError> {
-        if self.snapshot.audit_events.len() >= MAX_PEER_RUNTIME_HOST_EVENTS
+        self.ensure_capacity_preserving_pair_obligations(
+            &self.snapshot.media_command_runtime,
+            &self.snapshot.pair_media_routes,
+            1,
+        )
+    }
+
+    fn ensure_pair_transition_capacity(
+        &self,
+        resulting_runtime: &ManifoldRuntimeHostSnapshot,
+        resulting_routes: &ManifoldPairMediaRouteAuthorityStateV2,
+    ) -> Result<(), ManifoldPeerRuntimeHostError> {
+        self.ensure_capacity_preserving_pair_obligations(resulting_runtime, resulting_routes, 0)
+    }
+
+    fn ensure_capacity_preserving_pair_obligations(
+        &self,
+        runtime: &ManifoldRuntimeHostSnapshot,
+        routes: &ManifoldPairMediaRouteAuthorityStateV2,
+        pending_runtime_growth: usize,
+    ) -> Result<(), ManifoldPeerRuntimeHostError> {
+        let reserved = pair_media_route_v2_reserved_mutations(routes)
+            .ok_or(ManifoldPeerRuntimeHostError::AuthorityCapacityExhausted)?;
+        let host_events = self
+            .snapshot
+            .audit_events
+            .len()
+            .checked_add(1)
+            .and_then(|count| count.checked_add(reserved));
+        let runtime_audits = runtime
+            .audit_events
+            .len()
+            .checked_add(pending_runtime_growth)
+            .and_then(|count| count.checked_add(reserved));
+        let runtime_requests = runtime
+            .applied_request_ids
+            .len()
+            .checked_add(pending_runtime_growth)
+            .and_then(|count| count.checked_add(reserved));
+        if host_events.map_or(true, |count| count > MAX_PEER_RUNTIME_HOST_EVENTS)
+            || (reserved > 0
+                && (runtime_audits.map_or(true, |count| count > MAX_RUNTIME_AUDIT_EVENTS)
+                    || runtime_requests.map_or(true, |count| count > MAX_RUNTIME_SNAPSHOT_RECORDS)))
             || authority_record_lengths(&self.snapshot)
                 .into_iter()
                 .any(|length| length > MAX_PEER_RUNTIME_AUTHORITY_RECORDS.saturating_sub(2))
         {
             return Err(ManifoldPeerRuntimeHostError::AuthorityCapacityExhausted);
         }
+        let reserved = u64::try_from(reserved)
+            .map_err(|_| ManifoldPeerRuntimeHostError::EventSequenceExhausted)?;
         self.snapshot
             .event_sequence
             .checked_add(1)
+            .and_then(|sequence| sequence.checked_add(reserved))
+            .ok_or(ManifoldPeerRuntimeHostError::EventSequenceExhausted)?;
+        if reserved == 0 {
+            return Ok(());
+        }
+        runtime
+            .authority_revision
+            .get()
+            .checked_add(u64::try_from(pending_runtime_growth).unwrap_or(u64::MAX))
+            .and_then(|revision| revision.checked_add(reserved))
             .map(|_| ())
             .ok_or(ManifoldPeerRuntimeHostError::EventSequenceExhausted)
     }
@@ -3355,6 +4381,7 @@ impl From<ManifoldBrokerRuntimeStateError> for ManifoldPeerRuntimeHostError {
     }
 }
 
+#[allow(clippy::too_many_lines)]
 fn migrate_legacy_embedded_runtime_host_and_derivative_bindings(
     snapshot: &mut ManifoldPeerRuntimeHostSnapshot,
 ) -> Result<(), ManifoldPeerRuntimeHostError> {
@@ -3459,6 +4486,36 @@ fn migrate_legacy_embedded_runtime_host_and_derivative_bindings(
     Ok(())
 }
 
+fn is_pair_media_route_command(command_id: &str) -> bool {
+    matches!(
+        command_id,
+        rusty_manifold_peer::PAIR_MEDIA_ROUTE_ISSUE_COMMAND
+            | rusty_manifold_peer::PAIR_MEDIA_ROUTE_STOP_COMMAND
+            | rusty_manifold_peer::PAIR_MEDIA_ROUTE_REVOKE_COMMAND
+            | rusty_manifold_peer::PAIR_MEDIA_ROUTE_CLEANUP_COMMAND
+    )
+}
+
+fn legacy_snapshot_contains_pair_media_route_command(
+    json: &str,
+) -> Result<bool, ManifoldPeerRuntimeHostError> {
+    let value: serde_json::Value =
+        serde_json::from_str(json).map_err(ManifoldPeerRuntimeHostError::Deserialize)?;
+    Ok(value
+        .get("media_command_runtime")
+        .and_then(|runtime| runtime.get("commands"))
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|commands| {
+            commands.iter().any(|command| {
+                command
+                    .get("command_id")
+                    .and_then(serde_json::Value::as_str)
+                    .is_some_and(is_pair_media_route_command)
+            })
+        }))
+}
+
+#[allow(clippy::too_many_lines)]
 fn decode_peer_runtime_snapshot_with_migration(
     json: &str,
 ) -> Result<
@@ -3471,11 +4528,110 @@ fn decode_peer_runtime_snapshot_with_migration(
     let probe: PeerRuntimeHostSnapshotSchemaProbe =
         serde_json::from_str(json).map_err(ManifoldPeerRuntimeHostError::Deserialize)?;
     let source_schema_id = probe.schema_id;
+    if matches!(
+        source_schema_id.as_str(),
+        LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V1_SCHEMA
+            | LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V2_SCHEMA
+            | LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V3_SCHEMA
+    ) && legacy_snapshot_contains_pair_media_route_command(json)?
+    {
+        return Err(invalid_snapshot(
+            "legacy peer Runtime Host snapshot cannot own pair route commands",
+        ));
+    }
     let (mut snapshot, migrated) = match source_schema_id.as_str() {
         PEER_RUNTIME_HOST_SNAPSHOT_SCHEMA => (
             serde_json::from_str(json).map_err(ManifoldPeerRuntimeHostError::Deserialize)?,
             false,
         ),
+        LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V4_SCHEMA => {
+            let legacy: LegacyManifoldPeerRuntimeHostSnapshotV4 =
+                serde_json::from_str(json).map_err(ManifoldPeerRuntimeHostError::Deserialize)?;
+            if legacy.schema_id != source_schema_id {
+                return Err(invalid_snapshot(
+                    "peer Runtime Host migration schema probe mismatch",
+                ));
+            }
+            (
+                ManifoldPeerRuntimeHostSnapshot {
+                    schema_id: schema(PEER_RUNTIME_HOST_SNAPSHOT_SCHEMA),
+                    host_id: legacy.host_id,
+                    trust_policy: legacy.trust_policy,
+                    provider_epoch_id: legacy.provider_epoch_id,
+                    event_sequence: legacy.event_sequence,
+                    accepted_peers: legacy.accepted_peers,
+                    enrollment: legacy.enrollment,
+                    rendezvous: legacy.rendezvous,
+                    reciprocal_ed25519: migrate_reciprocal_ed25519_state_v2_to_v3(
+                        legacy.reciprocal_ed25519,
+                    ),
+                    peer_sessions: migrate_peer_session_state_v1_to_v2(legacy.peer_sessions),
+                    peer_mesh: legacy.peer_mesh,
+                    media_sessions: legacy.media_sessions,
+                    media_command_runtime: legacy.media_command_runtime,
+                    broker_lease_admissions: legacy.broker_lease_admissions,
+                    broker_lease_revocation_convergences: legacy
+                        .broker_lease_revocation_convergences,
+                    broker_lease_revocation_cleanup_completions: legacy
+                        .broker_lease_revocation_cleanup_completions,
+                    broker_epoch_rollovers: legacy.broker_epoch_rollovers,
+                    direct_lane_leases: legacy.direct_lane_leases,
+                    pair_media_routes: migrate_pair_media_route_state_v1_to_v2(
+                        legacy.pair_media_routes,
+                    ),
+                    signed_topology_authorizations: legacy
+                        .signed_topology_authorizations
+                        .into_iter()
+                        .map(ManifoldSignedPeerTopologyAuthorizationV2::WifiDirect)
+                        .collect(),
+                    audit_events: legacy.audit_events,
+                },
+                true,
+            )
+        }
+        LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V3_SCHEMA => {
+            let legacy: LegacyManifoldPeerRuntimeHostSnapshotV3 =
+                serde_json::from_str(json).map_err(ManifoldPeerRuntimeHostError::Deserialize)?;
+            if legacy.schema_id != source_schema_id {
+                return Err(invalid_snapshot(
+                    "peer Runtime Host migration schema probe mismatch",
+                ));
+            }
+            (
+                ManifoldPeerRuntimeHostSnapshot {
+                    schema_id: schema(PEER_RUNTIME_HOST_SNAPSHOT_SCHEMA),
+                    host_id: legacy.host_id,
+                    trust_policy: legacy.trust_policy,
+                    provider_epoch_id: legacy.provider_epoch_id,
+                    event_sequence: legacy.event_sequence,
+                    accepted_peers: legacy.accepted_peers,
+                    enrollment: legacy.enrollment,
+                    rendezvous: legacy.rendezvous,
+                    reciprocal_ed25519: migrate_reciprocal_ed25519_state_v2_to_v3(
+                        legacy.reciprocal_ed25519,
+                    ),
+                    peer_sessions: migrate_peer_session_state_v1_to_v2(legacy.peer_sessions),
+                    peer_mesh: legacy.peer_mesh,
+                    media_sessions: legacy.media_sessions,
+                    media_command_runtime: legacy.media_command_runtime,
+                    broker_lease_admissions: legacy.broker_lease_admissions,
+                    broker_lease_revocation_convergences: legacy
+                        .broker_lease_revocation_convergences,
+                    broker_lease_revocation_cleanup_completions: legacy
+                        .broker_lease_revocation_cleanup_completions,
+                    broker_epoch_rollovers: legacy.broker_epoch_rollovers,
+                    direct_lane_leases: legacy.direct_lane_leases,
+                    pair_media_routes: ManifoldPairMediaRouteAuthorityStateV2::empty(),
+                    signed_topology_authorizations: legacy
+                        .signed_topology_authorizations
+                        .into_iter()
+                        .map(ManifoldSignedPeerTopologyAuthorizationV2::WifiDirect)
+                        .collect(),
+                    audit_events: legacy.audit_events,
+                },
+                true,
+            )
+        }
         LEGACY_PEER_RUNTIME_HOST_SNAPSHOT_V2_SCHEMA => {
             let legacy: LegacyManifoldPeerRuntimeHostSnapshotV2 =
                 serde_json::from_str(json).map_err(ManifoldPeerRuntimeHostError::Deserialize)?;
@@ -3494,8 +4650,10 @@ fn decode_peer_runtime_snapshot_with_migration(
                     accepted_peers: legacy.accepted_peers,
                     enrollment: legacy.enrollment,
                     rendezvous: legacy.rendezvous,
-                    reciprocal_ed25519: legacy.reciprocal_ed25519,
-                    peer_sessions: legacy.peer_sessions,
+                    reciprocal_ed25519: migrate_reciprocal_ed25519_state_v2_to_v3(
+                        legacy.reciprocal_ed25519,
+                    ),
+                    peer_sessions: migrate_peer_session_state_v1_to_v2(legacy.peer_sessions),
                     peer_mesh: legacy.peer_mesh,
                     media_sessions: legacy.media_sessions,
                     media_command_runtime: legacy.media_command_runtime,
@@ -3506,7 +4664,12 @@ fn decode_peer_runtime_snapshot_with_migration(
                         .broker_lease_revocation_cleanup_completions,
                     broker_epoch_rollovers: Vec::new(),
                     direct_lane_leases: legacy.direct_lane_leases,
-                    signed_topology_authorizations: legacy.signed_topology_authorizations,
+                    pair_media_routes: ManifoldPairMediaRouteAuthorityStateV2::empty(),
+                    signed_topology_authorizations: legacy
+                        .signed_topology_authorizations
+                        .into_iter()
+                        .map(ManifoldSignedPeerTopologyAuthorizationV2::WifiDirect)
+                        .collect(),
                     audit_events: legacy.audit_events,
                 },
                 true,
@@ -3530,8 +4693,10 @@ fn decode_peer_runtime_snapshot_with_migration(
                     accepted_peers: legacy.accepted_peers,
                     enrollment: legacy.enrollment,
                     rendezvous: legacy.rendezvous,
-                    reciprocal_ed25519: legacy.reciprocal_ed25519,
-                    peer_sessions: legacy.peer_sessions,
+                    reciprocal_ed25519: migrate_reciprocal_ed25519_state_v2_to_v3(
+                        legacy.reciprocal_ed25519,
+                    ),
+                    peer_sessions: migrate_peer_session_state_v1_to_v2(legacy.peer_sessions),
                     peer_mesh: legacy.peer_mesh,
                     media_sessions: legacy.media_sessions,
                     media_command_runtime: legacy.media_command_runtime,
@@ -3540,7 +4705,12 @@ fn decode_peer_runtime_snapshot_with_migration(
                     broker_lease_revocation_cleanup_completions: Vec::new(),
                     broker_epoch_rollovers: Vec::new(),
                     direct_lane_leases: legacy.direct_lane_leases,
-                    signed_topology_authorizations: legacy.signed_topology_authorizations,
+                    pair_media_routes: ManifoldPairMediaRouteAuthorityStateV2::empty(),
+                    signed_topology_authorizations: legacy
+                        .signed_topology_authorizations
+                        .into_iter()
+                        .map(ManifoldSignedPeerTopologyAuthorizationV2::WifiDirect)
+                        .collect(),
                     audit_events: legacy.audit_events,
                 },
                 true,
@@ -4166,7 +5336,34 @@ fn validate_snapshot(
 fn validate_snapshot_capacity(
     snapshot: &ManifoldPeerRuntimeHostSnapshot,
 ) -> Result<(), ManifoldPeerRuntimeHostError> {
-    if snapshot.audit_events.len() > MAX_PEER_RUNTIME_HOST_EVENTS
+    let reserved = pair_media_route_v2_reserved_mutations(&snapshot.pair_media_routes)
+        .ok_or_else(|| invalid_snapshot("pair media route obligation capacity overflow"))?;
+    let host_events = snapshot.audit_events.len().checked_add(reserved);
+    let runtime_audits = snapshot
+        .media_command_runtime
+        .audit_events
+        .len()
+        .checked_add(reserved);
+    let runtime_requests = snapshot
+        .media_command_runtime
+        .applied_request_ids
+        .len()
+        .checked_add(reserved);
+    let reserved_revisions = u64::try_from(reserved)
+        .map_err(|_| invalid_snapshot("pair media route revision reservation overflow"))?;
+    if host_events.map_or(true, |count| count > MAX_PEER_RUNTIME_HOST_EVENTS)
+        || runtime_audits.map_or(true, |count| count > MAX_RUNTIME_AUDIT_EVENTS)
+        || runtime_requests.map_or(true, |count| count > MAX_RUNTIME_SNAPSHOT_RECORDS)
+        || snapshot
+            .event_sequence
+            .checked_add(reserved_revisions)
+            .is_none()
+        || snapshot
+            .media_command_runtime
+            .authority_revision
+            .get()
+            .checked_add(reserved_revisions)
+            .is_none()
         || authority_record_lengths(snapshot)
             .into_iter()
             .any(|length| length > MAX_PEER_RUNTIME_AUTHORITY_RECORDS)
@@ -4337,13 +5534,17 @@ fn validate_snapshot_schemas(
         || snapshot.accepted_peers.schema_id.as_str() != PEER_SNAPSHOT_SCHEMA
         || snapshot.enrollment.schema_id.as_str() != PEER_ENROLLMENT_STATE_SCHEMA
         || snapshot.rendezvous.schema_id.as_str() != RENDEZVOUS_AUTHORITY_STATE_SCHEMA
-        || snapshot.reciprocal_ed25519.schema_id.as_str() != RECIPROCAL_ED25519_STATE_SCHEMA
-        || snapshot.peer_sessions.schema_id.as_str() != PEER_SESSION_SNAPSHOT_SCHEMA
+        || snapshot.reciprocal_ed25519.schema_id.as_str()
+            != rusty_manifold_peer::RECIPROCAL_ED25519_STATE_V3_SCHEMA
+        || snapshot.peer_sessions.schema_id.as_str()
+            != rusty_manifold_peer::PEER_SESSION_STATE_V2_SCHEMA
         || snapshot.peer_mesh.schema_id.as_str() != PEER_MESH_STATE_SCHEMA
         || snapshot.media_sessions.schema_id.as_str()
             != MANIFOLD_MEDIA_SESSION_ACCEPTANCE_STATE_SCHEMA
         || snapshot.media_command_runtime.schema_id.as_str() != HOST_SNAPSHOT_SCHEMA
         || snapshot.direct_lane_leases.schema_id.as_str() != DIRECT_LANE_LEASE_STATE_SCHEMA
+        || snapshot.pair_media_routes.schema_id.as_str()
+            != rusty_manifold_peer::PAIR_MEDIA_ROUTE_STATE_V2_SCHEMA
     {
         return Err(invalid_snapshot("authority schema mismatch"));
     }
@@ -4413,24 +5614,15 @@ fn validate_rendezvous_and_session_state(
                 || !receipt.accepted
                 || receipt.rejection_reason.is_some()
         })
+        || !reciprocal_ed25519_state_v3_is_well_formed(&snapshot.reciprocal_ed25519)
+        || !peer_session_state_v2_is_well_formed(&snapshot.peer_sessions)
     {
-        return Err(invalid_snapshot("signed rendezvous identity/replay state"));
+        return Err(invalid_snapshot("mixed reciprocal/session authority state"));
     }
-    if !unique_ids(snapshot.reciprocal_ed25519.applied_request_ids.iter())
-        || !unique_ids(snapshot.reciprocal_ed25519.consumed_correlation_ids.iter())
-        || !unique_strings(snapshot.reciprocal_ed25519.consumed_context_sha256.iter())
-        || !unique_strings(snapshot.reciprocal_ed25519.consumed_nonce_sha256.iter())
-        || snapshot
-            .reciprocal_ed25519
-            .accepted_receipts
-            .windows(2)
-            .any(|pair| pair[0].receipt_id >= pair[1].receipt_id)
-        || snapshot
-            .reciprocal_ed25519
-            .accepted_receipts
-            .iter()
-            .any(|receipt| {
-                !receipt.accepted
+    for receipt in &snapshot.reciprocal_ed25519.accepted_receipts {
+        match receipt {
+            ManifoldReciprocalEd25519ReceiptV3::WifiDirect(receipt) => {
+                if !receipt.accepted
                     || receipt.rejection_reason.is_some()
                     || receipt.trust_policy_id != snapshot.trust_policy.policy_id
                     || receipt.trust_policy_revision != snapshot.trust_policy.revision
@@ -4441,30 +5633,40 @@ fn validate_rendezvous_and_session_state(
                         .any(|candidate| {
                             candidate == &reciprocal_ed25519_compatibility_receipt(receipt)
                         })
-            })
-    {
-        return Err(invalid_snapshot(
-            "reciprocal Ed25519 v2 authority/projection state",
-        ));
+                {
+                    return Err(invalid_snapshot("Wi-Fi reciprocal compatibility binding"));
+                }
+            }
+            ManifoldReciprocalEd25519ReceiptV3::CommonLan(receipt) => {
+                if !receipt.accepted
+                    || receipt.rejection_reason.is_some()
+                    || receipt.trust_policy_id != snapshot.trust_policy.policy_id
+                    || receipt.trust_policy_revision != snapshot.trust_policy.revision
+                    || receipt.peer_ids.len() != 2
+                    || receipt.peer_ids[0] >= receipt.peer_ids[1]
+                    || receipt.signer_key_ids.len() != 2
+                    || receipt.signer_key_ids[0] >= receipt.signer_key_ids[1]
+                {
+                    return Err(invalid_snapshot("common-LAN reciprocal authority binding"));
+                }
+            }
+        }
     }
-    if !unique_ids(snapshot.peer_sessions.applied_proposal_ids.iter())
-        || !unique_ids(snapshot.peer_sessions.revoked_session_ids.iter())
-        || !unique_ids(
-            snapshot
-                .peer_sessions
-                .sessions
-                .iter()
-                .map(|session| &session.proposal.session_id),
-        )
-        || snapshot.peer_sessions.sessions.iter().any(|session| {
-            session.proposal.schema_id.as_str() != PEER_SESSION_PROPOSAL_SCHEMA
-                || !snapshot
-                    .peer_sessions
-                    .applied_proposal_ids
-                    .contains(&session.proposal.proposal_id)
-        })
-    {
-        return Err(invalid_snapshot("peer-session identity/replay state"));
+    if snapshot.peer_sessions.sessions.iter().any(|session| {
+        !snapshot
+            .peer_sessions
+            .applied_proposal_ids
+            .iter()
+            .any(|proposal_id| match session {
+                ManifoldAcceptedPeerSessionV2::WifiDirect(value) => {
+                    proposal_id == &value.proposal.proposal_id
+                }
+                ManifoldAcceptedPeerSessionV2::CommonLan(value) => {
+                    proposal_id == &value.proposal.proposal_id
+                }
+            })
+    }) {
+        return Err(invalid_snapshot("mixed peer-session replay binding"));
     }
     Ok(())
 }
@@ -4573,6 +5775,603 @@ fn validate_mesh_and_lease_state(
         })
     {
         return Err(invalid_snapshot("direct-lane lease identity/replay state"));
+    }
+    if !pair_media_route_state_v2_is_well_formed(&snapshot.pair_media_routes) {
+        return Err(invalid_snapshot("pair media route identity/replay state"));
+    }
+    validate_pair_media_route_bindings(snapshot)?;
+    validate_pair_media_route_audit_closure(snapshot)?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
+fn validate_pair_media_route_bindings(
+    snapshot: &ManifoldPeerRuntimeHostSnapshot,
+) -> Result<(), ManifoldPeerRuntimeHostError> {
+    let historical_epochs = snapshot
+        .broker_epoch_rollovers
+        .iter()
+        .map(|receipt| &receipt.source_provider_epoch_id)
+        .collect::<BTreeSet<_>>();
+    macro_rules! validate_route {
+        ($route:expr, $common_lan:expr) => {{
+            let route = $route;
+            let issue = unique_applied_pair_event(snapshot, &ManifoldPeerRuntimeAuditKind::PairMediaRoute, &route.request_id)?;
+            let media = snapshot.media_sessions.sessions.iter()
+                .find(|media| media.decision_id == route.media_session_decision_id)
+                .ok_or_else(|| invalid_snapshot("pair route media decision missing"))?;
+            let peer = snapshot.peer_sessions.sessions.iter()
+                .find(|peer| peer.session_id() == &route.peer_session_id)
+                .ok_or_else(|| invalid_snapshot("pair route peer session missing"))?;
+            let descriptor = &media.product_binding.descriptor;
+            let mut allowed_resources = descriptor.source_ids.iter()
+                .chain(&descriptor.processor_ids).chain(&descriptor.route_ids)
+                .chain(&descriptor.sink_ids).chain(&descriptor.stream_ids)
+                .cloned().collect::<Vec<_>>();
+            allowed_resources.sort();
+            let grant_current = snapshot.trust_policy.media_client_grants.iter().any(|grant| {
+                grant.runtime_host_id == route.authority_host_id
+                    && grant.client_id == route.authority_client_id
+                    && grant.lease_id == route.authority_runtime_lease_id
+                    && grant.product_id == route.product_id
+                    && grant.feature_lock_id == route.feature_lock_id
+                    && grant.feature_lock_fingerprint == route.feature_lock_fingerprint
+                    && grant.capability_id == route.capability_id
+                    && grant.admission_grant_id == route.admission_grant_id
+                    && grant.allowed_session_id == route.media_session_id
+                    && grant.allowed_platform_runtime_spec_id == route.platform_runtime_spec_id
+                    && grant.allowed_resource_ids == allowed_resources
+                    && grant.allowed_descriptor_canonical_sha256.contains(&route.media_descriptor_canonical_sha256)
+            });
+            let current_epoch_lease_matches = route.authority_provider_epoch_id != snapshot.provider_epoch_id
+                || route.lifecycle_status != rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Current
+                || snapshot.media_command_runtime.leases.iter().any(|lease| {
+                    lease.lease_id == route.authority_runtime_lease_id
+                        && lease.holder_id == route.authority_client_id
+                        && lease.expires_at_ms == route.authority_runtime_lease_expires_at_ms
+                });
+            if issue.prior_authority_revision >= issue.resulting_authority_revision
+                || route.authority_host_id != snapshot.media_command_runtime.host_id
+                || (route.authority_provider_epoch_id != snapshot.provider_epoch_id
+                    && !historical_epochs.contains(&route.authority_provider_epoch_id))
+                || route.peer_session_decision_id != *peer.decision_id()
+                || route.peer_session_authority_revision > snapshot.peer_sessions.authority_revision
+                || route.media_session_id != media.session_id
+                || route.media_acceptance_authority_revision > snapshot.media_sessions.authority_revision
+                || route.media_descriptor_canonical_sha256 != media.product_descriptor_canonical_sha256
+                || route.platform_runtime_spec_id != media.platform_runtime_spec_id
+                || route.authority_host_id != media.runtime_authority_host_id
+                || route.authority_provider_epoch_id != media.provider_epoch_id
+                || route.authority_client_id != media.runtime_client_id
+                || route.authority_runtime_lease_id != media.runtime_lease_id
+                || !current_epoch_lease_matches || !grant_current
+                || !descriptor.source_ids.contains(&route.route_leg.source_id)
+                || !descriptor.route_ids.contains(&route.route_leg.route_id)
+                || !descriptor.sink_ids.contains(&route.route_leg.sink_id)
+                || route.route_leg.processor_ids.iter().any(|id| !descriptor.processor_ids.contains(id))
+                || route.route_leg.stream_ids.iter().any(|id| !descriptor.stream_ids.contains(id))
+                || route.runtime_dispatch_id != derived("dispatch.runtime", &route.runtime_command_request_id)
+                || route.runtime_application_receipt_id != derived("receipt.runtime", &route.runtime_command_request_id)
+                || !runtime_application_is_closed(snapshot, &route.runtime_command_request_id, route.runtime_resulting_authority_revision)
+            {
+                return Err(invalid_snapshot("pair media route authority binding"));
+            }
+            match route.lifecycle_status {
+                rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Current => {
+                    if route.ended_by_id.is_some() || route.termination_action.is_some()
+                        || route.termination_runtime_binding.is_some()
+                    { return Err(invalid_snapshot("current pair route has terminal evidence")); }
+                }
+                rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Stopped
+                | rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Revoked => {
+                    let source = route.ended_by_id.as_ref().ok_or_else(|| invalid_snapshot("terminal route source missing"))?;
+                    let terminal_binding_valid = match (
+                        route.termination_action.as_ref(),
+                        route.termination_runtime_binding.as_ref(),
+                    ) {
+                        (None, None)
+                            if route.lifecycle_status
+                                == rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Revoked =>
+                        {
+                            unique_applied_pair_event(
+                                snapshot,
+                                &ManifoldPeerRuntimeAuditKind::BrokerLeaseRevocationConvergence,
+                                source,
+                            )?;
+                            snapshot.broker_lease_revocation_convergences.iter().any(|receipt| {
+                                receipt.applied
+                                    && receipt.convergence_id == *source
+                                    && receipt.converged_at_ms == route.ended_at_ms.unwrap_or_default()
+                                    && receipt.revoked_media_decision_ids
+                                        .contains(&route.media_session_decision_id)
+                            })
+                        }
+                        (Some(action), Some(binding)) => {
+                            let event = unique_applied_pair_event(
+                                snapshot,
+                                &ManifoldPeerRuntimeAuditKind::PairMediaRouteTermination,
+                                source,
+                            )?;
+                            let authorized = match action {
+                                ManifoldPairMediaRouteTerminationAction::Stop => {
+                                    binding.requester_id == route.authority_client_id
+                                        && binding.lease_id == route.authority_runtime_lease_id
+                                }
+                                ManifoldPairMediaRouteTerminationAction::Revoke => snapshot
+                                    .trust_policy.trusted_media_revoker_ids
+                                    .contains(&binding.requester_id),
+                            };
+                            let v1_request = ManifoldPairMediaRouteTerminationRequest {
+                                schema_id: schema(PAIR_MEDIA_ROUTE_TERMINATION_REQUEST_SCHEMA),
+                                request_id: source.clone(),
+                                expected_authority_revision: event.prior_authority_revision,
+                                runtime_command_request_id: binding.request_id.clone(),
+                                grant_id: route.grant_id.clone(),
+                                action: action.clone(),
+                            };
+                            let v2_request = ManifoldPairMediaRouteTerminationRequestV2 {
+                                schema_id: schema(PAIR_MEDIA_ROUTE_TERMINATION_REQUEST_V2_SCHEMA),
+                                request_id: source.clone(),
+                                expected_authority_revision: event.prior_authority_revision,
+                                runtime_command_request_id: binding.request_id.clone(),
+                                grant_id: route.grant_id.clone(),
+                                expected_authority_provider_epoch_id: route.authority_provider_epoch_id.clone(),
+                                expected_platform_runtime_spec_id: route.platform_runtime_spec_id.clone(),
+                                action: action.clone(),
+                            };
+                            let params_match = if binding.params_digest.params_type_id.as_str()
+                                == PAIR_MEDIA_ROUTE_TERMINATION_PARAMS_TYPE
+                            {
+                                !$common_lan
+                                    && pair_media_route_termination_params_digest(&v1_request)
+                                        .ok()
+                                        .as_ref()
+                                        == Some(&binding.params_digest)
+                            } else if binding.params_digest.params_type_id.as_str()
+                                == PAIR_MEDIA_ROUTE_TERMINATION_PARAMS_V2_TYPE
+                            {
+                                rusty_manifold_peer::pair_media_route_termination_params_digest_v2(&v2_request)
+                                    .ok()
+                                    .as_ref()
+                                    == Some(&binding.params_digest)
+                            } else {
+                                false
+                            };
+                            authorized
+                                && params_match
+                                && runtime_application_is_closed(
+                                    snapshot,
+                                    &binding.request_id,
+                                    binding.resulting_authority_revision,
+                                )
+                        }
+                        _ => false,
+                    };
+                    if !terminal_binding_valid {
+                        return Err(invalid_snapshot("terminal route runtime application missing"));
+                    }
+                }
+                rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Expired => {
+                    let source = route.ended_by_id.as_ref().ok_or_else(|| invalid_snapshot("expired route source missing"))?;
+                    unique_applied_pair_event(snapshot, &ManifoldPeerRuntimeAuditKind::PairMediaRouteExpiry, source)?;
+                }
+                rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Superseded => {
+                    let source = route.ended_by_id.as_ref().ok_or_else(|| invalid_snapshot("superseded route source missing"))?;
+                    unique_applied_pair_event(snapshot, &ManifoldPeerRuntimeAuditKind::PairMediaRoute, source)?;
+                }
+            }
+        }};
+    }
+    for route in &snapshot.pair_media_routes.routes {
+        match route {
+            ManifoldAcceptedPairMediaRouteV2::WifiDirect(route) => {
+                validate_route!(route, false);
+                let issue = unique_applied_pair_event(
+                    snapshot,
+                    &ManifoldPeerRuntimeAuditKind::PairMediaRoute,
+                    &route.request_id,
+                )?;
+                let reconstructed = ManifoldPairMediaRouteRequest {
+                    schema_id: schema(PAIR_MEDIA_ROUTE_REQUEST_SCHEMA),
+                    request_id: route.request_id.clone(),
+                    expected_authority_revision: issue.prior_authority_revision,
+                    expected_peer_session_authority_revision: route
+                        .peer_session_acceptance_authority_revision,
+                    expected_media_acceptance_authority_revision: route
+                        .media_acceptance_authority_revision,
+                    runtime_command_request_id: route.runtime_command_request_id.clone(),
+                    expected_runtime_lease_expires_at_ms: route
+                        .authority_runtime_lease_expires_at_ms,
+                    peer_session_id: route.peer_session_id.clone(),
+                    media_session_decision_id: route.media_session_decision_id.clone(),
+                    route_leg: route.route_leg.clone(),
+                    expires_at_ms: route.expires_at_ms,
+                };
+                if pair_media_route_issue_params_digest(&reconstructed)
+                    .ok()
+                    .as_ref()
+                    != Some(&route.runtime_params_digest)
+                {
+                    return Err(invalid_snapshot("Wi-Fi route issue parameter binding"));
+                }
+                if route
+                    .signed_topology_evidence
+                    .topology_authorization
+                    .session_id
+                    != route.peer_session_id
+                    || route
+                        .signed_topology_evidence
+                        .topology_authorization
+                        .decision_id
+                        != route.peer_session_decision_id
+                    || snapshot
+                        .signed_topology_authorizations
+                        .iter()
+                        .find(|topology| {
+                            topology.session_id() == &route.peer_session_id
+                                && topology.decision_id() == &route.peer_session_decision_id
+                        })
+                        .map_or(true, |topology| {
+                            topology.as_wifi_direct() != Some(&route.signed_topology_evidence)
+                        })
+                {
+                    return Err(invalid_snapshot("Wi-Fi route retained topology binding"));
+                }
+            }
+            ManifoldAcceptedPairMediaRouteV2::CommonLan(route) => {
+                validate_route!(route, true);
+                let issue = unique_applied_pair_event(
+                    snapshot,
+                    &ManifoldPeerRuntimeAuditKind::PairMediaRoute,
+                    &route.request_id,
+                )?;
+                let reconstructed = ManifoldCommonLanPairMediaRouteRequest {
+                    request: ManifoldPairMediaRouteRequest {
+                        schema_id: schema(PAIR_MEDIA_ROUTE_REQUEST_SCHEMA),
+                        request_id: route.request_id.clone(),
+                        expected_authority_revision: issue.prior_authority_revision,
+                        expected_peer_session_authority_revision: route
+                            .peer_session_acceptance_authority_revision,
+                        expected_media_acceptance_authority_revision: route
+                            .media_acceptance_authority_revision,
+                        runtime_command_request_id: route.runtime_command_request_id.clone(),
+                        expected_runtime_lease_expires_at_ms: route
+                            .authority_runtime_lease_expires_at_ms,
+                        peer_session_id: route.peer_session_id.clone(),
+                        media_session_decision_id: route.media_session_decision_id.clone(),
+                        route_leg: route.route_leg.clone(),
+                        expires_at_ms: route.expires_at_ms,
+                    },
+                    transport: route.transport.clone(),
+                };
+                if pair_media_route_issue_params_digest_v2(&reconstructed)
+                    .ok()
+                    .as_ref()
+                    != Some(&route.runtime_params_digest)
+                {
+                    return Err(invalid_snapshot("common-LAN route issue parameter binding"));
+                }
+                if route.signed_topology_evidence.session_id != route.peer_session_id
+                    || route.signed_topology_evidence.decision_id != route.peer_session_decision_id
+                    || route.signed_topology_evidence.transport != route.transport
+                    || snapshot
+                        .signed_topology_authorizations
+                        .iter()
+                        .find(|topology| {
+                            topology.session_id() == &route.peer_session_id
+                                && topology.decision_id() == &route.peer_session_decision_id
+                        })
+                        .map_or(true, |topology| {
+                            !matches!(topology,
+                        ManifoldSignedPeerTopologyAuthorizationV2::CommonLan(value)
+                            if value == &route.signed_topology_evidence)
+                        })
+                {
+                    return Err(invalid_snapshot(
+                        "common-LAN route retained topology binding",
+                    ));
+                }
+            }
+        }
+    }
+    for tagged in &snapshot.pair_media_routes.cleanup_receipts {
+        let receipt = match tagged {
+            ManifoldPairMediaRouteCleanupReceiptV2::WifiDirect(value)
+            | ManifoldPairMediaRouteCleanupReceiptV2::CommonLan(value) => value,
+        };
+        let event = unique_applied_pair_event(
+            snapshot,
+            &ManifoldPeerRuntimeAuditKind::PairMediaRouteCleanup,
+            &receipt.request_id,
+        )?;
+        let route = snapshot
+            .pair_media_routes
+            .routes
+            .iter()
+            .find(|route| route.grant_id() == &receipt.grant_id)
+            .ok_or_else(|| invalid_snapshot("cleaned pair route missing"))?;
+        let params_match = if receipt
+            .runtime_binding
+            .params_digest
+            .params_type_id
+            .as_str()
+            == PAIR_MEDIA_ROUTE_CLEANUP_PARAMS_TYPE
+        {
+            match tagged {
+                ManifoldPairMediaRouteCleanupReceiptV2::WifiDirect(_) => {
+                    let request = ManifoldPairMediaRouteCleanupCompletionRequest {
+                        schema_id: schema(PAIR_MEDIA_ROUTE_CLEANUP_REQUEST_SCHEMA),
+                        request_id: receipt.request_id.clone(),
+                        expected_authority_revision: event.prior_authority_revision,
+                        runtime_command_request_id: receipt.runtime_binding.request_id.clone(),
+                        grant_id: receipt.grant_id.clone(),
+                        effect_receipt_id: receipt.effect_receipt_id.clone(),
+                        effect_receipt_sha256: receipt.effect_receipt_sha256.clone(),
+                    };
+                    pair_media_route_cleanup_params_digest(&request)
+                        .ok()
+                        .as_ref()
+                        == Some(&receipt.runtime_binding.params_digest)
+                }
+                ManifoldPairMediaRouteCleanupReceiptV2::CommonLan(_) => false,
+            }
+        } else if receipt
+            .runtime_binding
+            .params_digest
+            .params_type_id
+            .as_str()
+            == PAIR_MEDIA_ROUTE_CLEANUP_PARAMS_V2_TYPE
+        {
+            let request = ManifoldPairMediaRouteCleanupCompletionRequestV2 {
+                schema_id: schema(PAIR_MEDIA_ROUTE_CLEANUP_REQUEST_V2_SCHEMA),
+                request_id: receipt.request_id.clone(),
+                expected_authority_revision: event.prior_authority_revision,
+                runtime_command_request_id: receipt.runtime_binding.request_id.clone(),
+                grant_id: receipt.grant_id.clone(),
+                expected_authority_provider_epoch_id: route.authority_provider_epoch_id().clone(),
+                expected_platform_runtime_spec_id: route.platform_runtime_spec_id().clone(),
+                effect_receipt_id: receipt.effect_receipt_id.clone(),
+                effect_receipt_sha256: receipt.effect_receipt_sha256.clone(),
+            };
+            pair_media_route_cleanup_params_digest_v2(&request)
+                .ok()
+                .as_ref()
+                == Some(&receipt.runtime_binding.params_digest)
+        } else {
+            false
+        };
+        let cleanup_authorized = (receipt.runtime_binding.requester_id
+            == *route.authority_client_id()
+            && receipt.runtime_binding.lease_id == *route.authority_runtime_lease_id())
+            || snapshot
+                .trust_policy
+                .trusted_media_revoker_ids
+                .contains(&receipt.runtime_binding.requester_id);
+        if receipt.authority_host_id != *route.authority_host_id()
+            || receipt.authority_provider_epoch_id != *route.authority_provider_epoch_id()
+            || !cleanup_authorized
+            || !params_match
+            || !valid_sha256(&receipt.effect_receipt_sha256)
+            || !runtime_application_is_closed(
+                snapshot,
+                &receipt.runtime_binding.request_id,
+                receipt.runtime_binding.resulting_authority_revision,
+            )
+            || *route.cleanup_status()
+                != rusty_manifold_peer::ManifoldPairMediaRouteCleanupStatus::Completed
+        {
+            return Err(invalid_snapshot("pair route cleanup binding"));
+        }
+    }
+    Ok(())
+}
+
+fn runtime_application_is_closed(
+    snapshot: &ManifoldPeerRuntimeHostSnapshot,
+    request_id: &DottedId,
+    resulting_authority_revision: Revision,
+) -> bool {
+    snapshot
+        .media_command_runtime
+        .applied_request_ids
+        .contains(request_id)
+        && snapshot
+            .media_command_runtime
+            .audit_events
+            .iter()
+            .filter(|event| {
+                event.event_kind == ManifoldRuntimeAuditKind::CommandApplication
+                    && event.source_id == *request_id
+                    && event.applied
+                    && event.resulting_authority_revision == resulting_authority_revision
+                    && event.prior_authority_revision.next() == Some(resulting_authority_revision)
+            })
+            .count()
+            == 1
+}
+
+fn unique_applied_pair_event<'a>(
+    snapshot: &'a ManifoldPeerRuntimeHostSnapshot,
+    kind: &ManifoldPeerRuntimeAuditKind,
+    source_id: &DottedId,
+) -> Result<&'a ManifoldPeerRuntimeAuditEvent, ManifoldPeerRuntimeHostError> {
+    let events = snapshot
+        .audit_events
+        .iter()
+        .filter(|event| &event.event_kind == kind && event.source_id == *source_id && event.applied)
+        .collect::<Vec<_>>();
+    if events.len() == 1 {
+        Ok(events[0])
+    } else {
+        Err(invalid_snapshot("pair route applied audit uniqueness"))
+    }
+}
+
+fn is_pair_media_route_audit_kind(kind: &ManifoldPeerRuntimeAuditKind) -> bool {
+    matches!(
+        kind,
+        ManifoldPeerRuntimeAuditKind::PairMediaRoute
+            | ManifoldPeerRuntimeAuditKind::PairMediaRouteTermination
+            | ManifoldPeerRuntimeAuditKind::PairMediaRouteExpiry
+            | ManifoldPeerRuntimeAuditKind::PairMediaRouteCleanup
+    )
+}
+
+#[allow(clippy::too_many_lines)]
+fn validate_pair_media_route_audit_closure(
+    snapshot: &ManifoldPeerRuntimeHostSnapshot,
+) -> Result<(), ManifoldPeerRuntimeHostError> {
+    let mut expected_revision = Revision::INITIAL;
+    let mut applied_sources = Vec::new();
+    let broker_route_convergence_sources = snapshot
+        .pair_media_routes
+        .routes
+        .iter()
+        .filter(|route| {
+            *route.lifecycle_status()
+                == rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Revoked
+                && route.termination_action().is_none()
+                && route.termination_runtime_binding().is_none()
+        })
+        .filter_map(|route| route.ended_by_id())
+        .collect::<BTreeSet<_>>();
+    for event in &snapshot.audit_events {
+        let broker_route_convergence = event.event_kind
+            == ManifoldPeerRuntimeAuditKind::BrokerLeaseRevocationConvergence
+            && broker_route_convergence_sources.contains(&event.source_id);
+        if !is_pair_media_route_audit_kind(&event.event_kind) && !broker_route_convergence {
+            continue;
+        }
+        if event.applied {
+            let resulting = expected_revision
+                .next()
+                .ok_or_else(|| invalid_snapshot("pair route audit revision overflow"))?;
+            if event.rejection_code.is_some()
+                || (!broker_route_convergence
+                    && (event.prior_authority_revision != expected_revision
+                        || event.resulting_authority_revision != resulting))
+            {
+                return Err(invalid_snapshot("applied pair route audit continuity"));
+            }
+            expected_revision = resulting;
+            applied_sources.push(event.source_id.clone());
+        } else if event.rejection_code.is_none()
+            || event.prior_authority_revision != expected_revision
+            || event.resulting_authority_revision != expected_revision
+        {
+            return Err(invalid_snapshot("rejected pair route audit continuity"));
+        }
+    }
+    applied_sources.sort();
+    if expected_revision != snapshot.pair_media_routes.authority_revision
+        || applied_sources != snapshot.pair_media_routes.applied_request_ids
+    {
+        return Err(invalid_snapshot("pair route audit replay closure"));
+    }
+
+    let applied_event_count = |kind: ManifoldPeerRuntimeAuditKind, source_id: &DottedId| {
+        snapshot
+            .audit_events
+            .iter()
+            .filter(|event| {
+                event.event_kind == kind && event.source_id == *source_id && event.applied
+            })
+            .count()
+    };
+    for route in &snapshot.pair_media_routes.routes {
+        if applied_event_count(
+            ManifoldPeerRuntimeAuditKind::PairMediaRoute,
+            route.request_id(),
+        ) != 1
+        {
+            return Err(invalid_snapshot("pair route accepted issue audit"));
+        }
+        let terminal_audit_valid = match *route.lifecycle_status() {
+            rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Current => {
+                route.ended_by_id().is_none()
+            }
+            rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Stopped
+            | rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Revoked => {
+                route.ended_by_id().is_some_and(|source_id| {
+                    let kind = if route.termination_runtime_binding().is_some() {
+                        ManifoldPeerRuntimeAuditKind::PairMediaRouteTermination
+                    } else {
+                        ManifoldPeerRuntimeAuditKind::BrokerLeaseRevocationConvergence
+                    };
+                    applied_event_count(kind, source_id) == 1
+                })
+            }
+            rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Expired => {
+                route.ended_by_id().is_some_and(|source_id| {
+                    applied_event_count(
+                        ManifoldPeerRuntimeAuditKind::PairMediaRouteExpiry,
+                        source_id,
+                    ) == 1
+                })
+            }
+            rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Superseded => {
+                route.ended_by_id().is_some_and(|source_id| {
+                    applied_event_count(ManifoldPeerRuntimeAuditKind::PairMediaRoute, source_id)
+                        == 1
+                        && snapshot.pair_media_routes.routes.iter().any(|replacement| {
+                            replacement.request_id() == source_id
+                                && replacement.route_leg().leg_id == route.route_leg().leg_id
+                                && replacement.route_leg().leg_revision
+                                    > route.route_leg().leg_revision
+                        })
+                })
+            }
+        };
+        if !terminal_audit_valid {
+            return Err(invalid_snapshot("pair route terminal audit binding"));
+        }
+    }
+    for receipt in &snapshot.pair_media_routes.cleanup_receipts {
+        if applied_event_count(
+            ManifoldPeerRuntimeAuditKind::PairMediaRouteCleanup,
+            receipt.request_id(),
+        ) != 1
+        {
+            return Err(invalid_snapshot("pair route cleanup audit binding"));
+        }
+    }
+    for event in snapshot
+        .audit_events
+        .iter()
+        .filter(|event| event.applied && is_pair_media_route_audit_kind(&event.event_kind))
+    {
+        let owned = match event.event_kind {
+            ManifoldPeerRuntimeAuditKind::PairMediaRoute => snapshot
+                .pair_media_routes
+                .routes
+                .iter()
+                .any(|route| route.request_id() == &event.source_id),
+            ManifoldPeerRuntimeAuditKind::PairMediaRouteTermination => {
+                snapshot.pair_media_routes.routes.iter().any(|route| {
+                    matches!(
+                        *route.lifecycle_status(),
+                        rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Stopped
+                            | rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Revoked
+                    ) && route.ended_by_id() == Some(&event.source_id)
+                })
+            }
+            ManifoldPeerRuntimeAuditKind::PairMediaRouteExpiry => {
+                snapshot.pair_media_routes.routes.iter().any(|route| {
+                    *route.lifecycle_status()
+                        == rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Expired
+                        && route.ended_by_id() == Some(&event.source_id)
+                })
+            }
+            ManifoldPeerRuntimeAuditKind::PairMediaRouteCleanup => snapshot
+                .pair_media_routes
+                .cleanup_receipts
+                .iter()
+                .any(|receipt| receipt.request_id() == &event.source_id),
+            _ => false,
+        };
+        if !owned {
+            return Err(invalid_snapshot("orphan applied pair route audit"));
+        }
     }
     Ok(())
 }
@@ -4733,6 +6532,28 @@ fn validate_trust_policy(
     Ok(())
 }
 
+fn pair_media_route_v2_reserved_mutations(
+    state: &ManifoldPairMediaRouteAuthorityStateV2,
+) -> Option<usize> {
+    let current = state
+        .routes
+        .iter()
+        .filter(|route| {
+            *route.lifecycle_status()
+                == rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Current
+        })
+        .count();
+    let pending = state
+        .routes
+        .iter()
+        .filter(|route| {
+            *route.cleanup_status()
+                == rusty_manifold_peer::ManifoldPairMediaRouteCleanupStatus::Pending
+        })
+        .count();
+    current.checked_mul(2)?.checked_add(pending)
+}
+
 fn valid_sha256(value: &str) -> bool {
     value.len() == 71
         && value.starts_with("sha256:")
@@ -4757,10 +6578,10 @@ fn validate_media_command_runtime(
         .map_err(|error| invalid_snapshot(&format!("media Runtime Host state: {error}")))?;
     let policy = &snapshot.trust_policy;
     let mut expected_commands = BTreeSet::new();
-    if policy
+    let media_enabled = policy
         .enabled_authority_families
-        .contains(&ManifoldPeerRuntimeAuthorityFamily::MediaSession)
-    {
+        .contains(&ManifoldPeerRuntimeAuthorityFamily::MediaSession);
+    if media_enabled {
         expected_commands.extend([
             MANIFOLD_MEDIA_SESSION_ACCEPT_COMMAND,
             MANIFOLD_MEDIA_SESSION_STOP_COMMAND,
@@ -4783,8 +6604,25 @@ fn validate_media_command_runtime(
         .iter()
         .map(|command| command.command_id.as_str())
         .collect::<BTreeSet<_>>();
+    let pair_command_count = actual_commands
+        .iter()
+        .filter(|command| is_pair_media_route_command(command))
+        .count();
+    let pair_bundle_enabled = pair_command_count == 4;
+    if pair_bundle_enabled {
+        expected_commands.extend([
+            rusty_manifold_peer::PAIR_MEDIA_ROUTE_ISSUE_COMMAND,
+            rusty_manifold_peer::PAIR_MEDIA_ROUTE_STOP_COMMAND,
+            rusty_manifold_peer::PAIR_MEDIA_ROUTE_REVOKE_COMMAND,
+            rusty_manifold_peer::PAIR_MEDIA_ROUTE_CLEANUP_COMMAND,
+        ]);
+    }
     if snapshot.media_command_runtime.host_id != policy.media_runtime_host_id
+        || pair_command_count != 0 && !pair_bundle_enabled
+        || pair_bundle_enabled && !media_enabled
         || actual_commands != expected_commands
+        || !pair_bundle_enabled
+            && snapshot.pair_media_routes != ManifoldPairMediaRouteAuthorityStateV2::empty()
         || snapshot
             .media_command_runtime
             .commands
@@ -4793,7 +6631,13 @@ fn validate_media_command_runtime(
                 let expected_scope = match command.command_id.as_str() {
                     MANIFOLD_MEDIA_SESSION_ACCEPT_COMMAND
                     | MANIFOLD_MEDIA_SESSION_STOP_COMMAND
-                    | MANIFOLD_MEDIA_SESSION_REVOKE_COMMAND => &policy.media_runtime_lease_scope_id,
+                    | MANIFOLD_MEDIA_SESSION_REVOKE_COMMAND
+                    | rusty_manifold_peer::PAIR_MEDIA_ROUTE_ISSUE_COMMAND
+                    | rusty_manifold_peer::PAIR_MEDIA_ROUTE_STOP_COMMAND
+                    | rusty_manifold_peer::PAIR_MEDIA_ROUTE_REVOKE_COMMAND
+                    | rusty_manifold_peer::PAIR_MEDIA_ROUTE_CLEANUP_COMMAND => {
+                        &policy.media_runtime_lease_scope_id
+                    }
                     DIRECT_LANE_LEASE_ISSUE_COMMAND
                     | DIRECT_LANE_LEASE_USE_COMMAND
                     | DIRECT_LANE_LEASE_REVOKE_COMMAND => {
@@ -5395,26 +7239,58 @@ fn validate_topology_and_audit_state(
         snapshot
             .signed_topology_authorizations
             .iter()
-            .map(|topology| &topology.topology_authorization.decision_id),
-    ) || snapshot
-        .signed_topology_authorizations
-        .iter()
-        .any(|topology| {
-            topology.schema_id.as_str() != SIGNED_PEER_TOPOLOGY_AUTHORIZATION_SCHEMA
-                || topology.topology_authorization.schema_id.as_str()
-                    != PEER_TOPOLOGY_AUTHORIZATION_SCHEMA
-                || !snapshot.peer_sessions.sessions.iter().any(|session| {
-                    session.decision_id == topology.topology_authorization.decision_id
-                        && session.proposal.session_id == topology.topology_authorization.session_id
-                })
-                || !snapshot
-                    .rendezvous
-                    .accepted_receipts
-                    .iter()
-                    .any(|receipt| receipt.receipt_id == topology.rendezvous_receipt_id)
-        })
-    {
-        return Err(invalid_snapshot("signed topology provenance"));
+            .map(ManifoldSignedPeerTopologyAuthorizationV2::decision_id),
+    ) {
+        return Err(invalid_snapshot("signed topology decision identity"));
+    }
+    for topology in &snapshot.signed_topology_authorizations {
+        let session = snapshot
+            .peer_sessions
+            .sessions
+            .iter()
+            .find(|session| {
+                session.session_id() == topology.session_id()
+                    && session.decision_id() == topology.decision_id()
+            })
+            .ok_or_else(|| invalid_snapshot("signed topology session provenance"))?;
+        match (topology, session) {
+            (
+                ManifoldSignedPeerTopologyAuthorizationV2::WifiDirect(topology),
+                ManifoldAcceptedPeerSessionV2::WifiDirect(_),
+            ) => {
+                if topology.schema_id.as_str() != SIGNED_PEER_TOPOLOGY_AUTHORIZATION_SCHEMA
+                    || topology.topology_authorization.schema_id.as_str()
+                        != PEER_TOPOLOGY_AUTHORIZATION_SCHEMA
+                    || !snapshot
+                        .rendezvous
+                        .accepted_receipts
+                        .iter()
+                        .any(|receipt| receipt.receipt_id == topology.rendezvous_receipt_id)
+                {
+                    return Err(invalid_snapshot("Wi-Fi signed topology provenance"));
+                }
+            }
+            (
+                ManifoldSignedPeerTopologyAuthorizationV2::CommonLan(topology),
+                ManifoldAcceptedPeerSessionV2::CommonLan(session),
+            ) => {
+                if !topology.authorized
+                    || topology.session_id != session.proposal.session_id
+                    || topology.decision_id != session.decision_id
+                    || !snapshot
+                        .reciprocal_ed25519
+                        .accepted_receipts
+                        .iter()
+                        .any(|receipt| {
+                            matches!(receipt, ManifoldReciprocalEd25519ReceiptV3::CommonLan(value)
+                            if value.receipt_id == topology.reciprocal_receipt_id)
+                        })
+                {
+                    return Err(invalid_snapshot("common-LAN signed topology provenance"));
+                }
+            }
+            _ => return Err(invalid_snapshot("session/topology variant mismatch")),
+        }
     }
     if snapshot.event_sequence != snapshot.audit_events.len() as u64 {
         return Err(invalid_snapshot("audit sequence/count mismatch"));
