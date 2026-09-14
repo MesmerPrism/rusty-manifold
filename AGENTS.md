@@ -46,16 +46,17 @@ it must not define Lattice relation semantics or default to legacy
 9. `docs/PEER_MESH_AUTHORITY.md`
 10. `docs/PEER_RUNTIME_HOST.md`
 11. `docs/MEDIA_SESSION_AUTHORITY.md`
-12. `docs/RUNTIME_HOST.md`
-13. `docs/BROKER_PRODUCTS.md`
-14. `docs/BROKER_ADAPTERS.md`
-15. `docs/ADMISSION.md`
-16. `docs/LOCAL_CONTROL_AUTHORITY.md`
-17. `docs/CONNECTION_HUB_AUTHORITY.md`
-18. `docs/IMPLEMENTATION_PLAN.md`
-19. `docs/MODULE_PACKAGE_STRATEGY.md`
-20. `docs/SCHEMA_EVOLUTION.md`
-21. `fixtures/README.md`
+12. `docs/pair-media-route-authority.md`
+13. `docs/RUNTIME_HOST.md`
+14. `docs/BROKER_PRODUCTS.md`
+15. `docs/BROKER_ADAPTERS.md`
+16. `docs/ADMISSION.md`
+17. `docs/LOCAL_CONTROL_AUTHORITY.md`
+18. `docs/CONNECTION_HUB_AUTHORITY.md`
+19. `docs/IMPLEMENTATION_PLAN.md`
+20. `docs/MODULE_PACKAGE_STRATEGY.md`
+21. `docs/SCHEMA_EVOLUTION.md`
+22. `fixtures/README.md`
 
 ## Architecture Rules
 
@@ -79,6 +80,10 @@ it must not define Lattice relation semantics or default to legacy
   Manifold owns mesh revision, deterministic coordinator, route ranking,
   split-brain rejection, expiry, revocation, direct-lane eligibility, and
   audit. Advisory gossip is never direct-route or media authority.
+- Pair media route authority is independent of mesh membership and never
+  exports the three-peer mesh minimum to pair consumers. Snapshot v5 products
+  opt in only with the complete pair command bundle; see
+  `docs/pair-media-route-authority.md`.
 - Products opt into `rusty-manifold-peer-runtime-host` at compile time when
   they need one restartable owner for accepted peer status, enrollment,
   signed rendezvous, session/mesh, signed topology, direct-lane lease, replay,

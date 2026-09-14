@@ -25,6 +25,11 @@ three-to-32-peer membership, elects a canonical coordinator, ranks
 authenticated direct routes, rejects split brain, and owns expiry/revocation
 and audit. Advisory gossip remains status-only and cannot schedule media.
 
+[Pair media route authority](docs/pair-media-route-authority.md) grants one
+directional media leg between the two peers in a current signed session. It is
+independent of mesh membership and the three-peer mesh minimum. Peer Runtime
+Host snapshot v5 enables it only through an explicit complete command bundle.
+
 The opt-in [Peer Runtime Host](docs/PEER_RUNTIME_HOST.md) composes accepted peer
 status, enrollment, signed rendezvous, peer session/mesh, topology, and real
 direct-lane lease plus product-bound media-session authorities into one restartable snapshot and audit

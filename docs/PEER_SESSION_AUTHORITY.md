@@ -41,3 +41,14 @@ cargo test -p rusty-manifold-peer
 Canonical and damaged fixtures live under `fixtures/peer-session/` and
 `fixtures/damaged/peer-session-*.json`. Runtime BLE and Wi-Fi Direct adapters
 belong in downstream platform repos.
+
+The active v2 state adds a strict tagged common-LAN session while preserving
+the public v1 Wi-Fi Direct types and behavior. A common-LAN session binds the
+same two enrolled identities to their reciprocal Ed25519 receipt and exact
+signed transport record. The record contains two advertised listening
+endpoints and a packaged route-configuration digest; it does not claim that
+Manifold observed the operating-system network. Wi-Fi and common-LAN reviews
+share one authority revision and replay/revocation history. Current validation
+requires exact proposal, decision, pair, signer keys, reciprocal receipt,
+transport, authorization interval, and ready peer status. Unknown topology
+tags and extra tagged-envelope fields fail deserialization.

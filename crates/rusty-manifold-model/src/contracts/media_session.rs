@@ -6,6 +6,8 @@ use crate::{DottedId, Revision, SchemaId};
 
 /// Accepted source-neutral media-session descriptor schema.
 pub const MANIFOLD_MEDIA_SESSION_SCHEMA: &str = "rusty.manifold.media.session_descriptor.v1";
+/// One directional media route-leg descriptor under an accepted media session.
+pub const MANIFOLD_MEDIA_ROUTE_LEG_SCHEMA: &str = "rusty.manifold.media.route_leg_descriptor.v1";
 /// Required plane for high-rate media carried outside Manifold JSON.
 pub const MANIFOLD_BINARY_MEDIA_PLANE: &str = "binary-media";
 
@@ -41,6 +43,72 @@ pub struct ManifoldMediaSessionDescriptor {
     /// Whether a legacy remote-camera contract is projected through an
     /// explicit compatibility adapter.
     pub remote_camera_compatibility: bool,
+}
+
+/// Source-neutral resources for one directional leg. Peer/session authority is
+/// joined by `rusty-manifold-peer`; this descriptor carries no authority proof.
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(deny_unknown_fields))]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ManifoldMediaRouteLegDescriptor {
+    /// Schema identifier.
+    #[cfg_attr(feature = "serde", serde(rename = "$schema"))]
+    pub schema_id: SchemaId,
+    /// Stable directional leg subject.
+    pub leg_id: DottedId,
+    /// Subject-scoped route-leg revision.
+    pub leg_revision: Revision,
+    /// Peer that produces this direction.
+    pub source_peer_id: DottedId,
+    /// Peer that consumes this direction.
+    pub sink_peer_id: DottedId,
+    /// Exact source resource from the accepted media descriptor.
+    pub source_id: DottedId,
+    /// Exact ordered processor subset from the accepted media descriptor.
+    pub processor_ids: Vec<DottedId>,
+    /// Exact route resource from the accepted media descriptor.
+    pub route_id: DottedId,
+    /// Exact sink resource from the accepted media descriptor.
+    pub sink_id: DottedId,
+    /// Exact non-empty ordered stream subset from the accepted media descriptor.
+    pub stream_ids: Vec<DottedId>,
+}
+
+impl ManifoldMediaRouteLegDescriptor {
+    /// Validates the descriptor's local direction and canonical-set invariants.
+    pub fn validate(&self) -> Result<(), Vec<ManifoldMediaSessionValidationError>> {
+        let mut errors = Vec::new();
+        if self.schema_id.as_str() != MANIFOLD_MEDIA_ROUTE_LEG_SCHEMA {
+            errors.push(ManifoldMediaSessionValidationError::new(
+                "unsupported Manifold media route-leg schema",
+            ));
+        }
+        if self.source_peer_id == self.sink_peer_id {
+            errors.push(ManifoldMediaSessionValidationError::new(
+                "media route-leg source and sink peers must differ",
+            ));
+        }
+        for (label, values, required) in [
+            ("processor_ids", &self.processor_ids, false),
+            ("stream_ids", &self.stream_ids, true),
+        ] {
+            if required && values.is_empty() {
+                errors.push(ManifoldMediaSessionValidationError::new(format!(
+                    "{label} must not be empty"
+                )));
+            }
+            if values.windows(2).any(|pair| pair[0] >= pair[1]) {
+                errors.push(ManifoldMediaSessionValidationError::new(format!(
+                    "{label} must be a strict sorted set"
+                )));
+            }
+        }
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
+    }
 }
 
 /// Validation failure for a source-neutral media-session descriptor.
