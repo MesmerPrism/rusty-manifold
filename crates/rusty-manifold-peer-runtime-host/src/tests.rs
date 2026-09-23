@@ -776,6 +776,34 @@ fn fresh_media_revoker_adoption_rejects_stale_foreign_and_damaged_authority() {
     assert_eq!(host.snapshot(), &before);
 }
 
+#[test]
+fn fresh_media_revoker_adoption_request_rejects_runtime_snapshot_splicing() {
+    let host = fixture_host();
+    let (request, _) = fresh_revoker_issue(
+        &host,
+        "operator.media-revoker",
+        MEDIA_RUNTIME_LEASE_SCOPE_ID,
+        "snapshot-splice",
+    );
+    let mut outer = serde_json::to_value(&request).expect("typed request JSON");
+    outer["media_command_runtime"] =
+        serde_json::to_value(&host.snapshot().media_command_runtime).expect("runtime JSON");
+    assert!(
+        serde_json::from_value::<ManifoldPeerRuntimeTrustedMediaRevokerLeaseAdoptionRequest>(outer)
+            .is_err()
+    );
+
+    let mut nested = serde_json::to_value(request).expect("typed request JSON");
+    nested["runtime_adoption"]["leases"] =
+        serde_json::to_value(&host.snapshot().media_command_runtime.leases).expect("lease JSON");
+    assert!(
+        serde_json::from_value::<ManifoldPeerRuntimeTrustedMediaRevokerLeaseAdoptionRequest>(
+            nested
+        )
+        .is_err()
+    );
+}
+
 fn enroll_pair(host: &mut ManifoldPeerRuntimeHost) -> (SigningKey, SigningKey) {
     let alpha_key = key(7);
     let beta_key = key(11);
