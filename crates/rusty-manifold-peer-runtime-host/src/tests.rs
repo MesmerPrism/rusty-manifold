@@ -71,8 +71,11 @@ use rusty_manifold_peer::{
     SIGNED_RENDEZVOUS_EVIDENCE_SCHEMA,
 };
 use rusty_manifold_runtime_host::{
-    ManifoldRuntimeCommandDescriptor, ManifoldRuntimeLease, ManifoldRuntimeRejectionReason,
-    HOST_COMMAND_REQUEST_SCHEMA, LEGACY_HOST_AUDIT_EVENT_V3_SCHEMA, LEGACY_HOST_SNAPSHOT_V3_SCHEMA,
+    ManifoldRuntimeCommandDescriptor, ManifoldRuntimeControlLeaseAdoptionRequest,
+    ManifoldRuntimeControlLeaseAuthorityApplication, ManifoldRuntimeLease,
+    ManifoldRuntimeRejectionReason, HOST_COMMAND_REQUEST_SCHEMA,
+    HOST_CONTROL_LEASE_ADOPTION_REQUEST_SCHEMA, LEGACY_HOST_AUDIT_EVENT_V3_SCHEMA,
+    LEGACY_HOST_SNAPSHOT_V3_SCHEMA,
 };
 use sha2::{Digest, Sha256};
 
@@ -599,6 +602,206 @@ fn fixture_host() -> ManifoldPeerRuntimeHost {
     let expected_epoch = host.snapshot.provider_epoch_id.clone();
     ManifoldPeerRuntimeHost::from_snapshot(host.snapshot, &expected_policy, &expected_epoch)
         .expect("fixture host validates")
+}
+
+fn fresh_revoker_issue(
+    host: &ManifoldPeerRuntimeHost,
+    holder_id: &str,
+    scope_id: &str,
+    suffix: &str,
+) -> (
+    ManifoldPeerRuntimeTrustedMediaRevokerLeaseAdoptionRequest,
+    u64,
+) {
+    let mut prior: ManifoldAuthoritySnapshot = serde_json::from_str(include_str!(
+        "../../../fixtures/authority/synthetic-authority-snapshot.json"
+    ))
+    .expect("prior generic authority");
+    let clock: ManifoldClockSnapshot = serde_json::from_str(include_str!(
+        "../../../fixtures/clock/synthetic-command-review-clock.json"
+    ))
+    .expect("generic authority clock");
+    let capability = id("capability.peer.media-revoker.lease");
+    prior.host_manifest.capabilities.push(capability.clone());
+    let review = prior
+        .review_lease_request(
+            ManifoldControlLeaseRequest {
+                schema_id: schema_id("rusty.manifold.command.lease_request.v1"),
+                request_id: id(&format!("request.peer.revoker.{suffix}")),
+                holder_id: id(holder_id),
+                scope: id(scope_id),
+                expected_revision: prior.authority_revision,
+                requested_ttl_ms: 30_000,
+                required_capability: capability,
+                safety_class: SafetyClass::BoundedMutation,
+            },
+            clock.clone(),
+            vec![id("evidence.peer.revoker.lease")],
+        )
+        .expect("generic lease review");
+    let application = prior
+        .apply_control_lease_authority_review(review)
+        .expect("generic lease application");
+    (
+        ManifoldPeerRuntimeTrustedMediaRevokerLeaseAdoptionRequest {
+            schema_id: schema_id(PEER_RUNTIME_TRUSTED_MEDIA_REVOKER_LEASE_ADOPTION_REQUEST_SCHEMA),
+            expected_peer_event_sequence: host.snapshot().event_sequence,
+            runtime_adoption: ManifoldRuntimeControlLeaseAdoptionRequest {
+                schema_id: schema_id(HOST_CONTROL_LEASE_ADOPTION_REQUEST_SCHEMA),
+                adoption_id: id(&format!("adoption.peer.revoker.{suffix}")),
+                expected_host_authority_revision: host
+                    .snapshot()
+                    .media_command_runtime
+                    .authority_revision,
+                prior_authority_snapshot: prior,
+                application: ManifoldRuntimeControlLeaseAuthorityApplication::Issue(application),
+            },
+        },
+        u64::try_from(clock.wall_unix_ms).expect("positive clock"),
+    )
+}
+
+#[test]
+fn fresh_media_revoker_adoption_is_atomic_current_and_non_derivative() {
+    let (mut host, media_decision_id) = pair_host_without_mesh();
+    let route_request = pair_route_request(
+        &host,
+        "request.pair-route.revoker-adoption.001",
+        "runtime.request.pair-route.revoker-adoption.001",
+        "leg.revoker-adoption",
+        1,
+        "peer.alpha",
+        "peer.beta",
+        "session.peer.pair-only.001",
+        media_decision_id,
+        20_000,
+    );
+    assert!(issue_pair_route(&mut host, &route_request, 4_100).accepted);
+    host.snapshot
+        .media_command_runtime
+        .leases
+        .retain(|lease| lease.holder_id != id("operator.media-revoker"));
+    let policy = host.snapshot().trust_policy.clone();
+    let epoch = host.snapshot().provider_epoch_id.clone();
+    let mut host = ManifoldPeerRuntimeHost::from_snapshot(host.snapshot, &policy, &epoch)
+        .expect("revoker-free host");
+    let before = host.snapshot().clone();
+    let (request, now_ms) = fresh_revoker_issue(
+        &host,
+        "operator.media-revoker",
+        MEDIA_RUNTIME_LEASE_SCOPE_ID,
+        "accepted",
+    );
+    let receipt = host
+        .adopt_trusted_media_revoker_control_lease(&request, now_ms)
+        .expect("typed fresh revoker issue");
+    assert!(receipt.runtime_adoption.applied);
+    assert!(receipt.lease.derivative_binding.is_none());
+    assert_eq!(receipt.revoker_id, id("operator.media-revoker"));
+    assert_eq!(
+        receipt.resulting_peer_event_sequence,
+        before.event_sequence + 1
+    );
+    assert_eq!(host.snapshot().accepted_peers, before.accepted_peers);
+    assert_eq!(host.snapshot().peer_sessions, before.peer_sessions);
+    assert_eq!(host.snapshot().pair_media_routes, before.pair_media_routes);
+    let replay_before = host.snapshot().clone();
+    assert!(host
+        .adopt_trusted_media_revoker_control_lease(&request, now_ms)
+        .is_err());
+    assert_eq!(host.snapshot(), &replay_before);
+    let restored = ManifoldPeerRuntimeHost::restart_from_json(
+        &host.snapshot_json().expect("snapshot JSON"),
+        &policy,
+        &epoch,
+    )
+    .expect("typed adoption survives restart");
+    assert_eq!(restored.snapshot(), host.snapshot());
+}
+
+#[test]
+fn fresh_media_revoker_adoption_rejects_stale_foreign_and_damaged_authority() {
+    let mut host = fixture_host();
+    let before = host.snapshot().clone();
+    let (request, now_ms) = fresh_revoker_issue(
+        &host,
+        "operator.media-revoker",
+        MEDIA_RUNTIME_LEASE_SCOPE_ID,
+        "stale",
+    );
+    assert!(host
+        .adopt_trusted_media_revoker_control_lease(&request, now_ms + 30_001)
+        .is_err());
+    assert_eq!(host.snapshot(), &before);
+    let mut stale = request.clone();
+    stale.expected_peer_event_sequence += 1;
+    assert!(host
+        .adopt_trusted_media_revoker_control_lease(&stale, now_ms)
+        .is_err());
+    assert_eq!(host.snapshot(), &before);
+    let (foreign, _) = fresh_revoker_issue(
+        &host,
+        "operator.foreign",
+        MEDIA_RUNTIME_LEASE_SCOPE_ID,
+        "foreign",
+    );
+    assert!(host
+        .adopt_trusted_media_revoker_control_lease(&foreign, now_ms)
+        .is_err());
+    let (wrong_scope, _) = fresh_revoker_issue(
+        &host,
+        "operator.media-revoker",
+        DIRECT_RUNTIME_LEASE_SCOPE_ID,
+        "wrong-scope",
+    );
+    assert!(host
+        .adopt_trusted_media_revoker_control_lease(&wrong_scope, now_ms)
+        .is_err());
+    let mut forged = request;
+    let ManifoldRuntimeControlLeaseAuthorityApplication::Issue(application) =
+        &mut forged.runtime_adoption.application
+    else {
+        panic!("issue fixture");
+    };
+    application
+        .review
+        .audit_event
+        .accepted
+        .as_mut()
+        .expect("accepted")
+        .holder_id = id("operator.foreign");
+    assert!(host
+        .adopt_trusted_media_revoker_control_lease(&forged, now_ms)
+        .is_err());
+    assert_eq!(host.snapshot(), &before);
+}
+
+#[test]
+fn fresh_media_revoker_adoption_request_rejects_runtime_snapshot_splicing() {
+    let host = fixture_host();
+    let (request, _) = fresh_revoker_issue(
+        &host,
+        "operator.media-revoker",
+        MEDIA_RUNTIME_LEASE_SCOPE_ID,
+        "snapshot-splice",
+    );
+    let mut outer = serde_json::to_value(&request).expect("typed request JSON");
+    outer["media_command_runtime"] =
+        serde_json::to_value(&host.snapshot().media_command_runtime).expect("runtime JSON");
+    assert!(
+        serde_json::from_value::<ManifoldPeerRuntimeTrustedMediaRevokerLeaseAdoptionRequest>(outer)
+            .is_err()
+    );
+
+    let mut nested = serde_json::to_value(request).expect("typed request JSON");
+    nested["runtime_adoption"]["leases"] =
+        serde_json::to_value(&host.snapshot().media_command_runtime.leases).expect("lease JSON");
+    assert!(
+        serde_json::from_value::<ManifoldPeerRuntimeTrustedMediaRevokerLeaseAdoptionRequest>(
+            nested
+        )
+        .is_err()
+    );
 }
 
 fn enroll_pair(host: &mut ManifoldPeerRuntimeHost) -> (SigningKey, SigningKey) {

@@ -81,6 +81,20 @@ reimplement enrollment, signature, session, mesh, route, or lease decisions.
   the exact retained grant, provider epoch, runtime specification, resources,
   command digest, and effect receipt. Wrong-target, stale, or replayed cleanup
   leaves the pending handle unchanged.
+- A trusted media revoker can acquire a fresh, independent control lease
+  through `adopt_trusted_media_revoker_control_lease`. The peer host accepts
+  only a current typed Manifold authority `Issue` application for a holder in
+  its trusted-revoker policy and its exact media Runtime Host lease scope.
+  The embedded Runtime Host revalidates the application against its supplied
+  prior authority snapshot and derives the single lease itself. The peer host
+  bounds issue age and remaining lifetime, rejects media-grant and retained
+  route-lease identity aliases, and commits the Runtime Host delta and peer
+  audit together after complete snapshot validation. Peer, session, and route
+  state is retained byte-for-byte. The source adapter must own and synchronize
+  the Manifold authority snapshot that produced the application; the peer host
+  cannot attest to an external authority's current state from a detached
+  application alone. The resulting lease has no Broker derivative binding and
+  does not itself complete platform cleanup.
 - The Runtime Host joins an exact converged Broker barrier by provider epoch,
   application, lease, and consumer identity. It revokes dependent peer media
   decisions, sessions, routes, and streams, then atomically removes complete
