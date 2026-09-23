@@ -106,7 +106,9 @@ use rusty_manifold_peer::{
     SIGNED_PEER_SESSION_REVIEW_SCHEMA, SIGNED_PEER_TOPOLOGY_AUTHORIZATION_SCHEMA,
 };
 use rusty_manifold_runtime_host::{
-    ManifoldRuntimeAuditKind, ManifoldRuntimeCommandRequest, ManifoldRuntimeDerivativeLeaseBinding,
+    ManifoldRuntimeAuditKind, ManifoldRuntimeCommandRequest,
+    ManifoldRuntimeControlLeaseAdoptionReceipt, ManifoldRuntimeControlLeaseAdoptionRequest,
+    ManifoldRuntimeControlLeaseAuthorityApplication, ManifoldRuntimeDerivativeLeaseBinding,
     ManifoldRuntimeDerivativeLeaseRevocationReceipt,
     ManifoldRuntimeDerivativeLeaseRevocationRequest, ManifoldRuntimeDispatchOutcome,
     ManifoldRuntimeHost, ManifoldRuntimeHostSnapshot, ManifoldRuntimeLease,
@@ -163,6 +165,14 @@ pub const PEER_RUNTIME_BROKER_EPOCH_ROLLOVER_RECEIPT_SCHEMA: &str =
 /// Explicit peer Runtime Host snapshot migration receipt schema.
 pub const PEER_RUNTIME_HOST_SNAPSHOT_MIGRATION_RECEIPT_SCHEMA: &str =
     "rusty.manifold.peer.runtime_host.snapshot_migration_receipt.v1";
+/// Narrow typed adoption of a fresh independent media revoker control lease.
+pub const PEER_RUNTIME_TRUSTED_MEDIA_REVOKER_LEASE_ADOPTION_REQUEST_SCHEMA: &str =
+    "rusty.manifold.peer.runtime_host.trusted_media_revoker_lease_adoption_request.v1";
+/// Receipt for a validated revoker lease added to the embedded Runtime Host.
+pub const PEER_RUNTIME_TRUSTED_MEDIA_REVOKER_LEASE_ADOPTION_RECEIPT_SCHEMA: &str =
+    "rusty.manifold.peer.runtime_host.trusted_media_revoker_lease_adoption_receipt.v1";
+const MAX_TRUSTED_MEDIA_REVOKER_LEASE_AGE_MS: u64 = 30_000;
+const MAX_TRUSTED_MEDIA_REVOKER_LEASE_TTL_MS: u64 = 120_000;
 const PEER_RUNTIME_CONVERGENCE_RECEIPT_DIGEST_DOMAIN: &str =
     "rusty.manifold.peer.runtime_host.convergence_receipt.sha256.v1";
 const PEER_RUNTIME_TERMINAL_CLEANUP_RECEIPT_DIGEST_DOMAIN: &str =
@@ -261,6 +271,8 @@ pub enum ManifoldPeerRuntimeAuditKind {
     MediaSessionTermination,
     /// Explicit media-session expiry sweep.
     MediaSessionExpiry,
+    /// Independently validated non-derivative control lease for a trusted media revoker.
+    TrustedMediaRevokerLeaseAdoption,
     /// Outer broker bounded use minted an inner Runtime Host lease.
     BrokerLeaseAdmission,
     /// Inner Runtime Host lease released after stop/revoke.
@@ -291,6 +303,43 @@ pub enum ManifoldPeerRuntimeAuditKind {
     PairMediaRouteExpiry,
     /// Terminal pair media route cleanup acknowledgement.
     PairMediaRouteCleanup,
+}
+
+/// A product-owned control-lease authority application offered to the peer
+/// host's encapsulated media Runtime Host. No caller-supplied lease set is read.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldPeerRuntimeTrustedMediaRevokerLeaseAdoptionRequest {
+    /// Schema.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Compare-and-swap guard for all peer state, including retained routes.
+    pub expected_peer_event_sequence: u64,
+    /// Generic authority's exact typed issue application and prior snapshot.
+    pub runtime_adoption: ManifoldRuntimeControlLeaseAdoptionRequest,
+}
+
+/// Evidence of one atomic peer/nested-Runtime-Host revoker adoption.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldPeerRuntimeTrustedMediaRevokerLeaseAdoptionReceipt {
+    /// Schema.
+    #[serde(rename = "$schema")]
+    pub schema_id: SchemaId,
+    /// Owning peer host.
+    pub peer_host_id: DottedId,
+    /// Owning provider process epoch.
+    pub provider_epoch_id: DottedId,
+    /// Trusted requester that holds the new lease.
+    pub revoker_id: DottedId,
+    /// Exact added control lease.
+    pub lease: ManifoldRuntimeLease,
+    /// Peer event sequence before adoption.
+    pub prior_peer_event_sequence: u64,
+    /// Peer event sequence after adoption.
+    pub resulting_peer_event_sequence: u64,
+    /// Generic Runtime Host's independently validated application receipt.
+    pub runtime_adoption: ManifoldRuntimeControlLeaseAdoptionReceipt,
 }
 
 /// Append-only audit record spanning all peer authority families.
@@ -950,6 +999,147 @@ impl ManifoldPeerRuntimeHost {
     #[must_use]
     pub const fn snapshot(&self) -> &ManifoldPeerRuntimeHostSnapshot {
         &self.snapshot
+    }
+
+    /// Adopts one newly issued, non-derivative media control lease for a
+    /// policy-trusted revoker through the encapsulated Runtime Host. The generic
+    /// authority application is revalidated by Runtime Host; callers cannot
+    /// replace its lease set or mutate the peer snapshot directly.
+    ///
+    /// # Errors
+    /// Rejects stale peer state, non-issue or damaged authority applications,
+    /// foreign/derivative/expired leases, target-identity aliases, and capacity
+    /// exhaustion without changing this host.
+    pub fn adopt_trusted_media_revoker_control_lease(
+        &mut self,
+        request: &ManifoldPeerRuntimeTrustedMediaRevokerLeaseAdoptionRequest,
+        now_ms: u64,
+    ) -> Result<
+        ManifoldPeerRuntimeTrustedMediaRevokerLeaseAdoptionReceipt,
+        ManifoldPeerRuntimeHostError,
+    > {
+        self.ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::MediaSession)?;
+        if request.schema_id.as_str()
+            != PEER_RUNTIME_TRUSTED_MEDIA_REVOKER_LEASE_ADOPTION_REQUEST_SCHEMA
+            || request.expected_peer_event_sequence != self.snapshot.event_sequence
+            || now_ms == 0
+        {
+            return Err(ManifoldPeerRuntimeHostError::Authority(
+                "trusted revoker adoption request is stale or malformed".to_owned(),
+            ));
+        }
+        self.ensure_mutation_source_unused(
+            &ManifoldPeerRuntimeAuditKind::TrustedMediaRevokerLeaseAdoption,
+            &request.runtime_adoption.adoption_id,
+        )?;
+        self.ensure_capacity_preserving_pair_obligations(
+            &self.snapshot.media_command_runtime,
+            &self.snapshot.pair_media_routes,
+            1,
+        )?;
+        let ManifoldRuntimeControlLeaseAuthorityApplication::Issue(application) =
+            &request.runtime_adoption.application
+        else {
+            return Err(ManifoldPeerRuntimeHostError::Authority(
+                "trusted revoker requires a fresh control-lease issue".to_owned(),
+            ));
+        };
+        let accepted = application.review.accepted.as_ref().ok_or_else(|| {
+            ManifoldPeerRuntimeHostError::Authority(
+                "trusted revoker issue has no accepted lease".to_owned(),
+            )
+        })?;
+        let issued_at_ms = u64::try_from(
+            application.review.audit_event.recorded_clock.wall_unix_ms,
+        )
+        .map_err(|_| ManifoldPeerRuntimeHostError::Authority("revoker clock invalid".to_owned()))?;
+        let expected_lease = ManifoldRuntimeLease {
+            lease_id: accepted.lease_id.clone(),
+            scope: accepted.scope.clone(),
+            holder_id: accepted.holder_id.clone(),
+            expires_at_ms: accepted.expires_at_ms,
+            derivative_binding: None,
+        };
+        self.ensure_fresh_trusted_media_revoker_lease(&expected_lease, issued_at_ms, now_ms)?;
+        let mut runtime =
+            ManifoldRuntimeHost::from_snapshot(self.snapshot.media_command_runtime.clone())
+                .map_err(|error| ManifoldPeerRuntimeHostError::Authority(error.to_string()))?;
+        let runtime_receipt = runtime.apply_control_lease_adoption(&request.runtime_adoption);
+        if !runtime_receipt.applied
+            || runtime_receipt.added_lease_ids != [accepted.lease_id.clone()]
+            || !runtime_receipt.renewed_lease_ids.is_empty()
+            || !runtime_receipt.removed_lease_ids.is_empty()
+            || runtime
+                .snapshot()
+                .leases
+                .iter()
+                .find(|lease| lease.lease_id == accepted.lease_id)
+                != Some(&expected_lease)
+        {
+            return Err(ManifoldPeerRuntimeHostError::Authority(
+                "trusted revoker control-lease application rejected".to_owned(),
+            ));
+        }
+        let prior_peer_event_sequence = self.snapshot.event_sequence;
+        let mut next = self.clone();
+        next.snapshot.media_command_runtime = runtime.snapshot().clone();
+        next.record(
+            ManifoldPeerRuntimeAuditKind::TrustedMediaRevokerLeaseAdoption,
+            request.runtime_adoption.adoption_id.clone(),
+            runtime_receipt.prior_host_authority_revision,
+            runtime_receipt.resulting_host_authority_revision,
+            true,
+            None,
+        )?;
+        validate_snapshot(&next.snapshot)?;
+        let receipt = ManifoldPeerRuntimeTrustedMediaRevokerLeaseAdoptionReceipt {
+            schema_id: schema(PEER_RUNTIME_TRUSTED_MEDIA_REVOKER_LEASE_ADOPTION_RECEIPT_SCHEMA),
+            peer_host_id: next.snapshot.host_id.clone(),
+            provider_epoch_id: next.snapshot.provider_epoch_id.clone(),
+            revoker_id: accepted.holder_id.clone(),
+            lease: expected_lease,
+            prior_peer_event_sequence,
+            resulting_peer_event_sequence: next.snapshot.event_sequence,
+            runtime_adoption: runtime_receipt,
+        };
+        *self = next;
+        Ok(receipt)
+    }
+
+    fn ensure_fresh_trusted_media_revoker_lease(
+        &self,
+        lease: &ManifoldRuntimeLease,
+        issued_at_ms: u64,
+        now_ms: u64,
+    ) -> Result<(), ManifoldPeerRuntimeHostError> {
+        if !self
+            .snapshot
+            .trust_policy
+            .trusted_media_revoker_ids
+            .contains(&lease.holder_id)
+            || lease.scope != self.snapshot.trust_policy.media_runtime_lease_scope_id
+            || now_ms < issued_at_ms
+            || now_ms.saturating_sub(issued_at_ms) > MAX_TRUSTED_MEDIA_REVOKER_LEASE_AGE_MS
+            || lease.expires_at_ms <= now_ms
+            || lease.expires_at_ms.saturating_sub(now_ms) > MAX_TRUSTED_MEDIA_REVOKER_LEASE_TTL_MS
+            || self
+                .snapshot
+                .trust_policy
+                .media_client_grants
+                .iter()
+                .any(|grant| grant.lease_id == lease.lease_id)
+            || self
+                .snapshot
+                .pair_media_routes
+                .routes
+                .iter()
+                .any(|route| route.authority_runtime_lease_id() == &lease.lease_id)
+        {
+            return Err(ManifoldPeerRuntimeHostError::Authority(
+                "trusted revoker lease is not current, scoped, independent, or distinct".to_owned(),
+            ));
+        }
+        Ok(())
     }
 
     /// Reviews one low-rate peer status proposal against host-owned state.
