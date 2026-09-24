@@ -35,28 +35,14 @@ it must not define Lattice relation semantics or default to legacy
 
 ## Read Order
 
-1. `README.md`
-2. `docs/ARCHITECTURE.md`
-3. `docs/GLOSSARY.md`
-4. `docs/PORTS_AND_ADAPTERS.md`
-5. `docs/COMMANDS_LEASES_AND_AUTHORITY.md`
-6. `docs/PEER_IDENTITY_AND_STATUS_AUTHORITY.md`
-7. `docs/STREAM_OBSERVATION_AUTHORITY.md`
-8. `docs/PEER_SESSION_AUTHORITY.md`
-9. `docs/PEER_MESH_AUTHORITY.md`
-10. `docs/PEER_RUNTIME_HOST.md`
-11. `docs/MEDIA_SESSION_AUTHORITY.md`
-12. `docs/pair-media-route-authority.md`
-13. `docs/RUNTIME_HOST.md`
-14. `docs/BROKER_PRODUCTS.md`
-15. `docs/BROKER_ADAPTERS.md`
-16. `docs/ADMISSION.md`
-17. `docs/LOCAL_CONTROL_AUTHORITY.md`
-18. `docs/CONNECTION_HUB_AUTHORITY.md`
-19. `docs/IMPLEMENTATION_PLAN.md`
-20. `docs/MODULE_PACKAGE_STRATEGY.md`
-21. `docs/SCHEMA_EVOLUTION.md`
-22. `fixtures/README.md`
+Start with this file and `README.md`. Then read the owning contract for the
+task, its linked dependencies, and the relevant source or fixture README.
+Use `docs/ARCHITECTURE.md` and `docs/GLOSSARY.md` when ownership or terminology
+is unclear. For cross-cutting changes, follow affected links from those
+documents and `docs/PORTS_AND_ADAPTERS.md`. Read `docs/IMPLEMENTATION_PLAN.md`
+for roadmap work, `docs/SCHEMA_EVOLUTION.md` for schema changes, and
+`fixtures/README.md` for fixture work. A bounded edit does not require every
+authority document.
 
 ## Architecture Rules
 
@@ -266,7 +252,10 @@ it must not define Lattice relation semantics or default to legacy
   `Morphospace*` core types by default.
 ## Validation
 
-Run the narrow checks before committing:
+Choose checks for the affected files and behavior before committing. Use
+`docs/VALIDATION.md` for the repo-local full gate and focused suites. For a
+documentation-only routing change, check links and diff scope. The following
+commands cover source, fixture, and schema changes as applicable:
 
 ```powershell
 cargo fmt --all --check
@@ -278,5 +267,5 @@ cargo run -p rusty-manifold-fixtures --bin rusty-manifold-fixtures -- diff --che
 cargo run -p rusty-manifold-schema -- export --check
 ```
 
-When schema tooling exists, add deterministic schema export and fixture
-validation checks to this list.
+When schema tooling exists, include deterministic schema export and fixture
+validation for changes that affect those surfaces.
