@@ -108,6 +108,13 @@ pub const MAX_PAIR_MEDIA_ROUTE_RECORDS: usize = 4_096;
 /// Maximum replay-protected mutation request identities.
 pub const MAX_PAIR_MEDIA_ROUTE_REQUEST_IDS: usize = 8_192;
 const MAX_PAIR_MEDIA_ROUTE_TTL_MS: u64 = 120_000;
+// Common-LAN media has a 110-second rendered-frame run plus a bounded
+// reconnect/cleanup window. Wi-Fi Direct keeps its existing route ceiling.
+const MAX_COMMON_LAN_PAIR_MEDIA_ROUTE_TTL_MS: u64 = 180_000;
+
+fn route_lifetime_is_bounded(expires_at_ms: u64, now_ms: u64, max_ttl_ms: u64) -> bool {
+    expires_at_ms > now_ms && expires_at_ms.saturating_sub(now_ms) <= max_ttl_ms
+}
 
 /// Lifecycle of a retained directional route grant.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1455,11 +1462,13 @@ fn issue_common_lan_route(
             rejected(ManifoldPairMediaRouteRejectionReason::StaleLegRevision),
         );
     }
-    if request.expires_at_ms <= now_ms
-        || request.expires_at_ms.saturating_sub(now_ms) > MAX_PAIR_MEDIA_ROUTE_TTL_MS
-        || peer
-            .expires_at_ms
-            .map_or(true, |expiry| request.expires_at_ms > expiry)
+    if !route_lifetime_is_bounded(
+        request.expires_at_ms,
+        now_ms,
+        MAX_COMMON_LAN_PAIR_MEDIA_ROUTE_TTL_MS,
+    ) || peer
+        .expires_at_ms
+        .map_or(true, |expiry| request.expires_at_ms > expiry)
         || request.expires_at_ms > media.expires_at_ms
         || request.expires_at_ms > request.expected_runtime_lease_expires_at_ms
     {
@@ -3456,8 +3465,7 @@ fn validate_issue<'a>(
     }) {
         return Err(ManifoldPairMediaRouteRejectionReason::StaleLegRevision);
     }
-    if request.expires_at_ms <= now_ms
-        || request.expires_at_ms.saturating_sub(now_ms) > MAX_PAIR_MEDIA_ROUTE_TTL_MS
+    if !route_lifetime_is_bounded(request.expires_at_ms, now_ms, MAX_PAIR_MEDIA_ROUTE_TTL_MS)
         || request.expires_at_ms > peer.proposal.expires_at_ms
         || request.expires_at_ms > media.expires_at_ms
         || request.expires_at_ms > request.expected_runtime_lease_expires_at_ms
@@ -3942,6 +3950,36 @@ fn hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn common_lan_route_window_is_bounded_without_extending_wifi_direct() {
+        let issued_at_ms = 10_000;
+        assert!(route_lifetime_is_bounded(
+            issued_at_ms + MAX_COMMON_LAN_PAIR_MEDIA_ROUTE_TTL_MS,
+            issued_at_ms,
+            MAX_COMMON_LAN_PAIR_MEDIA_ROUTE_TTL_MS,
+        ));
+        assert!(!route_lifetime_is_bounded(
+            issued_at_ms + MAX_COMMON_LAN_PAIR_MEDIA_ROUTE_TTL_MS + 1,
+            issued_at_ms,
+            MAX_COMMON_LAN_PAIR_MEDIA_ROUTE_TTL_MS,
+        ));
+        assert!(!route_lifetime_is_bounded(
+            issued_at_ms,
+            issued_at_ms,
+            MAX_COMMON_LAN_PAIR_MEDIA_ROUTE_TTL_MS,
+        ));
+        assert!(route_lifetime_is_bounded(
+            issued_at_ms + MAX_PAIR_MEDIA_ROUTE_TTL_MS,
+            issued_at_ms,
+            MAX_PAIR_MEDIA_ROUTE_TTL_MS,
+        ));
+        assert!(!route_lifetime_is_bounded(
+            issued_at_ms + MAX_PAIR_MEDIA_ROUTE_TTL_MS + 1,
+            issued_at_ms,
+            MAX_PAIR_MEDIA_ROUTE_TTL_MS,
+        ));
+    }
 
     fn id(value: &str) -> DottedId {
         DottedId::new(value).expect("test id")
