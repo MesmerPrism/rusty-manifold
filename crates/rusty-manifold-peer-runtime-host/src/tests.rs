@@ -571,6 +571,10 @@ fn enrollment_request(
 }
 
 fn fixture_host() -> ManifoldPeerRuntimeHost {
+    fixture_host_with_lifetime(100_000)
+}
+
+fn fixture_host_with_lifetime(expires_at_ms: u64) -> ManifoldPeerRuntimeHost {
     let mesh_case: ManifoldPeerMeshReviewCase = serde_json::from_str(include_str!(
         "../../../fixtures/peer-mesh/three-peer.pass.json"
     ))
@@ -579,15 +583,24 @@ fn fixture_host() -> ManifoldPeerRuntimeHost {
         "../../../fixtures/peer-session/authenticated-ble.pass.json"
     ))
     .expect("session fixture");
+    let mut media_runtime = media_command_runtime();
+    if expires_at_ms != 100_000 {
+        for lease in &mut media_runtime.leases {
+            lease.expires_at_ms = expires_at_ms;
+        }
+    }
     let mut host = ManifoldPeerRuntimeHost::new(
         id("host.peer-runtime.test"),
         trust_policy(),
         id(PROVIDER_EPOCH_ID),
-        media_command_runtime(),
+        media_runtime,
     )
     .expect("host");
     let mut accepted = mesh_case.accepted_peers;
     for peer in &mut accepted.peers {
+        if expires_at_ms != 100_000 {
+            peer.status.expires_at_ms = expires_at_ms;
+        }
         if let Some(session_peer) = session_case
             .accepted_peers
             .peers
@@ -805,13 +818,22 @@ fn fresh_media_revoker_adoption_request_rejects_runtime_snapshot_splicing() {
 }
 
 fn enroll_pair(host: &mut ManifoldPeerRuntimeHost) -> (SigningKey, SigningKey) {
+    enroll_pair_with_expiry(host, 100_000)
+}
+
+fn enroll_pair_with_expiry(
+    host: &mut ManifoldPeerRuntimeHost,
+    expires_at_ms: u64,
+) -> (SigningKey, SigningKey) {
     let alpha_key = key(7);
     let beta_key = key(11);
+    let mut alpha_credential = credential("peer.alpha", "key.peer.alpha.001", 1, &alpha_key);
+    alpha_credential.expires_at_ms = expires_at_ms;
     let alpha = enrollment_request(
         "request.enroll.alpha.001",
         host.snapshot().enrollment.authority_revision,
         ManifoldPeerEnrollmentAction::Enroll {
-            credential: credential("peer.alpha", "key.peer.alpha.001", 1, &alpha_key),
+            credential: alpha_credential,
         },
     );
     assert!(
@@ -819,11 +841,13 @@ fn enroll_pair(host: &mut ManifoldPeerRuntimeHost) -> (SigningKey, SigningKey) {
             .expect("alpha enrollment")
             .applied
     );
+    let mut beta_credential = credential("peer.beta", "key.peer.beta.001", 1, &beta_key);
+    beta_credential.expires_at_ms = expires_at_ms;
     let beta = enrollment_request(
         "request.enroll.beta.001",
         host.snapshot().enrollment.authority_revision,
         ManifoldPeerEnrollmentAction::Enroll {
-            credential: credential("peer.beta", "key.peer.beta.001", 1, &beta_key),
+            credential: beta_credential,
         },
     );
     assert!(
@@ -4555,6 +4579,15 @@ fn common_lan_reciprocal_request(
     alpha_key: &SigningKey,
     beta_key: &SigningKey,
 ) -> rusty_manifold_peer::ManifoldCommonLanReciprocalEd25519ReviewRequest {
+    common_lan_reciprocal_request_with_expiry(host, alpha_key, beta_key, 60_000)
+}
+
+fn common_lan_reciprocal_request_with_expiry(
+    host: &ManifoldPeerRuntimeHost,
+    alpha_key: &SigningKey,
+    beta_key: &SigningKey,
+    expires_at_ms: u64,
+) -> rusty_manifold_peer::ManifoldCommonLanReciprocalEd25519ReviewRequest {
     let credential = |peer: &str| {
         host.snapshot()
             .enrollment
@@ -4602,7 +4635,7 @@ fn common_lan_reciprocal_request(
         transport: common_lan_transport(),
         coordinator_epoch: 23,
         issued_at_ms: 2_500,
-        expires_at_ms: 60_000,
+        expires_at_ms,
     };
     let bytes = rusty_manifold_peer::common_lan_reciprocal_ed25519_context_signing_bytes(&context);
     let digest = rusty_manifold_peer::common_lan_reciprocal_ed25519_context_sha256(&context);
@@ -4626,6 +4659,139 @@ fn common_lan_reciprocal_request(
         responder_signature: signature(&context.responder, beta_key),
         context,
     }
+}
+
+#[test]
+#[allow(clippy::too_many_lines)]
+fn common_lan_route_issue_accepts_180_seconds_and_rejects_one_millisecond_more() {
+    const AUTHORITY_EXPIRY_MS: u64 = 250_000;
+    const ROUTE_ISSUE_MS: u64 = 4_100;
+    const ROUTE_EXPIRY_MS: u64 = ROUTE_ISSUE_MS + 180_000;
+    let mut host = fixture_host_with_lifetime(AUTHORITY_EXPIRY_MS);
+    let (alpha_key, beta_key) = enroll_pair_with_expiry(&mut host, AUTHORITY_EXPIRY_MS);
+    let reciprocal_request =
+        common_lan_reciprocal_request_with_expiry(&host, &alpha_key, &beta_key, 240_000);
+    let reciprocal = host
+        .review_reciprocal_ed25519_v3(
+            &ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(reciprocal_request),
+            3_000,
+        )
+        .expect("signed Common-LAN reciprocal review");
+    let ManifoldReciprocalEd25519ReceiptV3::CommonLan(reciprocal) = reciprocal else {
+        panic!("Common-LAN receipt");
+    };
+    assert!(reciprocal.accepted);
+    let requested_capability_ids = session_proposal(
+        &host,
+        "proposal.unused.common-lan-duration",
+        "session.unused.common-lan-duration",
+    )
+    .requested_capability_ids;
+    let session = ManifoldCommonLanPeerSessionProposal {
+        schema_id: schema_id(rusty_manifold_peer::COMMON_LAN_PEER_SESSION_PROPOSAL_SCHEMA),
+        proposal_id: id("proposal.common-lan-duration.001"),
+        session_id: id("session.common-lan-duration.001"),
+        expected_authority_revision: host.snapshot().peer_sessions.authority_revision,
+        subject_peer_id: id("peer.alpha"),
+        candidate_peer_id: id("peer.beta"),
+        initiator_peer_id: id("peer.alpha"),
+        responder_peer_id: id("peer.beta"),
+        requested_capability_ids,
+        transport: common_lan_transport(),
+        expires_at_ms: 240_000,
+    };
+    let (decision, _) = host
+        .review_common_lan_peer_session(&session, &reciprocal, 3_100)
+        .expect("Common-LAN peer session");
+    assert!(decision.applied, "{decision:?}");
+    let mut acceptance = media_acceptance_request(
+        &host,
+        "request.media.accept.common-lan-duration.001",
+        6,
+        PROVIDER_EPOCH_ID,
+    );
+    acceptance.expires_at_ms = AUTHORITY_EXPIRY_MS;
+    let acceptance_command = media_accept_command(&host, &acceptance);
+    let media = host
+        .review_media_session_acceptance(&acceptance, &acceptance_command, 4_000)
+        .expect("media acceptance");
+    let media_decision_id = media.accepted_session.expect("accepted media").decision_id;
+
+    let make_route = |host: &ManifoldPeerRuntimeHost, suffix: &str, expiry| {
+        ManifoldCommonLanPairMediaRouteRequest {
+            request: pair_route_request(
+                host,
+                &format!("request.route.common-lan-duration.{suffix}"),
+                &format!("runtime.request.route.common-lan-duration.{suffix}"),
+                &format!("leg.common-lan-duration.{suffix}"),
+                1,
+                "peer.alpha",
+                "peer.beta",
+                "session.common-lan-duration.001",
+                media_decision_id.clone(),
+                expiry,
+            ),
+            transport: common_lan_transport(),
+        }
+    };
+    let mut overlong_host = host.clone();
+    let overlong = make_route(&overlong_host, "overlong", ROUTE_EXPIRY_MS + 1);
+    let overlong_command = media_command(
+        &overlong_host,
+        overlong.request.runtime_command_request_id.clone(),
+        PAIR_MEDIA_ROUTE_ISSUE_COMMAND,
+        rusty_manifold_peer::pair_media_route_issue_params_digest_v2(&overlong)
+            .expect("overlong route digest"),
+        TRUSTED_MEDIA_PROPOSER_ID,
+        "lease.runtime.media-test",
+        ROUTE_ISSUE_MS,
+    );
+    let rejected = overlong_host
+        .review_pair_media_route_v2(
+            &ManifoldPairMediaRouteRequestV2::CommonLan(overlong),
+            &overlong_command,
+            ROUTE_ISSUE_MS,
+        )
+        .expect("overlong route review");
+    assert!(matches!(
+        rejected,
+        ManifoldPairMediaRouteReceiptV2::CommonLan(ref receipt)
+            if receipt.route.is_none()
+                && receipt.rejection_reason == Some(ManifoldPairMediaRouteRejectionReason::InvalidExpiry)
+    ));
+    assert!(overlong_host.snapshot().pair_media_routes.routes.is_empty());
+
+    let exact = make_route(&host, "exact", ROUTE_EXPIRY_MS);
+    let exact_command = media_command(
+        &host,
+        exact.request.runtime_command_request_id.clone(),
+        PAIR_MEDIA_ROUTE_ISSUE_COMMAND,
+        rusty_manifold_peer::pair_media_route_issue_params_digest_v2(&exact)
+            .expect("exact route digest"),
+        TRUSTED_MEDIA_PROPOSER_ID,
+        "lease.runtime.media-test",
+        ROUTE_ISSUE_MS,
+    );
+    let accepted = host
+        .review_pair_media_route_v2(
+            &ManifoldPairMediaRouteRequestV2::CommonLan(exact),
+            &exact_command,
+            ROUTE_ISSUE_MS,
+        )
+        .expect("exact route review");
+    let ManifoldPairMediaRouteReceiptV2::CommonLan(accepted) = accepted else {
+        panic!("Common-LAN route receipt");
+    };
+    let grant_id = accepted.route.expect("180-second route accepted").grant_id;
+    assert!(
+        host.validate_pair_media_route_v2(&grant_id, ROUTE_EXPIRY_MS - 1)
+            .current
+    );
+    assert!(
+        !host
+            .validate_pair_media_route_v2(&grant_id, ROUTE_EXPIRY_MS)
+            .current
+    );
 }
 
 #[test]

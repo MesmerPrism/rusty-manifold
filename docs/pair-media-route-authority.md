@@ -87,12 +87,15 @@ route ceilings. These are maximums, not automatic grants: a route still ends
 at the earliest peer-session, signed-topology, accepted-media, or Runtime Host
 lease expiry. Current-route readback rechecks those identities and times.
 
-The Common-LAN bounds reserve a 110-second rendered-frame qualification plus
-up to 70 seconds after route issue for Start, reconnect, and terminal cleanup.
-The longer signed-context window also leaves room for pairing and route setup:
-the observed short-window client had only 111.75 seconds remaining immediately
-after pairing, before route issue or Start. The consumer must still measure its
-actual setup and recovery times and choose shorter expiries where possible.
+The 180-second route ceiling budgets a 110-second rendered-frame qualification
+and at most 70 seconds combined for delay after route issue, Start, reconnect,
+and initiating terminal action while the route remains current. Retained
+cleanup may continue after a route stops being current; this ceiling does not
+prove cleanup completion. The longer signed-context window leaves room for
+pairing and route setup: the observed short-window client had only 111.75
+seconds remaining immediately after pairing, before route issue or Start.
+That is the only measured timing here. The consumer must measure actual Start,
+reconnect, and cleanup times and choose shorter expiries where possible.
 Longer signed authority increases the maximum time a still-current enrolled
 peer can present the same accepted session; signature, nonce/replay, revocation,
 credential, topology, lease, and exact route-lineage checks remain required.
