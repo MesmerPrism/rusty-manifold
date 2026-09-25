@@ -80,6 +80,23 @@ two-device acceptance.
 
 ## Mixed Wi-Fi Direct and common-LAN authority
 
+The Common-LAN reciprocal context permits at most 240 seconds between its
+signed issue and expiry times. A Common-LAN pair route permits at most 180
+seconds from route issue. Wi-Fi Direct retains its 120-second reciprocal and
+route ceilings. These are maximums, not automatic grants: a route still ends
+at the earliest peer-session, signed-topology, accepted-media, or Runtime Host
+lease expiry. Current-route readback rechecks those identities and times.
+
+The Common-LAN bounds reserve a 110-second rendered-frame qualification plus
+up to 70 seconds after route issue for Start, reconnect, and terminal cleanup.
+The longer signed-context window also leaves room for pairing and route setup:
+the observed short-window client had only 111.75 seconds remaining immediately
+after pairing, before route issue or Start. The consumer must still measure its
+actual setup and recovery times and choose shorter expiries where possible.
+Longer signed authority increases the maximum time a still-current enrolled
+peer can present the same accepted session; signature, nonce/replay, revocation,
+credential, topology, lease, and exact route-lineage checks remain required.
+
 The active v2 route state is a closed tagged union over the unchanged Wi-Fi
 Direct v1 record and a common-LAN record. Both variants consume one shared
 authority revision, replay set, clock, route cap, and reserved terminal and

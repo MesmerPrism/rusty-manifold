@@ -53,6 +53,9 @@ const CONTEXT_DOMAIN: &[u8] = b"rusty.manifold.peer.reciprocal_ed25519_context.v
 const COMMON_LAN_CONTEXT_DOMAIN: &[u8] =
     b"rusty.manifold.peer.common_lan_reciprocal_ed25519_context.v1\0";
 const MAX_CONTEXT_TTL_MS: u64 = 120_000;
+// Common-LAN media needs a bounded setup window before a 110-second rendered
+// run. Keep the existing Wi-Fi Direct reciprocal lifetime unchanged.
+const MAX_COMMON_LAN_CONTEXT_TTL_MS: u64 = 240_000;
 const MAX_RECIPROCAL_RECEIPTS: usize = 4_096;
 
 /// Exact current Runtime Host revisions signed by both enrolled devices.
@@ -189,6 +192,124 @@ mod mixed_authority_tests {
             initiator_signature: signature(&context.initiator, alpha),
             responder_signature: signature(&context.responder, beta),
             context,
+        }
+    }
+
+    fn signed_common_with_expiry(
+        enrollment: &ManifoldPeerEnrollmentState,
+        alpha: &SigningKey,
+        beta: &SigningKey,
+        expiry: u64,
+    ) -> ManifoldCommonLanReciprocalEd25519ReviewRequest {
+        let mut request = signed_common(
+            enrollment,
+            &ManifoldReciprocalEd25519AuthorityStateV3::empty(),
+            alpha,
+            beta,
+            "duration",
+        );
+        request.context.expires_at_ms = expiry;
+        let bytes = common_lan_reciprocal_ed25519_context_signing_bytes(&request.context);
+        let hash = common_lan_reciprocal_ed25519_context_sha256(&request.context);
+        request.initiator_signature.context_sha256 = hash.clone();
+        request.initiator_signature.signature_hex =
+            encode_lower_hex(&alpha.sign(&bytes).to_bytes());
+        request.responder_signature.context_sha256 = hash;
+        request.responder_signature.signature_hex = encode_lower_hex(&beta.sign(&bytes).to_bytes());
+        request
+    }
+
+    #[test]
+    fn common_lan_duration_is_bounded_and_wifi_duration_is_unchanged() {
+        let alpha = SigningKey::from_bytes(&[7; 32]);
+        let beta = SigningKey::from_bytes(&[11; 32]);
+        let mut enrollment = super::tests::enrollment(&alpha, &beta);
+        for credential in &mut enrollment.credentials {
+            credential.expires_at_ms = 300_000;
+        }
+        let host = id("host.peer.test");
+        let policy = id("policy.peer.test");
+        let empty = ManifoldReciprocalEd25519AuthorityStateV3::empty();
+        let accepted_request = signed_common_with_expiry(
+            &enrollment,
+            &alpha,
+            &beta,
+            1_000 + MAX_COMMON_LAN_CONTEXT_TTL_MS,
+        );
+        let (accepted_state, accepted_receipt) = review_and_apply_reciprocal_ed25519_v3(
+            &empty,
+            &ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(accepted_request.clone()),
+            super::tests::runtime(&host, &policy, &enrollment),
+            2_000,
+        );
+        assert!(matches!(
+            accepted_receipt,
+            ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref receipt) if receipt.accepted
+        ));
+        assert!(validate_current_reciprocal_ed25519_receipt_v3(
+            &accepted_state,
+            &enrollment,
+            &accepted_receipt,
+            &id("peer.alpha"),
+            &id("peer.beta"),
+            1_000 + MAX_COMMON_LAN_CONTEXT_TTL_MS - 1,
+        )
+        .is_ok());
+        assert!(validate_current_reciprocal_ed25519_receipt_v3(
+            &accepted_state,
+            &enrollment,
+            &accepted_receipt,
+            &id("peer.alpha"),
+            &id("peer.beta"),
+            1_000 + MAX_COMMON_LAN_CONTEXT_TTL_MS,
+        )
+        .is_err());
+        let replayed = review_and_apply_reciprocal_ed25519_v3(
+            &accepted_state,
+            &ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(accepted_request),
+            super::tests::runtime(&host, &policy, &enrollment),
+            2_000,
+        );
+        assert_eq!(replayed.0, accepted_state);
+        assert!(matches!(
+            replayed.1,
+            ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref receipt)
+                if receipt.rejection_reason == Some(ManifoldReciprocalEd25519RejectionReason::Replay)
+        ));
+
+        let overlong = signed_common_with_expiry(
+            &enrollment,
+            &alpha,
+            &beta,
+            1_001 + MAX_COMMON_LAN_CONTEXT_TTL_MS,
+        );
+        let (unchanged, rejected) = review_and_apply_reciprocal_ed25519_v3(
+            &empty,
+            &ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(overlong),
+            super::tests::runtime(&host, &policy, &enrollment),
+            2_000,
+        );
+        assert_eq!(unchanged, empty);
+        assert!(matches!(
+            rejected,
+            ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref receipt)
+                if receipt.rejection_reason == Some(ManifoldReciprocalEd25519RejectionReason::InvalidLifetime)
+        ));
+
+        for (expiry, accepted) in [
+            (1_000 + MAX_CONTEXT_TTL_MS, true),
+            (1_001 + MAX_CONTEXT_TTL_MS, false),
+        ] {
+            let mut wifi = super::tests::context(&enrollment);
+            wifi.expires_at_ms = expiry;
+            let signed = super::tests::signed(wifi, &alpha, &beta);
+            let (_, receipt) = review_and_apply_reciprocal_ed25519(
+                &ManifoldReciprocalEd25519AuthorityState::empty(),
+                &signed,
+                super::tests::runtime(&host, &policy, &enrollment),
+                2_000,
+            );
+            assert_eq!(receipt.accepted, accepted);
         }
     }
 
@@ -1839,7 +1960,8 @@ fn validate_common_lan_review(
     }
     if context.issued_at_ms > now_ms
         || context.expires_at_ms <= now_ms
-        || context.expires_at_ms.saturating_sub(context.issued_at_ms) > MAX_CONTEXT_TTL_MS
+        || context.expires_at_ms.saturating_sub(context.issued_at_ms)
+            > MAX_COMMON_LAN_CONTEXT_TTL_MS
     {
         return Err(ManifoldReciprocalEd25519RejectionReason::InvalidLifetime);
     }
