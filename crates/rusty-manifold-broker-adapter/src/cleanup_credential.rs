@@ -227,6 +227,15 @@ pub struct ManifoldBrokerCleanupSnapshot {
     audit_sha256: Vec<String>,
 }
 impl ManifoldBrokerCleanupSnapshot {
+    /// Read the exact consumed signed event after the held authority has replayed
+    /// and validated this snapshot. This is not a public authorization constructor.
+    pub(crate) fn consumed_credential(&self) -> Option<&ManifoldBrokerCleanupCredential> {
+        match self.events.last()? {
+            Event::Pending { credential, .. } => Some(credential),
+            Event::Challenge(_) => None,
+        }
+    }
+
     pub(crate) fn binding(&self) -> &ManifoldBrokerCleanupBinding {
         &self.binding
     }

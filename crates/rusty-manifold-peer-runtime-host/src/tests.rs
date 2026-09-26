@@ -469,14 +469,25 @@ fn schema_id(value: &str) -> SchemaId {
 fn broker_control_lease_authority(
     lease: &ManifoldRuntimeLease,
 ) -> ManifoldBrokerControlLeaseAuthority {
+    broker_control_lease_authority_at(lease, None)
+}
+
+fn broker_control_lease_authority_at(
+    lease: &ManifoldRuntimeLease,
+    wall_ms: Option<i64>,
+) -> ManifoldBrokerControlLeaseAuthority {
     let mut prior: ManifoldAuthoritySnapshot = serde_json::from_str(include_str!(
         "../../../fixtures/authority/synthetic-authority-snapshot.json"
     ))
     .expect("prior authority snapshot");
-    let clock: ManifoldClockSnapshot = serde_json::from_str(include_str!(
+    let mut clock: ManifoldClockSnapshot = serde_json::from_str(include_str!(
         "../../../fixtures/clock/synthetic-command-review-clock.json"
     ))
     .expect("projection clock");
+    if let Some(wall_ms) = wall_ms {
+        prior.clock_snapshot.wall_unix_ms = wall_ms - 100;
+        clock.wall_unix_ms = wall_ms;
+    }
     let capability = id("capability.broker.peer-runtime.test");
     prior.host_manifest.capabilities.push(capability.clone());
     let suffix = lease
@@ -5185,4 +5196,587 @@ fn common_lan_route_is_mixed_restartable_and_legacy_current_fails_closed() {
         *restarted.snapshot().pair_media_routes.routes[0].cleanup_status(),
         ManifoldPairMediaRouteCleanupStatus::Completed
     );
+}
+
+fn cleanup_live_fixture() -> (ManifoldPeerRuntimeHost, ManifoldBrokerRuntime, DottedId) {
+    let product_lock = resolve_broker_product(&ManifoldBrokerProductSpec {
+        schema_id: schema_id(BROKER_PRODUCT_SPEC_SCHEMA),
+        product_id: id("broker.runtime.media-test"),
+        standalone_enabled: true,
+        embedded_enabled: false,
+        requested_features: vec![ManifoldBrokerFeature::MediaSession],
+    })
+    .expect("outer product lock");
+    let packaged_product_lock = serde_json::to_vec(&product_lock).expect("serialize product lock");
+    let product_lock_sha256 = packaged_product_lock_sha256(&packaged_product_lock);
+    let mut policy = trust_policy();
+    policy.media_client_grants[0].broker_product_lock_id = product_lock.lock_id.clone();
+    policy.media_client_grants[0].broker_product_lock_fingerprint =
+        product_lock.spec_fingerprint.clone();
+    policy.media_client_grants[0].broker_product_lock_sha256 = product_lock_sha256.clone();
+    let grant = policy.media_client_grants[0].clone();
+    let (ready, _, _) = ready_host();
+    let mut dynamic_snapshot = ready.snapshot().clone();
+    dynamic_snapshot.trust_policy = policy.clone();
+    dynamic_snapshot
+        .media_command_runtime
+        .leases
+        .retain(|lease| lease.scope.as_str() != MEDIA_RUNTIME_LEASE_SCOPE_ID);
+    dynamic_snapshot
+        .media_command_runtime
+        .leases
+        .push(ManifoldRuntimeLease {
+            lease_id: id("lease.runtime.media-revoker"),
+            scope: id(MEDIA_RUNTIME_LEASE_SCOPE_ID),
+            holder_id: id("operator.media-revoker"),
+            expires_at_ms: 2_000_000_000_000,
+            derivative_binding: None,
+        });
+    let mut host =
+        ManifoldPeerRuntimeHost::from_snapshot(dynamic_snapshot, &policy, &id(PROVIDER_EPOCH_ID))
+            .expect("peer host without ambient media lease");
+
+    let broker_lease = ManifoldRuntimeLease {
+        lease_id: grant.broker_runtime_lease_id.clone(),
+        scope: id("lease.media.session"),
+        holder_id: grant.client_id.clone(),
+        expires_at_ms: 100_000,
+        derivative_binding: None,
+    };
+    let control_lease_authority = broker_control_lease_authority_at(&broker_lease, Some(3_000));
+    let broker_adapter = ManifoldBrokerAdapter::new(
+        ManifoldBrokerAdapterConfig {
+            schema_id: schema_id(BROKER_ADAPTER_CONFIG_SCHEMA),
+            adapter_id: grant.broker_adapter_id.clone(),
+            mode: ManifoldBrokerAdapterMode::Standalone,
+            product_lock_id: product_lock.lock_id.clone(),
+            product_lock_fingerprint: product_lock.spec_fingerprint.clone(),
+            product_lock_sha256,
+            authority_host_id: grant.broker_runtime_host_id.clone(),
+            authority_owner_id: id(RUNTIME_HOST_AUTHORITY_OWNER),
+        },
+        &packaged_product_lock,
+        &control_lease_authority,
+    )
+    .expect("outer broker adapter");
+    let outer_capability = command_capability(&grant.broker_command_id);
+    let revoke_capability = control_lease_lifecycle_capability(
+        ManifoldBrokerControlLeaseLifecycleOperationKind::Revocation,
+    );
+    assert_eq!(outer_capability, grant.broker_capability_id);
+    let admission_snapshot = ManifoldAdmissionSnapshot {
+        schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
+        authority_id: id("authority.admission.media-test"),
+        authority_revision: Revision::INITIAL,
+        grants: vec![ManifoldAdmissionGrant {
+            grant_id: grant.admission_grant_id.clone(),
+            client_lock_id: grant.broker_client_lock_id.clone(),
+            client_lock_fingerprint: grant.broker_client_lock_fingerprint.clone(),
+            identity: grant.broker_client_identity.clone(),
+            capabilities: vec![outer_capability.clone(), revoke_capability],
+            expires_at_ms: 2_000_000_000_000,
+            revoked: false,
+        }],
+        active_tokens: Vec::new(),
+        revoked_token_ids: Vec::new(),
+        consumed_request_ids: Vec::new(),
+        consumed_use_request_ids: Vec::new(),
+        reviewed_sweep_ids: Vec::new(),
+        audit_events: Vec::new(),
+        max_token_ttl_ms: 30_000,
+    };
+    let mut broker = ManifoldBrokerRuntime::new(
+        id(PROVIDER_EPOCH_ID),
+        broker_adapter,
+        control_lease_authority,
+        admission_snapshot,
+    )
+    .expect("outer broker runtime");
+
+    let mutation = broker_media_mutation(&mut broker, &grant, "cleanup", 30, 3_200);
+    host.apply_broker_media_command_and_admit_runtime_lease(&mut broker, &mutation, 4_000)
+        .expect("genuine outer applied Broker admission");
+    let acceptance =
+        media_acceptance_request(&host, "request.media.accept.cleanup", 6, PROVIDER_EPOCH_ID);
+    let command = media_accept_command(&host, &acceptance);
+    let media = host
+        .review_media_session_acceptance_with_live_broker_runtime(
+            &broker,
+            &acceptance,
+            &command,
+            4_250,
+        )
+        .unwrap()
+        .accepted_session
+        .unwrap();
+    let session_id = host.snapshot().peer_sessions.sessions[0]
+        .session_id()
+        .to_string();
+    let request = pair_route_request(
+        &host,
+        "request.route.cleanup",
+        "runtime.request.route.cleanup",
+        "leg.cleanup.alpha-beta",
+        1,
+        "peer.alpha",
+        "peer.beta",
+        &session_id,
+        media.decision_id,
+        10_000,
+    );
+    let command = media_command(
+        &host,
+        request.runtime_command_request_id.clone(),
+        PAIR_MEDIA_ROUTE_ISSUE_COMMAND,
+        pair_media_route_issue_params_digest(&request).unwrap(),
+        grant.client_id.as_str(),
+        grant.lease_id.as_str(),
+        4_500,
+    );
+    let route = host
+        .review_pair_media_route_v2_with_live_broker_runtime(
+            &broker,
+            &ManifoldPairMediaRouteRequestV2::WifiDirect(request),
+            &command,
+            4_500,
+        )
+        .unwrap();
+    let grant_id = match route {
+        ManifoldPairMediaRouteReceiptV2::WifiDirect(r) => {
+            r.accepted_route.expect("actual accepted route").grant_id
+        }
+        _ => panic!("wrong route"),
+    };
+    (host, broker, grant_id)
+}
+
+fn cleanup_inputs(
+    host: &ManifoldPeerRuntimeHost,
+    broker: &ManifoldBrokerRuntime,
+    grant_id: &DottedId,
+) -> (
+    rusty_manifold_broker_adapter::ManifoldBrokerCleanupBinding,
+    rusty_manifold_broker_adapter::ManifoldBrokerCleanupDeploymentInputs,
+    ManifoldPeerCleanupEffectExpectation,
+    SigningKey,
+    ManifoldClockSnapshot,
+) {
+    use rusty_manifold_broker_adapter::{
+        ManifoldBrokerCleanupBinding, ManifoldBrokerCleanupDeploymentInputs,
+        ManifoldBrokerCleanupTarget, ManifoldBrokerCleanupTrust,
+    };
+    let route = host
+        .snapshot()
+        .pair_media_routes
+        .routes
+        .iter()
+        .find(|r| r.grant_id() == grant_id)
+        .unwrap();
+    let admission = &host.snapshot().broker_lease_admissions[0];
+    let use_ = admission.broker_receipt.bounded_use.as_ref().unwrap();
+    let config = broker.adapter_config();
+    let grant = &broker.admission_snapshot().grants[0];
+    let outer = &broker.host_snapshot().leases[0];
+    let key = key(31);
+    let trust = ManifoldBrokerCleanupTrust {
+        issuer: "issuer.cleanup.peer-test".into(),
+        public_key_hex: encode_lower_hex(&key.verifying_key().to_bytes()),
+        audience: "audience.cleanup.peer-test".into(),
+    };
+    let inputs = ManifoldBrokerCleanupDeploymentInputs {
+        trust: trust.clone(),
+        revoker_principal: "revoker.cleanup.peer-test".into(),
+        feature_lock_id: "lock.media.test.001".into(),
+        feature_lock_sha256: format!("sha256:{}", "ab".repeat(32)),
+        original_identity: use_.identity.clone(),
+    };
+    let route_json = serde_json::to_value(route).unwrap();
+    let mut inputs = inputs;
+    inputs.feature_lock_id = route_json["record"]["feature_lock_id"]
+        .as_str()
+        .unwrap()
+        .into();
+    let effect = ManifoldPeerCleanupEffectExpectation {
+        route_leg: route.route_leg().clone(),
+        platform_runtime_spec_id: route.platform_runtime_spec_id().clone(),
+        effect_target_sha256: format!("sha256:{}", "d2".repeat(32)),
+    };
+    let mut clock = broker
+        .evidence()
+        .control_lease_authority
+        .current_clock
+        .clone();
+    clock.wall_unix_ms = 5_000;
+    clock.sequence += 1;
+    clock.monotonic_elapsed_ns += 2_000_000;
+    let issue = unique_applied_pair_event(
+        host.snapshot(),
+        &ManifoldPeerRuntimeAuditKind::PairMediaRoute,
+        route.request_id(),
+    )
+    .unwrap();
+    let binding = ManifoldBrokerCleanupBinding {
+        trust,
+        revoker_principal: inputs.revoker_principal.clone(),
+        clock_epoch: clock.clock_epoch_id.to_string(),
+        target: ManifoldBrokerCleanupTarget {
+            authority_host: config.authority_host_id.to_string(),
+            provider_epoch: PROVIDER_EPOCH_ID.into(),
+            original_principal: use_.identity.client_id.to_string(),
+            admission_id: grant.grant_id.to_string(),
+            admission_expires_at_ms: grant.expires_at_ms,
+            lease_id: outer.lease_id.to_string(),
+            lease_expires_at_ms: outer.expires_at_ms,
+            product_lock_id: config.product_lock_id.to_string(),
+            product_lock_fingerprint: config.product_lock_fingerprint.clone(),
+            product_lock_sha256: config.product_lock_sha256.clone(),
+            client_lock_id: use_.client_lock_id.to_string(),
+            client_lock_sha256: use_.client_lock_fingerprint.clone(),
+            feature_lock_id: inputs.feature_lock_id.clone(),
+            feature_lock_sha256: inputs.feature_lock_sha256.clone(),
+            route_grant_id: grant_id.to_string(),
+            route_revision: issue.resulting_authority_revision.get(),
+            platform_runtime: effect.platform_runtime_spec_id.to_string(),
+            effect_target_sha256: effect.effect_target_sha256.clone(),
+        },
+    };
+    (binding, inputs, effect, key, clock)
+}
+
+#[test]
+fn cleanup_peer_registration_checks_genuine_distinct_lineage_and_immutable_projection() {
+    let (host, mut broker, route_id) = cleanup_live_fixture();
+    let (binding, inputs, effect, _, clock) = cleanup_inputs(&host, &broker, &route_id);
+    let route = &host.snapshot().pair_media_routes.routes[0];
+    assert_ne!(
+        route.authority_host_id().as_str(),
+        binding.target.authority_host
+    );
+    assert_ne!(
+        route.authority_runtime_lease_id().as_str(),
+        binding.target.lease_id
+    );
+    let original = host
+        .derive_retained_cleanup_projection(&binding, &inputs, &effect)
+        .unwrap();
+    for field in [
+        "authority_host",
+        "lease_id",
+        "admission_id",
+        "product_lock_sha256",
+        "client_lock_sha256",
+        "feature_lock_sha256",
+        "platform_runtime",
+        "effect_target_sha256",
+    ] {
+        let mut v = serde_json::to_value(&binding).unwrap();
+        v["target"][field] = serde_json::json!(
+            "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+        );
+        let wrong = serde_json::from_value(v).unwrap();
+        assert!(
+            host.derive_retained_cleanup_projection(&wrong, &inputs, &effect)
+                .is_err(),
+            "{field}"
+        );
+    }
+    let mut wrong_effect = effect.clone();
+    wrong_effect.route_leg.sink_id = id("sink.other");
+    assert!(host
+        .derive_retained_cleanup_projection(&binding, &inputs, &wrong_effect)
+        .is_err());
+    let mut wrong_host = host.clone();
+    wrong_host.snapshot.broker_lease_admissions[0]
+        .runtime_lease
+        .derivative_binding
+        .as_mut()
+        .unwrap()
+        .source_authorization_id = id("request.fake");
+    assert!(wrong_host
+        .derive_retained_cleanup_projection(&binding, &inputs, &effect)
+        .is_err());
+    let record = host
+        .register_pair_route_cleanup_before_start(
+            &mut broker,
+            id("registration.cleanup.peer"),
+            binding,
+            &inputs,
+            &effect,
+            clock,
+        )
+        .unwrap();
+    assert_eq!(record.expected().peer_route_projection_sha256, original);
+    let duplicate_clock = broker_clock(&broker, 5_001);
+    assert!(host
+        .register_pair_route_cleanup_before_start(
+            &mut broker,
+            id("registration.cleanup.peer.duplicate"),
+            record.expected().binding.clone(),
+            &inputs,
+            &effect,
+            duplicate_clock
+        )
+        .is_err());
+}
+
+fn broker_clock(broker: &ManifoldBrokerRuntime, ms: i64) -> ManifoldClockSnapshot {
+    let mut clock = broker.evidence().control_lease_authority.current_clock;
+    clock.wall_unix_ms = ms;
+    clock.sequence += 10;
+    clock.monotonic_elapsed_ns += u64::try_from(ms).unwrap() * 1_000_000;
+    clock
+}
+
+#[test]
+fn cleanup_live_pending_preflight_preserves_expiry_provenance_and_rejects_stale_cas() {
+    use rusty_manifold_broker_adapter::{
+        broker_cleanup_signing_bytes, ManifoldBrokerCleanupAction, ManifoldBrokerCleanupCredential,
+        ManifoldBrokerCleanupStatement,
+    };
+    let (mut host, mut broker, route_id) = cleanup_live_fixture();
+    let (binding, inputs, effect, key, clock) = cleanup_inputs(&host, &broker, &route_id);
+    let projection = host
+        .derive_retained_cleanup_projection(&binding, &inputs, &effect)
+        .unwrap();
+    host.register_pair_route_cleanup_before_start(
+        &mut broker,
+        id("registration.cleanup.peer"),
+        binding.clone(),
+        &inputs,
+        &effect,
+        clock,
+    )
+    .unwrap();
+    let revision = host.snapshot().pair_media_routes.authority_revision;
+    let sequence = host.snapshot().event_sequence;
+    host.expire_pair_media_routes(id("sweep.cleanup.peer"), revision, 10_001)
+        .unwrap();
+    assert_eq!(
+        host.derive_retained_cleanup_projection(&binding, &inputs, &effect)
+            .unwrap(),
+        projection
+    );
+    let clock = broker_clock(&broker, 10_001);
+    let challenge = broker
+        .challenge_registered_cleanup(&id("registration.cleanup.peer"), clock.clone())
+        .unwrap();
+    let statement = ManifoldBrokerCleanupStatement {
+        issuer: binding.trust.issuer.clone(),
+        audience: binding.trust.audience.clone(),
+        target: binding.target.clone(),
+        revoker_principal: binding.revoker_principal.clone(),
+        action: ManifoldBrokerCleanupAction::AcknowledgeRetainedPairRouteCleanup,
+        challenge,
+        request_id: "request.cleanup.peer".into(),
+        issued_at_ms: 10_001,
+        expires_at_ms: 11_001,
+    };
+    let credential = ManifoldBrokerCleanupCredential {
+        signature_hex: encode_lower_hex(
+            &key.sign(&broker_cleanup_signing_bytes(&statement))
+                .to_bytes(),
+        ),
+        statement,
+    };
+    broker
+        .authorize_registered_cleanup(
+            &id("registration.cleanup.peer"),
+            &credential,
+            "request.cleanup.peer",
+            clock.clone(),
+        )
+        .unwrap();
+    assert!(broker
+        .authorize_registered_cleanup(
+            &id("registration.cleanup.peer"),
+            &credential,
+            "request.cleanup.peer",
+            clock.clone()
+        )
+        .is_err());
+    assert!(broker
+        .borrow_pending_cleanup(
+            &id("registration.missing"),
+            "request.cleanup.peer",
+            clock.clone()
+        )
+        .is_err());
+    assert!(broker
+        .borrow_pending_cleanup(
+            &id("registration.cleanup.peer"),
+            "request.other",
+            clock.clone()
+        )
+        .is_err());
+    let pending = broker
+        .borrow_pending_cleanup(
+            &id("registration.cleanup.peer"),
+            "request.cleanup.peer",
+            clock.clone(),
+        )
+        .unwrap();
+    assert!(host
+        .preflight_pair_route_cleanup_pending(
+            pending,
+            &effect,
+            "request.cleanup.peer",
+            revision,
+            sequence,
+            clock.clone()
+        )
+        .is_err());
+    let current_revision = host.snapshot().pair_media_routes.authority_revision;
+    let current_sequence = host.snapshot().event_sequence;
+    let pending = broker
+        .borrow_pending_cleanup(
+            &id("registration.cleanup.peer"),
+            "request.cleanup.peer",
+            clock.clone(),
+        )
+        .unwrap();
+    let checked = host
+        .preflight_pair_route_cleanup_pending(
+            pending,
+            &effect,
+            "request.cleanup.peer",
+            current_revision,
+            current_sequence,
+            clock.clone(),
+        )
+        .unwrap();
+    assert_eq!(checked.request_id(), "request.cleanup.peer");
+    assert_eq!(checked.peer_authority_revision(), current_revision);
+    drop(checked);
+    for case in ["expired", "epoch", "regression"] {
+        let pending = broker
+            .borrow_pending_cleanup(
+                &id("registration.cleanup.peer"),
+                "request.cleanup.peer",
+                clock.clone(),
+            )
+            .unwrap();
+        let mut delayed = clock.clone();
+        match case {
+            "expired" => {
+                delayed.wall_unix_ms = 11_001;
+                delayed.sequence += 1;
+                delayed.monotonic_elapsed_ns += 1_000_000;
+            }
+            "epoch" => delayed.clock_epoch_id = id("clock_epoch.other"),
+            _ => delayed.monotonic_elapsed_ns -= 1,
+        }
+        assert!(
+            host.preflight_pair_route_cleanup_pending(
+                pending,
+                &effect,
+                "request.cleanup.peer",
+                current_revision,
+                current_sequence,
+                delayed
+            )
+            .is_err(),
+            "{case}"
+        );
+    }
+    let mut regressing = clock.clone();
+    regressing.wall_unix_ms -= 1;
+    assert!(broker
+        .borrow_pending_cleanup(
+            &id("registration.cleanup.peer"),
+            "request.cleanup.peer",
+            regressing
+        )
+        .is_err());
+    let mut expired = clock;
+    expired.wall_unix_ms = 11_001;
+    expired.sequence += 1;
+    expired.monotonic_elapsed_ns += 1_000_000;
+    assert!(broker
+        .borrow_pending_cleanup(
+            &id("registration.cleanup.peer"),
+            "request.cleanup.peer",
+            expired
+        )
+        .is_err());
+    assert!(host
+        .snapshot()
+        .pair_media_routes
+        .cleanup_receipts
+        .is_empty());
+    assert_eq!(
+        *host.snapshot().pair_media_routes.routes[0].cleanup_status(),
+        ManifoldPairMediaRouteCleanupStatus::Pending
+    );
+}
+
+#[test]
+fn cleanup_peer_rejects_caller_attested_projection_even_with_genuine_signed_pending() {
+    use rusty_manifold_broker_adapter::{
+        broker_cleanup_signing_bytes, ManifoldBrokerCleanupAction, ManifoldBrokerCleanupCredential,
+        ManifoldBrokerCleanupExpectedRegistration, ManifoldBrokerCleanupStatement,
+    };
+    let (host, mut broker, route_id) = cleanup_live_fixture();
+    let (binding, inputs, effect, key, clock) = cleanup_inputs(&host, &broker, &route_id);
+    let mut missing = host.clone();
+    missing.snapshot.broker_lease_admissions.clear();
+    assert!(missing
+        .derive_retained_cleanup_projection(&binding, &inputs, &effect)
+        .is_err());
+    let expected = ManifoldBrokerCleanupExpectedRegistration {
+        registration_id: id("registration.cleanup.unchecked"),
+        binding: binding.clone(),
+        deployment_inputs: inputs.clone(),
+        peer_route_projection_sha256: format!("sha256:{}", "ff".repeat(32)),
+    };
+    // A genuine signature over lower-level caller-attested registration cannot
+    // bypass the actual Peer owner's independently reconstructed projection.
+    broker
+        .register_cleanup_before_start(expected.clone(), &inputs, clock.clone())
+        .unwrap();
+    let challenge = broker
+        .challenge_registered_cleanup(&expected.registration_id, clock.clone())
+        .unwrap();
+    let statement = ManifoldBrokerCleanupStatement {
+        issuer: binding.trust.issuer.clone(),
+        audience: binding.trust.audience.clone(),
+        target: binding.target.clone(),
+        revoker_principal: binding.revoker_principal.clone(),
+        action: ManifoldBrokerCleanupAction::AcknowledgeRetainedPairRouteCleanup,
+        challenge,
+        request_id: "request.cleanup.unchecked".into(),
+        issued_at_ms: 5_000,
+        expires_at_ms: 6_000,
+    };
+    let credential = ManifoldBrokerCleanupCredential {
+        signature_hex: encode_lower_hex(
+            &key.sign(&broker_cleanup_signing_bytes(&statement))
+                .to_bytes(),
+        ),
+        statement,
+    };
+    broker
+        .authorize_registered_cleanup(
+            &expected.registration_id,
+            &credential,
+            "request.cleanup.unchecked",
+            clock.clone(),
+        )
+        .unwrap();
+    let pending = broker
+        .borrow_pending_cleanup(
+            &expected.registration_id,
+            "request.cleanup.unchecked",
+            clock.clone(),
+        )
+        .unwrap();
+    assert!(host
+        .preflight_pair_route_cleanup_pending(
+            pending,
+            &effect,
+            "request.cleanup.unchecked",
+            host.snapshot().pair_media_routes.authority_revision,
+            host.snapshot().event_sequence,
+            clock
+        )
+        .is_err());
 }

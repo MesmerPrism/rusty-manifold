@@ -167,7 +167,146 @@ pub struct ManifoldBrokerCleanupRestoreRequirements {
     pub clock: ManifoldClockSnapshot,
 }
 
+/// Read-only preflight authority borrowed from one held, replay-validated Broker
+/// Pending transaction. It cannot be cloned, serialized, or constructed from
+/// deserialized Pending evidence, and it prevents owner mutation while held.
+/// It proves authorization/provenance only, never terminal effects.
+#[derive(Debug)]
+pub struct ManifoldBrokerCleanupPendingCapability<'a> {
+    registration: &'a ManifoldBrokerCleanupRegistration,
+    runtime: &'a ManifoldBrokerRuntime,
+    clock: ManifoldClockSnapshot,
+}
+impl ManifoldBrokerCleanupPendingCapability<'_> {
+    /// Recheck at use time against an independently obtained owner clock. A held
+    /// borrow fences mutation, but does not stop time or extend signed validity.
+    /// # Errors
+    /// Rejects unhealthy/regressing/foreign-epoch clocks or expired credential.
+    pub fn validate_at(
+        &self,
+        clock: &ManifoldClockSnapshot,
+    ) -> Result<(), ManifoldBrokerRuntimeStateError> {
+        check_clock(&self.clock, clock)?;
+        let now = self.runtime.check_cleanup_clock(clock)?;
+        restore_held_record(self.registration, now)?;
+        let credential = self
+            .registration
+            .cleanup_snapshot
+            .consumed_credential()
+            .ok_or_else(|| invalid("cleanup_pending_event_missing"))?;
+        if now < credential.statement.issued_at_ms || now >= credential.statement.expires_at_ms {
+            return Err(invalid("cleanup_pending_request_or_validity"));
+        }
+        Ok(())
+    }
+    /// Exact independently pinned registration retained by the Broker.
+    #[must_use]
+    pub fn expected(&self) -> &ManifoldBrokerCleanupExpectedRegistration {
+        &self.registration.expected
+    }
+    /// Exact consumed transaction; observation is not another authorization.
+    #[must_use]
+    pub fn pending(&self) -> &crate::ManifoldBrokerCleanupPending {
+        self.registration
+            .cleanup_snapshot
+            .pending()
+            .expect("verified Pending")
+    }
+    /// Immutable registration audit binding.
+    #[must_use]
+    pub fn registration_audit_sha256(&self) -> &str {
+        &self.registration.registration_audit_sha256
+    }
+    /// Held Broker provider epoch.
+    #[must_use]
+    pub fn provider_epoch(&self) -> &DottedId {
+        &self.runtime.provider_epoch_id
+    }
+    /// Fresh non-regressing preflight clock retained by the Broker.
+    #[must_use]
+    pub fn clock(&self) -> &ManifoldClockSnapshot {
+        &self.clock
+    }
+    /// Original outer Broker lease; this never reissues or renews it.
+    #[must_use]
+    pub fn original_lease(&self) -> &ManifoldRuntimeLease {
+        &self.registration.original_lease
+    }
+    /// Exact retained successful Broker mutation and consumption tombstones.
+    /// This checks historical lineage without requiring ordinary authority to
+    /// remain unexpired, and does not accept a caller's alleged success bit.
+    #[must_use]
+    pub fn retains_admission(&self, receipt: &super::ManifoldBrokerMutationReceipt) -> bool {
+        let evidence = self.runtime.evidence();
+        receipt.provider_epoch_id == self.runtime.provider_epoch_id
+            && evidence.committed_mutation_receipts.contains(receipt)
+            && evidence
+                .consumed_bounded_use_ids
+                .contains(&receipt.admission_use_request_id)
+            && evidence
+                .admission_snapshot
+                .consumed_use_request_ids
+                .contains(&receipt.admission_use_request_id)
+            && !evidence
+                .pending_bounded_uses
+                .iter()
+                .any(|pending| pending.admission_use_request_id == receipt.admission_use_request_id)
+    }
+}
+
 impl ManifoldBrokerRuntime {
+    /// Borrow an existing consumed Pending authorization for cross-owner
+    /// preflight. Requires the signed credential still to be valid now; expired
+    /// crash-resumption and terminal completion are deliberately unsupported.
+    /// # Errors
+    /// Rejects missing pins, request mismatch, replay/audit damage, epoch or
+    /// clock regression, and expired signed authorization.
+    pub fn borrow_pending_cleanup(
+        &mut self,
+        registration_id: &DottedId,
+        request_id: &str,
+        clock: ManifoldClockSnapshot,
+    ) -> Result<ManifoldBrokerCleanupPendingCapability<'_>, ManifoldBrokerRuntimeStateError> {
+        let now = self.check_cleanup_clock(&clock)?;
+        self.validate_complete_cleanup_size()?;
+        let record = self
+            .cleanup_registrations
+            .get(registration_id)
+            .ok_or_else(|| invalid("cleanup_registration_missing"))?;
+        if record.audit()? != record.registration_audit_sha256
+            || !binding_matches_runtime(self, &record.expected)
+        {
+            return Err(invalid("cleanup_registration_provenance"));
+        }
+        restore_held_record(record, now)?;
+        let pending = record
+            .cleanup_snapshot
+            .pending()
+            .ok_or_else(|| invalid("cleanup_pending_missing"))?;
+        let credential = record
+            .cleanup_snapshot
+            .consumed_credential()
+            .ok_or_else(|| invalid("cleanup_pending_event_missing"))?;
+        if pending.request_id != request_id
+            || credential.statement.request_id != request_id
+            || now < credential.statement.issued_at_ms
+            || now >= credential.statement.expires_at_ms
+        {
+            return Err(invalid("cleanup_pending_request_or_validity"));
+        }
+        let mut candidate = self.staged_copy()?;
+        candidate.cleanup_clock = Some(clock.clone());
+        candidate.validate_complete_cleanup_size()?;
+        *self = candidate;
+        Ok(ManifoldBrokerCleanupPendingCapability {
+            registration: self
+                .cleanup_registrations
+                .get(registration_id)
+                .expect("held verified registration"),
+            runtime: self,
+            clock,
+        })
+    }
     /// Complete opt-in snapshot for cleanup-enabled persistence. Every R5b
     /// persistence join must use this before Start; `evidence()` is core-only.
     #[must_use]
@@ -1000,6 +1139,74 @@ mod tests {
         );
     }
     #[test]
+    fn live_pending_capability_rechecks_signed_event_clock_and_independent_restore_pins() {
+        let (mut runtime, expected, key) = setup();
+        register(&mut runtime, &expected);
+        let clock = runtime.cleanup_clock.clone().unwrap();
+        let credential = credential(&mut runtime, &expected, &key, &clock);
+        runtime
+            .authorize_registered_cleanup(
+                &expected.registration_id,
+                &credential,
+                "request.cleanup.test",
+                clock.clone(),
+            )
+            .unwrap();
+        {
+            let cap = runtime
+                .borrow_pending_cleanup(
+                    &expected.registration_id,
+                    "request.cleanup.test",
+                    clock.clone(),
+                )
+                .unwrap();
+            assert_eq!(cap.expected(), &expected);
+            assert_eq!(
+                cap.pending().credential_sha256,
+                cap.registration
+                    .cleanup_snapshot
+                    .pending()
+                    .unwrap()
+                    .credential_sha256
+            );
+            cap.validate_at(&clock).unwrap();
+            let mut expired = clock.clone();
+            expired.wall_unix_ms += 1000;
+            expired.sequence += 1;
+            expired.monotonic_elapsed_ns += 1_000_000;
+            assert!(cap.validate_at(&expired).is_err());
+        }
+        let v6 = runtime.complete_evidence_v6();
+        let req = requirements(&runtime);
+        let restored = ManifoldBrokerRuntime::restore_complete_evidence_v6(
+            runtime.adapter.clone(),
+            owner(&runtime),
+            v6.clone(),
+            &req,
+        )
+        .unwrap();
+        assert_eq!(restored.complete_evidence_v6(), v6);
+        let mut missing = req.clone();
+        missing.expected_registrations.clear();
+        assert!(ManifoldBrokerRuntime::restore_complete_evidence_v6(
+            runtime.adapter.clone(),
+            owner(&runtime),
+            v6,
+            &missing
+        )
+        .is_err());
+        let record = runtime
+            .cleanup_registrations
+            .get_mut(&expected.registration_id)
+            .unwrap();
+        let mut damaged = serde_json::to_value(&record.cleanup_snapshot).unwrap();
+        damaged["events"].as_array_mut().unwrap().pop();
+        record.cleanup_snapshot = serde_json::from_value(damaged).unwrap();
+        assert!(runtime
+            .borrow_pending_cleanup(&expected.registration_id, "request.cleanup.test", clock)
+            .is_err());
+    }
+    #[test]
     fn ordinary_expiry_keeps_registration_and_fresh_pending_blocks_drained_rollover() {
         let (mut runtime, expected, key) = setup();
         register(&mut runtime, &expected);
@@ -1063,6 +1270,20 @@ mod tests {
             .is_some());
         let req = requirements(&runtime);
         let snapshot = runtime.complete_evidence_v6();
+        {
+            let cap = runtime
+                .borrow_pending_cleanup(
+                    &expected.registration_id,
+                    "request.cleanup.test",
+                    clock.clone(),
+                )
+                .unwrap();
+            cap.validate_at(&clock).unwrap();
+            assert!(
+                clock_ms(&clock).unwrap() > cap.expected().binding.target.admission_expires_at_ms
+            );
+            assert!(clock_ms(&clock).unwrap() > cap.original_lease().expires_at_ms);
+        }
         ManifoldBrokerRuntime::restore_complete_evidence_v6(
             runtime.adapter.clone(),
             owner(&runtime),

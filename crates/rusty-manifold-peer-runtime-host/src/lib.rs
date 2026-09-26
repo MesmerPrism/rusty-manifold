@@ -8,6 +8,9 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
+mod cleanup_pending;
+pub use cleanup_pending::*;
+
 use rusty_manifold_broker_adapter::{
     packaged_product_lock_sha256, ManifoldBrokerAdapterMode, ManifoldBrokerAdapterRole,
     ManifoldBrokerControlLeaseLifecycleOperationKind, ManifoldBrokerControlLeaseLifecycleOutcome,

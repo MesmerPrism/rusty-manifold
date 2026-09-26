@@ -88,3 +88,37 @@ actual effect teardown evidence, and fence native effects by durable process
 generation. A credential cannot prove that an earlier process has stopped.
 After a reboot, clock-epoch transition needs separately attested continuity;
 the owner cannot invent elapsed monotonic time to satisfy Manifold checks.
+
+## Retained registration and live Pending preflight
+
+The source-only Peer Runtime Host now derives the original cleanup projection
+from its held accepted route, issue audit, and full genuine Broker admission.
+Its immutable field whitelist separates original issue provenance from mutable
+route terminalization and admission-release history. Broker authority host and
+outer control lease remain distinct from Peer authority host and inner derivative
+lease; provenance joins the actual upstream lease and admission-use authorization.
+`register_pair_route_cleanup_before_start` sends this derived projection to the
+existing complete Broker V6 registry while the original route is current.
+
+`borrow_pending_cleanup` returns a non-cloneable, non-serializable capability
+borrowed from the held Broker. The consumed signed event is replay-validated,
+and its registration, request, challenge, audit, owner epoch and clock remain
+bound. The borrow prevents owner mutation. `preflight_pair_route_cleanup_pending`
+requires a fresh independently obtained trusted clock at actual use, rechecks
+signed validity and nonregression, and separately checks current Peer route
+revision and unified event sequence. A delayed capability cannot extend signed
+validity. Expiry of original route authority does not renew it or replace its
+immutable issue projection. Completed route cleanup rejects this preflight.
+
+Deployment/effect expectations describe independently retained expected resource
+generation, exact leg, platform and digest. Their caller-supplied digest is not
+proof that effects existed or ceased. Registration and preflight produce no
+terminal receipt, ordinary lease, command dispatch, completion API or verified
+teardown. Complete Broker V6 and separate trusted Peer/deployment anchors must
+be persisted and jointly reconstructed before resumed effects; library checks
+do not prove exclusive storage ownership. Peer has no newly invented clock-epoch
+field: the cleanup credential uses the retained Broker clock epoch, and Peer
+checks its existing route observation time and provider epoch. Reboot continuity
+and terminal executor evidence remain separate contracts.
+
+No released signing payload or V5/V6 snapshot shape changes in this slice.
