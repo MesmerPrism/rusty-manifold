@@ -7,6 +7,7 @@
 //! and store snapshot anchors independently. No ordinary admission or lease is issued.
 
 use ed25519_dalek::{Signature, VerifyingKey};
+use rusty_manifold_model::DottedId;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -51,6 +52,8 @@ pub struct ManifoldBrokerCleanupTarget {
     /// Packaged product identity.
     pub product_lock_id: String,
     /// Semantic product closure fingerprint, separate from packaged bytes.
+    /// Supports the owner's legacy `fnv1a64-` plus 16 lowercase hex digits
+    /// and V2 `sha256:` plus 64 lowercase hex digits; this is not a dotted ID.
     pub product_lock_fingerprint: String,
     /// Exact packaged product bytes digest.
     pub product_lock_sha256: String,
@@ -497,10 +500,11 @@ fn decode<const N: usize>(value: &str) -> Option<[u8; N]> {
     Some(result)
 }
 fn identity(s: &str) -> bool {
-    !s.is_empty()
-        && s.len() <= 256
-        && s.bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b"._:-".contains(&b))
+    s.len() <= 256 && DottedId::new(s).is_ok()
+}
+fn product_fingerprint(s: &str) -> bool {
+    s.strip_prefix("fnv1a64-").and_then(decode::<8>).is_some()
+        || s.strip_prefix("sha256:").and_then(decode::<32>).is_some()
 }
 fn validate_binding(b: &ManifoldBrokerCleanupBinding) -> Result<(), ManifoldBrokerCleanupError> {
     let t = &b.target;
@@ -515,7 +519,6 @@ fn validate_binding(b: &ManifoldBrokerCleanupBinding) -> Result<(), ManifoldBrok
         &t.admission_id,
         &t.lease_id,
         &t.product_lock_id,
-        &t.product_lock_fingerprint,
         &t.client_lock_id,
         &t.feature_lock_id,
         &t.route_grant_id,
@@ -528,6 +531,7 @@ fn validate_binding(b: &ManifoldBrokerCleanupBinding) -> Result<(), ManifoldBrok
         &t.effect_target_sha256,
     ];
     if !ids.iter().all(|s| identity(s))
+        || !product_fingerprint(&t.product_lock_fingerprint)
         || !digests
             .iter()
             .all(|s| s.strip_prefix("sha256:").and_then(decode::<32>).is_some())
@@ -550,7 +554,6 @@ mod tests {
 
     fn setup() -> (ManifoldBrokerCleanupAuthority, SigningKey) {
         let key = SigningKey::from_bytes(&[19; 32]);
-        let sha = format!("sha256:{}", "12".repeat(32));
         let target = ManifoldBrokerCleanupTarget {
             authority_host: "host.original".into(),
             provider_epoch: "epoch.original".into(),
@@ -560,16 +563,16 @@ mod tests {
             lease_id: "lease.original".into(),
             lease_expires_at_ms: 30,
             product_lock_id: "lock.product".into(),
-            product_lock_fingerprint: "closure.original".into(),
-            product_lock_sha256: sha.clone(),
+            product_lock_fingerprint: "fnv1a64-0123456789abcdef".into(),
+            product_lock_sha256: format!("sha256:{}", "12".repeat(32)),
             client_lock_id: "lock.client".into(),
-            client_lock_sha256: sha.clone(),
+            client_lock_sha256: format!("sha256:{}", "23".repeat(32)),
             feature_lock_id: "lock.feature".into(),
-            feature_lock_sha256: sha.clone(),
+            feature_lock_sha256: format!("sha256:{}", "34".repeat(32)),
             route_grant_id: "route.original".into(),
             route_revision: 7,
             platform_runtime: "platform.original".into(),
-            effect_target_sha256: sha,
+            effect_target_sha256: format!("sha256:{}", "45".repeat(32)),
         };
         let binding = ManifoldBrokerCleanupBinding {
             trust: ManifoldBrokerCleanupTrust {
@@ -920,5 +923,109 @@ mod tests {
         let mut b = a.state.binding.clone();
         b.target.authority_host = "a".repeat(257);
         assert!(ManifoldBrokerCleanupAuthority::pin_before_start(b, 10).is_err());
+    }
+
+    #[test]
+    fn identities_use_owner_grammar_and_fingerprints_use_owner_forms() {
+        let (mut a, key) = setup();
+        let c = credential(&mut a, &key);
+        let binding = a.state.binding.clone();
+        for malformed in [
+            "Identity.upper",
+            "identity:colon",
+            "identity..empty",
+            ".edge",
+            "edge.",
+            "_edge",
+            "edge-",
+            "",
+        ] {
+            // Exercise every identity field at the trusted pin boundary.
+            let mut paths = vec![
+                vec!["revoker_principal"],
+                vec!["clock_epoch"],
+                vec!["trust", "issuer"],
+                vec!["trust", "audience"],
+            ];
+            for field in [
+                "authority_host",
+                "provider_epoch",
+                "original_principal",
+                "admission_id",
+                "lease_id",
+                "product_lock_id",
+                "client_lock_id",
+                "feature_lock_id",
+                "route_grant_id",
+                "platform_runtime",
+            ] {
+                paths.push(vec!["target", field]);
+            }
+            for path in paths {
+                let mut changed = serde_json::to_value(&binding).unwrap();
+                let mut leaf = &mut changed;
+                for part in &path {
+                    leaf = leaf.get_mut(part).unwrap();
+                }
+                *leaf = serde_json::json!(malformed);
+                let changed = serde_json::from_value(changed).unwrap();
+                assert_eq!(
+                    ManifoldBrokerCleanupAuthority::pin_before_start(changed, 10).unwrap_err(),
+                    ManifoldBrokerCleanupError::Invalid,
+                    "{path:?}: {malformed}"
+                );
+            }
+            // A valid signature cannot widen the request-ID vocabulary.
+            let mut changed = c.clone();
+            changed.statement.request_id = malformed.into();
+            resign(&mut changed, &key);
+            assert_eq!(
+                a.authorize(&changed, malformed, "clock.original", 150)
+                    .unwrap_err(),
+                ManifoldBrokerCleanupError::Invalid
+            );
+        }
+        let mut v2 = binding.clone();
+        v2.target.product_lock_fingerprint = format!("sha256:{}", "ab".repeat(32));
+        ManifoldBrokerCleanupAuthority::pin_before_start(v2, 10).unwrap();
+        for malformed in [
+            "",
+            "closure.original",
+            "fnv1a64-0123456789ABCDEF",
+            "fnv1a64:0123456789abcdef",
+            "fnv1a64-0123456789abcde",
+            "fnv1a64-0123456789abcdeg",
+            "sha256:AB",
+            "sha256:ab",
+            "sha256..ab",
+            "-fingerprint",
+        ] {
+            let mut changed = binding.clone();
+            changed.target.product_lock_fingerprint = malformed.into();
+            assert_eq!(
+                ManifoldBrokerCleanupAuthority::pin_before_start(changed, 10).unwrap_err(),
+                ManifoldBrokerCleanupError::Invalid,
+                "fingerprint {malformed}"
+            );
+        }
+        assert_ne!(
+            binding.target.product_lock_sha256,
+            binding.target.client_lock_sha256
+        );
+        assert_ne!(
+            binding.target.client_lock_sha256,
+            binding.target.feature_lock_sha256
+        );
+        let mut swapped = c;
+        std::mem::swap(
+            &mut swapped.statement.target.client_lock_sha256,
+            &mut swapped.statement.target.feature_lock_sha256,
+        );
+        resign(&mut swapped, &key);
+        assert_eq!(
+            a.authorize(&swapped, "request.cleanup", "clock.original", 150)
+                .unwrap_err(),
+            ManifoldBrokerCleanupError::Binding
+        );
     }
 }
