@@ -227,6 +227,15 @@ pub struct ManifoldBrokerCleanupSnapshot {
     audit_sha256: Vec<String>,
 }
 impl ManifoldBrokerCleanupSnapshot {
+    pub(crate) fn binding(&self) -> &ManifoldBrokerCleanupBinding {
+        &self.binding
+    }
+    pub(crate) fn initial_ms(&self) -> u64 {
+        self.initial_ms
+    }
+    pub(crate) fn last_ms(&self) -> u64 {
+        self.last_ms
+    }
     /// Anchor to persist in independently trusted owner storage after commit.
     #[must_use]
     pub fn anchor_sha256(&self) -> String {

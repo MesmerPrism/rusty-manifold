@@ -75,6 +75,9 @@ pub const LEGACY_BROKER_RUNTIME_EVIDENCE_V4_SCHEMA: &str =
     "rusty.manifold.broker.runtime_evidence.v4";
 /// Integrated broker runtime evidence with fail-closed revocation barriers.
 pub const BROKER_RUNTIME_EVIDENCE_SCHEMA: &str = "rusty.manifold.broker.runtime_evidence.v5";
+
+mod cleanup_runtime;
+pub use cleanup_runtime::*;
 /// Explicit legacy broker runtime-evidence migration receipt schema.
 pub const BROKER_RUNTIME_MIGRATION_RECEIPT_SCHEMA: &str =
     "rusty.manifold.broker.runtime_evidence_migration_receipt.v1";
@@ -872,6 +875,8 @@ struct LegacyBrokerRuntimeEvidenceV2 {
 /// One stateful Rust broker authority for a live standalone or embedded provider.
 #[derive(Debug)]
 pub struct ManifoldBrokerRuntime {
+    cleanup_registrations: BTreeMap<DottedId, ManifoldBrokerCleanupRegistration>,
+    cleanup_clock: Option<ManifoldClockSnapshot>,
     provider_epoch_id: DottedId,
     adapter: ManifoldBrokerAdapter,
     control_lease_authority: ManifoldBrokerControlLeaseAuthority,
@@ -933,6 +938,8 @@ impl ManifoldBrokerRuntime {
             .map(|token| (token.token_id.clone(), token.clone()))
             .collect();
         let runtime = Self {
+            cleanup_registrations: BTreeMap::new(),
+            cleanup_clock: None,
             provider_epoch_id,
             adapter,
             control_lease_authority,
@@ -1512,6 +1519,8 @@ impl ManifoldBrokerRuntime {
             ));
         }
         Ok(Self {
+            cleanup_registrations: BTreeMap::new(),
+            cleanup_clock: None,
             provider_epoch_id: evidence.provider_epoch_id,
             adapter,
             control_lease_authority,
@@ -2624,7 +2633,11 @@ impl ManifoldBrokerRuntime {
         receipt
     }
 
-    /// Returns a read-only state/evidence projection for rebind and restart tests.
+    /// Returns the released v5 core projection. When cleanup registrations
+    /// exist this omits pins, Pending and cleanup clocks, and is NOT a complete
+    /// persistence snapshot. Cleanup-enabled deployments must exclusively use
+    /// `complete_evidence_v6` and its strict independently anchored restore before
+    /// allowing resumable effects; plain v5 restore cannot infer missing pins.
     #[must_use]
     pub fn evidence(&self) -> ManifoldBrokerRuntimeEvidence {
         ManifoldBrokerRuntimeEvidence {
@@ -2780,6 +2793,7 @@ impl ManifoldBrokerRuntime {
         fresh_admission_snapshot: ManifoldAdmissionSnapshot,
     ) -> Result<ManifoldBrokerRuntimeEpochRolloverReceipt, ManifoldBrokerRuntimeStateError> {
         if resulting_provider_epoch_id == self.provider_epoch_id
+            || !self.cleanup_registrations.is_empty()
             || !self.adapter.host_snapshot().leases.is_empty()
             || !self.control_lease_authority.runtime_leases().is_empty()
             || !self.pending_bounded_uses.is_empty()
@@ -3939,11 +3953,19 @@ impl ManifoldBrokerRuntime {
                 evidence.control_lease_authority.current_clock.clone(),
             )
             .map_err(ManifoldBrokerRuntimeStateError::ControlLeaseAuthority)?;
-        Self::restore_from_caller_attested_exclusive_evidence(
+        let mut candidate = Self::restore_from_caller_attested_exclusive_evidence(
             self.adapter.clone(),
             control_lease_authority,
             evidence,
-        )
+        )?;
+        // This copy comes from the exclusively held live runtime, never a
+        // caller's v5 projection. Complete persistence requires v6 restore.
+        candidate.cleanup_registrations = self.cleanup_registrations.clone();
+        candidate.cleanup_clock.clone_from(&self.cleanup_clock);
+        if !candidate.cleanup_registrations.is_empty() {
+            candidate.validate_complete_cleanup_size()?;
+        }
+        Ok(candidate)
     }
 }
 
@@ -5814,7 +5836,7 @@ mod tests {
         .expect("control-lease authority")
     }
 
-    fn runtime(
+    pub(super) fn runtime(
         features: Vec<ManifoldBrokerFeature>,
         capabilities: Vec<DottedId>,
         leases: Vec<ManifoldRuntimeLease>,
@@ -6068,7 +6090,7 @@ mod tests {
         (use_id, token.token_id)
     }
 
-    fn next_control_lease_clock(
+    pub(super) fn next_control_lease_clock(
         runtime: &ManifoldBrokerRuntime,
         wall_advance_ms: i64,
     ) -> ManifoldClockSnapshot {
@@ -6079,7 +6101,7 @@ mod tests {
         clock
     }
 
-    fn authorize_lifecycle(
+    pub(super) fn authorize_lifecycle(
         runtime: &mut ManifoldBrokerRuntime,
         operation: ManifoldBrokerControlLeaseLifecycleOperation,
         suffix: &str,
