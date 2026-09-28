@@ -122,3 +122,31 @@ checks its existing route observation time and provider epoch. Reboot continuity
 and terminal executor evidence remain separate contracts.
 
 No released signing payload or V5/V6 snapshot shape changes in this slice.
+
+## Coupled renewal and retained target cleanup
+
+The implemented concurrent renewal path accepts fresh reciprocal signed proof
+under current same-key credentials before refreshing those credentials. A
+second fresh context renews the same accepted session and original decision.
+Outer Broker admission/control and inner media/route renewal retain their
+original resource identities and advance only through accepted typed owner
+receipts. Ordinary expiry, replay or uncertain application never resets the
+original authority or creates a new Start. Histories and deadlines are bounded.
+
+A retained cleanup target is derived from the terminal route and immutable
+original issue provenance. Its target holder and lease remain distinct from a
+fresh authenticated cleanup requester, including an independently admitted
+trusted revoker. Local executor projections use the actual local peer; remote
+projections retain their distinct-peer binding. An already prepared Stop can
+resume with fresh cleanup authority after original authority expires, while
+preserving its original ticket and target.
+
+The platform consumer's signed prepare/commit exchange independently derives
+and retains the target Stop action before execution, binds the exact requester
+and prepared ticket, and preserves authenticated raw effect readback in the
+source completion. These platform proofs do not move physical effect ownership
+into Manifold. Replay records prevent a completed effect from running twice;
+uncertain effects remain Pending. Route cleanup acceptance still requires the
+actual retained effect evidence, and does not prove app camera, GPU or process
+teardown. Reboot clock continuity and exclusive durable storage remain separate
+requirements from same-process credential renewal.

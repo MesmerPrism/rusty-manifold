@@ -392,6 +392,9 @@ pub struct ManifoldAcceptedCommonLanPairMediaRoute {
     pub cleanup_status: ManifoldPairMediaRouteCleanupStatus,
     /// Start time.
     pub valid_from_ms: u64,
+    /// Actual accepted coupled renewal observation, preserving the original issue time.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub renewed_at_ms: Option<u64>,
     /// Expiry.
     pub expires_at_ms: u64,
     /// Terminal time.
@@ -760,7 +763,7 @@ pub fn pair_media_route_state_v2_is_well_formed(
             && state.last_observed_at_ms.is_some_and(|last| {
                 (match route {
                     ManifoldAcceptedPairMediaRouteV2::WifiDirect(v) => v.valid_from_ms <= last,
-                    ManifoldAcceptedPairMediaRouteV2::CommonLan(v) => v.valid_from_ms <= last,
+                    ManifoldAcceptedPairMediaRouteV2::CommonLan(v) => v.valid_from_ms <= last && v.renewed_at_ms.map_or(true, |observed| observed <= last),
                 }) && route.ended_at_ms().map_or(true, |ended| ended <= last)
             })
             && match route {
@@ -1456,6 +1459,15 @@ fn issue_common_lan_route(
     if state.routes.iter().any(|route| {
         route.route_leg().leg_id == request.route_leg.leg_id
             && route.route_leg().leg_revision >= request.route_leg.leg_revision
+            && !(*route.lifecycle_status() == ManifoldPairMediaRouteLifecycleStatus::Stopped
+                && *route.cleanup_status() == ManifoldPairMediaRouteCleanupStatus::Completed
+                && route.route_leg() == &request.route_leg
+                && route.media_session_decision_id() != &request.media_session_decision_id
+                && authority.media_sessions.sessions.iter().any(|prior| {
+                    &prior.decision_id == route.media_session_decision_id()
+                        && prior.lifecycle_status == ManifoldMediaSessionLifecycleStatus::Stopped
+                        && prior.product_binding == media.product_binding
+                }))
     }) {
         return (
             state.clone(),
@@ -1604,6 +1616,7 @@ fn issue_common_lan_route(
         lifecycle_status: ManifoldPairMediaRouteLifecycleStatus::Current,
         cleanup_status: ManifoldPairMediaRouteCleanupStatus::NotRequired,
         valid_from_ms: now_ms,
+        renewed_at_ms: None,
         expires_at_ms: request.expires_at_ms,
         ended_at_ms: None,
         ended_by_id: None,
@@ -2179,7 +2192,7 @@ fn route_matches_current_common_lan_peer(
         && route.reciprocal_receipt_id == topology.reciprocal_receipt_id
         && route.reciprocal_authority_revision == topology.reciprocal_authority_revision
         && route.enrollment_authority_revision == topology.enrollment_authority_revision
-        && route.valid_from_ms >= topology.valid_from_ms
+        && route.renewed_at_ms.unwrap_or(route.valid_from_ms) >= topology.valid_from_ms
 }
 
 fn route_matches_current_common_lan_media(
@@ -2417,8 +2430,11 @@ pub fn review_and_apply_pair_media_route_termination_v2(
         && target.map_or(true, |route| {
             route.authority_provider_epoch_id() != &request.expected_authority_provider_epoch_id
                 || route.platform_runtime_spec_id() != &request.expected_platform_runtime_spec_id
-                || *route.lifecycle_status() != ManifoldPairMediaRouteLifecycleStatus::Current
-                || route.expires_at_ms() <= now_ms
+                || ((!matches!(route.lifecycle_status(),ManifoldPairMediaRouteLifecycleStatus::Current|ManifoldPairMediaRouteLifecycleStatus::Expired)
+                    || route.expires_at_ms() <= now_ms)
+                    && !(request.action==ManifoldPairMediaRouteTerminationAction::Revoke
+                        && runtime.trusted_media_revoker_ids.contains(&runtime.command_request.requester_id)
+                        && matches!(route.lifecycle_status(),ManifoldPairMediaRouteLifecycleStatus::Current|ManifoldPairMediaRouteLifecycleStatus::Expired)))
         })
     {
         rejection = Some(ManifoldPairMediaRouteRejectionReason::RouteNotCurrent);
@@ -3643,7 +3659,19 @@ fn valid_runtime_binding(
         && binding.runtime_lease.lease_id == binding.lease_id
         && binding.runtime_lease.holder_id == binding.requester_id
         && binding.runtime_lease.scope == binding.lease_scope_id
-        && binding.runtime_lease.derivative_binding.is_none()
+        && binding
+            .runtime_lease
+            .derivative_binding
+            .as_ref()
+            .map_or(true, |derived_lease| {
+                derived_lease.schema_id.as_str()
+                    == rusty_manifold_runtime_host::HOST_DERIVATIVE_LEASE_BINDING_SCHEMA
+                    && derived_lease.binding_id
+                        == derived(
+                            "binding.runtime_lease",
+                            &derived_lease.source_authorization_id,
+                        )
+            })
         && binding.params_digest.schema_id.as_str() == HOST_TYPED_PARAMS_DIGEST_SCHEMA
         && binding.params_digest.params_type_id.as_str() == expected_params_type
         && valid_sha256(&binding.params_digest.canonical_sha256)
@@ -3817,7 +3845,8 @@ fn valid_common_lan_route_record(r: &ManifoldAcceptedCommonLanPairMediaRoute) ->
         && r.runtime_params_digest.params_type_id.as_str() == PAIR_MEDIA_ROUTE_ISSUE_PARAMS_V2_TYPE
         && r.runtime_command_id.as_str() == PAIR_MEDIA_ROUTE_ISSUE_COMMAND
         && valid_sha256(&r.runtime_params_digest.canonical_sha256)
-        && r.valid_from_ms >= r.signed_topology_evidence.valid_from_ms
+        && r.renewed_at_ms.unwrap_or(r.valid_from_ms) >= r.signed_topology_evidence.valid_from_ms
+        && r.renewed_at_ms.map_or(true, |observed| observed >= r.valid_from_ms && observed < r.expires_at_ms)
         && r.valid_from_ms < r.expires_at_ms
         && r.expires_at_ms <= r.signed_topology_evidence.expires_at_ms
         && r.expires_at_ms <= r.authority_runtime_lease_expires_at_ms
@@ -4069,5 +4098,70 @@ mod tests {
             ),
             Err(ManifoldPairMediaRouteRejectionReason::RuntimeCommandNotAccepted)
         );
+    }
+    #[test]
+    fn retained_derivative_mutation_binding_preserves_shape_and_identity() {
+        let source = id("request.admitted.use");
+        let mut binding = ManifoldPairMediaRouteRuntimeMutationBinding {
+            command_id: id(PAIR_MEDIA_ROUTE_STOP_COMMAND),
+            requester_id: id("client.media"),
+            lease_id: id("lease.media"),
+            lease_scope_id: id("scope.media"),
+            runtime_lease: ManifoldRuntimeLease {
+                lease_id: id("lease.media"),
+                holder_id: id("client.media"),
+                scope: id("scope.media"),
+                expires_at_ms: 100,
+                derivative_binding: Some(
+                    rusty_manifold_runtime_host::ManifoldRuntimeDerivativeLeaseBinding {
+                        schema_id: schema(
+                            rusty_manifold_runtime_host::HOST_DERIVATIVE_LEASE_BINDING_SCHEMA,
+                        ),
+                        binding_id: derived("binding.runtime_lease", &source),
+                        provider_epoch_id: id("epoch.provider"),
+                        upstream_control_lease_id: id("lease.upstream"),
+                        source_authorization_id: source,
+                    },
+                ),
+            },
+            request_id: id("request.route.stop"),
+            params_digest: ManifoldRuntimeTypedParamsDigest {
+                schema_id: schema(HOST_TYPED_PARAMS_DIGEST_SCHEMA),
+                params_type_id: id(PAIR_MEDIA_ROUTE_TERMINATION_PARAMS_V2_TYPE),
+                canonical_sha256: format!("sha256:{}", "a".repeat(64)),
+                canonical_size_bytes: 10,
+            },
+            resulting_authority_revision: Revision::INITIAL,
+        };
+        let valid = |b: &ManifoldPairMediaRouteRuntimeMutationBinding| {
+            valid_runtime_binding(
+                b,
+                PAIR_MEDIA_ROUTE_STOP_COMMAND,
+                PAIR_MEDIA_ROUTE_TERMINATION_PARAMS_V2_TYPE,
+            )
+        };
+        assert!(valid(&binding));
+        let original = binding.clone();
+        binding
+            .runtime_lease
+            .derivative_binding
+            .as_mut()
+            .unwrap()
+            .binding_id = id("binding.substituted");
+        assert!(!valid(&binding));
+        binding = original.clone();
+        binding
+            .runtime_lease
+            .derivative_binding
+            .as_mut()
+            .unwrap()
+            .schema_id = schema("rusty.manifold.runtime_host.derivative_lease_binding.v2");
+        assert!(!valid(&binding));
+        binding = original.clone();
+        binding.runtime_lease.holder_id = id("client.foreign");
+        assert!(!valid(&binding));
+        binding = original;
+        binding.params_digest.params_type_id = id(PAIR_MEDIA_ROUTE_TERMINATION_PARAMS_TYPE);
+        assert!(!valid(&binding));
     }
 }

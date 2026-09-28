@@ -1,5 +1,8 @@
 //! Revisioned cross-app grants and short-lived opaque token authority.
 
+mod grant_renewal;
+pub use grant_renewal::*;
+
 use rusty_manifold_model::{DottedId, Revision, SchemaId};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -204,6 +207,8 @@ pub enum ManifoldAdmissionOperation {
     IssueToken,
     /// One-time capability use authorization.
     AuthorizeUse,
+    /// Scoped current-grant deadline renewal.
+    RenewGrant,
     /// Explicit token revocation.
     RevokeToken,
     /// Authority-owned token revocation.
@@ -309,6 +314,9 @@ pub struct ManifoldAdmissionAuditEvent {
     /// Exact accepted use/token binding; absent for other operations and rejections.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub use_authorization: Option<ManifoldAdmissionUseAuthorizationBinding>,
+    /// Actual current-grant renewal; absent for all legacy operations.
+    #[serde(default,skip_serializing_if = "Option::is_none")]
+    pub grant_renewal: Option<ManifoldAdmissionGrantRenewalBinding>,
 }
 
 /// Durable accepted admission state.
@@ -937,6 +945,7 @@ impl ManifoldAdmissionAuthority {
                 resulting_authority_revision: resulting,
                 rejection_reason: rejection.clone(),
                 use_authorization,
+                grant_renewal: None,
             });
         ManifoldAdmissionReceipt {
             schema_id: schema_id(ADMISSION_RECEIPT_SCHEMA),
@@ -1068,6 +1077,7 @@ fn migrate_legacy_admission_snapshot(
                 resulting_authority_revision: event.resulting_authority_revision,
                 rejection_reason: event.rejection_reason.clone(),
                 use_authorization: None,
+                grant_renewal: None,
             }
         })
         .collect::<Vec<_>>();
@@ -1191,7 +1201,8 @@ fn validate_legacy_admission_snapshot(
             event.applied
                 && matches!(
                     event.operation,
-                    ManifoldAdmissionOperation::IssueToken
+                    ManifoldAdmissionOperation::RenewGrant
+                        | ManifoldAdmissionOperation::IssueToken
                         | ManifoldAdmissionOperation::RevokeToken
                         | ManifoldAdmissionOperation::AdministrativeRevokeToken
                 )
@@ -1385,6 +1396,7 @@ fn validate_token(
 }
 
 fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), ManifoldAdmissionError> {
+    validate_grant_renewal_history(snapshot)?;
     if snapshot.schema_id.as_str() != ADMISSION_SNAPSHOT_SCHEMA || snapshot.max_token_ttl_ms == 0 {
         return Err(ManifoldAdmissionError::InvalidSnapshot("schema_or_ttl"));
     }
@@ -1480,7 +1492,8 @@ fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), Manifol
             event.applied
                 && matches!(
                     event.operation,
-                    ManifoldAdmissionOperation::IssueToken
+                    ManifoldAdmissionOperation::RenewGrant
+                        | ManifoldAdmissionOperation::IssueToken
                         | ManifoldAdmissionOperation::RevokeToken
                         | ManifoldAdmissionOperation::AdministrativeRevokeToken
                 )
@@ -1529,7 +1542,8 @@ fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), Manifol
     for (index, event) in snapshot.audit_events.iter().enumerate() {
         let sequence = (index as u64) + 1;
         let operation_valid = match event.operation {
-            ManifoldAdmissionOperation::IssueToken
+            ManifoldAdmissionOperation::RenewGrant
+                        | ManifoldAdmissionOperation::IssueToken
             | ManifoldAdmissionOperation::RevokeToken
             | ManifoldAdmissionOperation::AdministrativeRevokeToken
                 if event.applied =>

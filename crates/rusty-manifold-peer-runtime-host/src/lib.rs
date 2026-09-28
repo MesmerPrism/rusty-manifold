@@ -8,6 +8,12 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
+mod concurrent_media_renewal;
+pub use concurrent_media_renewal::*;
+
+mod concurrent_authority_renewal;
+pub use concurrent_authority_renewal::*;
+
 mod cleanup_pending;
 pub use cleanup_pending::*;
 
@@ -276,8 +282,12 @@ pub enum ManifoldPeerRuntimeAuditKind {
     MediaSessionExpiry,
     /// Independently validated non-derivative control lease for a trusted media revoker.
     TrustedMediaRevokerLeaseAdoption,
+    /// Actual generic expiry adoption of an independent revoker lease.
+    TrustedMediaRevokerLeaseRetirement,
     /// Outer broker bounded use minted an inner Runtime Host lease.
     BrokerLeaseAdmission,
+    /// Coupled active lease/media/route deadline adoption from accepted live authority.
+    ConcurrentMediaAuthorityRenewal,
     /// Inner Runtime Host lease released after stop/revoke.
     BrokerLeaseRelease,
     /// Live Broker administrative revocation cascaded through peer derivatives.
@@ -419,6 +429,15 @@ pub struct ManifoldPeerRuntimeHostSnapshot {
     pub pair_media_routes: ManifoldPairMediaRouteAuthorityStateV2,
     /// Signed topology receipts retained for current-state revalidation.
     pub signed_topology_authorizations: Vec<ManifoldSignedPeerTopologyAuthorizationV2>,
+    /// Applied credential refreshes, including exact accepted signed source proof.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub concurrent_credential_refreshes: Vec<ManifoldConcurrentPairCredentialRefreshReceipt>,
+    /// Applied same-session deadline transitions, retaining prior signed topology.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub concurrent_session_renewals: Vec<ManifoldConcurrentPairSessionRenewalReceipt>,
+    /// Successful source-bound coupled deadline adoptions.
+    #[serde(default,skip_serializing_if = "Vec::is_empty")]
+    pub concurrent_media_renewals: Vec<ManifoldConcurrentMediaAuthorityRenewalReceipt>,
     /// Append-only cross-authority audit records.
     pub audit_events: Vec<ManifoldPeerRuntimeAuditEvent>,
 }
@@ -868,6 +887,9 @@ impl ManifoldPeerRuntimeHost {
                 direct_lane_leases: ManifoldDirectLaneLeaseState::empty(),
                 pair_media_routes: ManifoldPairMediaRouteAuthorityStateV2::empty(),
                 signed_topology_authorizations: Vec::new(),
+                concurrent_credential_refreshes: Vec::new(),
+                concurrent_session_renewals: Vec::new(),
+                concurrent_media_renewals: Vec::new(),
                 audit_events: Vec::new(),
             },
             &expected_trust_policy,
@@ -1107,6 +1129,27 @@ impl ManifoldPeerRuntimeHost {
         };
         *self = next;
         Ok(receipt)
+    }
+
+    /// Adopts a real generic expiry sweep for only an independent enrolled revoker lease.
+    pub fn retire_trusted_media_revoker_control_lease(
+        &mut self, request:&ManifoldRuntimeControlLeaseAdoptionRequest, now_ms:u64,
+    )->Result<ManifoldRuntimeControlLeaseAdoptionReceipt,ManifoldPeerRuntimeHostError> {
+        let ManifoldRuntimeControlLeaseAuthorityApplication::Expiry(application)=&request.application else{return Err(invalid_snapshot("revoker retirement requires actual expiry application"));};
+        application.validate_against_snapshot(&request.prior_authority_snapshot).map_err(|_|invalid_snapshot("revoker expiry lineage invalid"))?;
+        let [expired]=application.review.expired_leases.as_slice() else{return Err(invalid_snapshot("revoker expiry requires exactly one lease"));};
+        if expired.expires_at_ms>now_ms || !self.snapshot.trust_policy.trusted_media_revoker_ids.contains(&expired.holder_id)
+            || expired.scope!=self.snapshot.trust_policy.media_runtime_lease_scope_id
+            || !application.review.expired_stream_subscriptions.is_empty()
+            || !self.snapshot.media_command_runtime.leases.iter().any(|lease|lease.lease_id==expired.lease_id && lease.derivative_binding.is_none() && lease.holder_id==expired.holder_id && lease.scope==expired.scope && lease.expires_at_ms==expired.expires_at_ms) {
+            return Err(invalid_snapshot("revoker expiry does not match retained independent lease"));
+        }
+        let mut runtime=ManifoldRuntimeHost::from_snapshot(self.snapshot.media_command_runtime.clone()).map_err(|_|invalid_snapshot("revoker expiry runtime invalid"))?;
+        let receipt=runtime.apply_control_lease_adoption(request);
+        if !receipt.applied || receipt.removed_lease_ids!=[expired.lease_id.clone()] || !receipt.added_lease_ids.is_empty() || !receipt.renewed_lease_ids.is_empty() {return Err(invalid_snapshot("revoker expiry not actually adopted"));}
+        let mut candidate=self.clone();candidate.snapshot.media_command_runtime=runtime.snapshot().clone();
+        candidate.record(ManifoldPeerRuntimeAuditKind::TrustedMediaRevokerLeaseRetirement,request.adoption_id.clone(),receipt.prior_host_authority_revision,receipt.resulting_host_authority_revision,true,None)?;
+        validate_snapshot(&candidate.snapshot)?;*self=candidate;Ok(receipt)
     }
 
     fn ensure_fresh_trusted_media_revoker_lease(
@@ -1692,6 +1735,7 @@ impl ManifoldPeerRuntimeHost {
     ) -> Result<ManifoldMediaSessionAcceptanceReceipt, ManifoldPeerRuntimeHostError> {
         self.ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::MediaSession)?;
         self.ensure_event_capacity()?;
+        let readoption = terminal_media_readoption(&self.snapshot, request, command_request)?;
         let mut runtime =
             ManifoldRuntimeHost::from_snapshot(self.snapshot.media_command_runtime.clone())
                 .map_err(|error| ManifoldPeerRuntimeHostError::Authority(error.to_string()))?;
@@ -1707,12 +1751,22 @@ impl ManifoldPeerRuntimeHost {
             dispatch: &dispatch,
             application: &application,
         };
-        let (next, receipt) = review_and_apply_media_session_acceptance(
-            &self.snapshot.media_sessions,
-            request,
-            context,
-            now_ms,
-        );
+        let (next, receipt) = if let Some(decision) = readoption {
+            rusty_manifold_media_session::review_and_apply_media_session_terminal_readoption(
+                &self.snapshot.media_sessions,
+                request,
+                context,
+                now_ms,
+                &decision,
+            )
+        } else {
+            review_and_apply_media_session_acceptance(
+                &self.snapshot.media_sessions,
+                request,
+                context,
+                now_ms,
+            )
+        };
         self.snapshot.media_sessions = next;
         self.record(
             ManifoldPeerRuntimeAuditKind::MediaSessionAcceptance,
@@ -2934,12 +2988,41 @@ impl ManifoldPeerRuntimeHost {
         self.review_media_session_termination_inner(request, command_request, now_ms)
     }
 
+    /// Revokes a retained media decision using a fresh independent enrolled revoker lease.
+    /// Expired ordinary grants/derivative leases cannot authorize this recovery.
+    pub fn review_media_session_revoker_recovery(
+        &mut self,
+        request:&ManifoldMediaSessionTerminationRequest,
+        command_request:&ManifoldRuntimeCommandRequest,
+        adoption:&ManifoldPeerRuntimeTrustedMediaRevokerLeaseAdoptionReceipt,
+        now_ms:u64,
+    )->Result<ManifoldMediaSessionMutationReceipt,ManifoldPeerRuntimeHostError> {
+        if request.action!=rusty_manifold_media_session::ManifoldMediaSessionTerminationAction::Revoke
+            || adoption.provider_epoch_id!=self.snapshot.provider_epoch_id || adoption.peer_host_id!=self.snapshot.host_id
+            || !adoption.runtime_adoption.applied || adoption.revoker_id!=command_request.requester_id
+            || command_request.lease_id.as_ref()!=Some(&adoption.lease.lease_id)
+            || !self.snapshot.media_command_runtime.leases.contains(&adoption.lease)
+            || !self.snapshot.media_command_runtime.reviewed_control_lease_adoption_ids.contains(&adoption.runtime_adoption.adoption_id)
+            || !self.snapshot.audit_events.iter().any(|event|event.event_kind==ManifoldPeerRuntimeAuditKind::TrustedMediaRevokerLeaseAdoption && event.source_id==adoption.runtime_adoption.adoption_id && event.applied) {
+            return Err(invalid_snapshot("revoker recovery lacks actual independent lease adoption"));
+        }
+        self.ensure_fresh_trusted_media_revoker_lease(&adoption.lease,now_ms,now_ms)?;
+        self.review_media_session_termination_inner_mode(request,command_request,now_ms,true)
+    }
+
     fn review_media_session_termination_inner(
         &mut self,
         request: &ManifoldMediaSessionTerminationRequest,
         command_request: &ManifoldRuntimeCommandRequest,
         now_ms: u64,
     ) -> Result<ManifoldMediaSessionMutationReceipt, ManifoldPeerRuntimeHostError> {
+        self.review_media_session_termination_inner_mode(request,command_request,now_ms,false)
+    }
+
+    fn review_media_session_termination_inner_mode(
+        &mut self, request:&ManifoldMediaSessionTerminationRequest, command_request:&ManifoldRuntimeCommandRequest,
+        now_ms:u64, revoker_recovery:bool,
+    )->Result<ManifoldMediaSessionMutationReceipt,ManifoldPeerRuntimeHostError> {
         self.ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::MediaSession)?;
         self.ensure_event_capacity()?;
         let mut runtime =
@@ -2957,12 +3040,11 @@ impl ManifoldPeerRuntimeHost {
             dispatch: &dispatch,
             application: &application,
         };
-        let (next, receipt) = review_and_apply_media_session_termination(
-            &self.snapshot.media_sessions,
-            request,
-            context,
-            now_ms,
-        );
+        let (next,receipt)=if revoker_recovery {
+            rusty_manifold_media_session::review_and_apply_media_session_revoker_recovery(&self.snapshot.media_sessions,request,context,now_ms)
+        } else {
+            review_and_apply_media_session_termination(&self.snapshot.media_sessions,request,context,now_ms)
+        };
         self.snapshot.media_sessions = next;
         self.record(
             ManifoldPeerRuntimeAuditKind::MediaSessionTermination,
@@ -4777,7 +4859,10 @@ fn decode_peer_runtime_snapshot_with_migration(
                         .into_iter()
                         .map(ManifoldSignedPeerTopologyAuthorizationV2::WifiDirect)
                         .collect(),
-                    audit_events: legacy.audit_events,
+                    concurrent_credential_refreshes: Vec::new(),
+                concurrent_session_renewals: Vec::new(),
+                concurrent_media_renewals: Vec::new(),
+                audit_events: legacy.audit_events,
                 },
                 true,
             )
@@ -4820,7 +4905,10 @@ fn decode_peer_runtime_snapshot_with_migration(
                         .into_iter()
                         .map(ManifoldSignedPeerTopologyAuthorizationV2::WifiDirect)
                         .collect(),
-                    audit_events: legacy.audit_events,
+                    concurrent_credential_refreshes: Vec::new(),
+                concurrent_session_renewals: Vec::new(),
+                concurrent_media_renewals: Vec::new(),
+                audit_events: legacy.audit_events,
                 },
                 true,
             )
@@ -4863,7 +4951,10 @@ fn decode_peer_runtime_snapshot_with_migration(
                         .into_iter()
                         .map(ManifoldSignedPeerTopologyAuthorizationV2::WifiDirect)
                         .collect(),
-                    audit_events: legacy.audit_events,
+                    concurrent_credential_refreshes: Vec::new(),
+                concurrent_session_renewals: Vec::new(),
+                concurrent_media_renewals: Vec::new(),
+                audit_events: legacy.audit_events,
                 },
                 true,
             )
@@ -4904,7 +4995,10 @@ fn decode_peer_runtime_snapshot_with_migration(
                         .into_iter()
                         .map(ManifoldSignedPeerTopologyAuthorizationV2::WifiDirect)
                         .collect(),
-                    audit_events: legacy.audit_events,
+                    concurrent_credential_refreshes: Vec::new(),
+                concurrent_session_renewals: Vec::new(),
+                concurrent_media_renewals: Vec::new(),
+                audit_events: legacy.audit_events,
                 },
                 true,
             )
@@ -5523,6 +5617,8 @@ fn validate_snapshot(
     validate_peer_and_enrollment_state(snapshot)?;
     validate_rendezvous_and_session_state(snapshot)?;
     validate_mesh_and_lease_state(snapshot)?;
+    validate_concurrent_pair_renewals(snapshot)?;
+    validate_concurrent_media_renewals(snapshot)?;
     validate_topology_and_audit_state(snapshot)
 }
 
@@ -5974,6 +6070,7 @@ fn validate_mesh_and_lease_state(
     }
     validate_pair_media_route_bindings(snapshot)?;
     validate_pair_media_route_audit_closure(snapshot)?;
+    validate_terminal_media_readoption_history(snapshot)?;
     Ok(())
 }
 
@@ -6131,6 +6228,7 @@ fn validate_pair_media_route_bindings(
                                 false
                             };
                             authorized
+                                && pair_route_runtime_lease_is_retained(snapshot, &binding.runtime_lease)
                                 && params_match
                                 && runtime_application_is_closed(
                                     snapshot,
@@ -6218,24 +6316,25 @@ fn validate_pair_media_route_bindings(
                     &ManifoldPeerRuntimeAuditKind::PairMediaRoute,
                     &route.request_id,
                 )?;
+                let original_route=original_common_lan_route(snapshot,route);
                 let reconstructed = ManifoldCommonLanPairMediaRouteRequest {
                     request: ManifoldPairMediaRouteRequest {
                         schema_id: schema(PAIR_MEDIA_ROUTE_REQUEST_SCHEMA),
-                        request_id: route.request_id.clone(),
+                        request_id: original_route.request_id.clone(),
                         expected_authority_revision: issue.prior_authority_revision,
-                        expected_peer_session_authority_revision: route
+                        expected_peer_session_authority_revision: original_route
                             .peer_session_acceptance_authority_revision,
-                        expected_media_acceptance_authority_revision: route
+                        expected_media_acceptance_authority_revision: original_route
                             .media_acceptance_authority_revision,
-                        runtime_command_request_id: route.runtime_command_request_id.clone(),
-                        expected_runtime_lease_expires_at_ms: route
+                        runtime_command_request_id: original_route.runtime_command_request_id.clone(),
+                        expected_runtime_lease_expires_at_ms: original_route
                             .authority_runtime_lease_expires_at_ms,
-                        peer_session_id: route.peer_session_id.clone(),
-                        media_session_decision_id: route.media_session_decision_id.clone(),
-                        route_leg: route.route_leg.clone(),
-                        expires_at_ms: route.expires_at_ms,
+                        peer_session_id: original_route.peer_session_id.clone(),
+                        media_session_decision_id: original_route.media_session_decision_id.clone(),
+                        route_leg: original_route.route_leg.clone(),
+                        expires_at_ms: original_route.expires_at_ms,
                     },
-                    transport: route.transport.clone(),
+                    transport: original_route.transport.clone(),
                 };
                 if pair_media_route_issue_params_digest_v2(&reconstructed)
                     .ok()
@@ -6247,18 +6346,10 @@ fn validate_pair_media_route_bindings(
                 if route.signed_topology_evidence.session_id != route.peer_session_id
                     || route.signed_topology_evidence.decision_id != route.peer_session_decision_id
                     || route.signed_topology_evidence.transport != route.transport
-                    || snapshot
-                        .signed_topology_authorizations
-                        .iter()
-                        .find(|topology| {
-                            topology.session_id() == &route.peer_session_id
-                                && topology.decision_id() == &route.peer_session_decision_id
-                        })
-                        .map_or(true, |topology| {
-                            !matches!(topology,
-                        ManifoldSignedPeerTopologyAuthorizationV2::CommonLan(value)
-                            if value == &route.signed_topology_evidence)
-                        })
+                    || !(snapshot.signed_topology_authorizations.iter().any(|topology| matches!(topology,
+                        ManifoldSignedPeerTopologyAuthorizationV2::CommonLan(value) if value == &route.signed_topology_evidence))
+                        || snapshot.concurrent_session_renewals.iter().any(|renewal|
+                            renewal.prior_topology == route.signed_topology_evidence || renewal.topology == route.signed_topology_evidence))
                 {
                     return Err(invalid_snapshot(
                         "common-LAN route retained topology binding",
@@ -6343,6 +6434,10 @@ fn validate_pair_media_route_bindings(
         if receipt.authority_host_id != *route.authority_host_id()
             || receipt.authority_provider_epoch_id != *route.authority_provider_epoch_id()
             || !cleanup_authorized
+            || !pair_route_runtime_lease_is_retained(
+                snapshot,
+                &receipt.runtime_binding.runtime_lease,
+            )
             || !params_match
             || !valid_sha256(&receipt.effect_receipt_sha256)
             || !runtime_application_is_closed(
@@ -6357,6 +6452,196 @@ fn validate_pair_media_route_bindings(
         }
     }
     Ok(())
+}
+
+/// Historical terminal/cleanup bindings preserve the exact admitted derivative
+/// lease even after physical release. Shape alone cannot confer Broker lineage.
+/// Derive terminal readoption exclusively from accepted host history. The new
+/// admitted lease must be a distinct object; fixed product lease IDs may recur.
+fn terminal_media_readoption(
+    snapshot: &ManifoldPeerRuntimeHostSnapshot,
+    request: &ManifoldMediaSessionAcceptanceRequest,
+    command: &ManifoldRuntimeCommandRequest,
+) -> Result<Option<DottedId>, ManifoldPeerRuntimeHostError> {
+    let descriptor = &request.product_binding.descriptor;
+    let previous: Vec<_> = snapshot
+        .media_sessions
+        .sessions
+        .iter()
+        .filter(|s| s.session_id == descriptor.session_id)
+        .collect();
+    if previous.is_empty()
+        || previous
+            .iter()
+            .all(|s| s.session_authority_revision < descriptor.authority_revision)
+    {
+        return Ok(None);
+    }
+    validate_pair_media_route_bindings(snapshot)?;
+    let fresh = snapshot
+        .media_command_runtime
+        .leases
+        .iter()
+        .find(|l| Some(&l.lease_id) == command.lease_id.as_ref())
+        .ok_or_else(|| invalid_snapshot("terminal readoption fresh lease missing"))?;
+    let fresh_admission = snapshot
+        .broker_lease_admissions
+        .iter()
+        .find(|a| {
+            &a.runtime_lease == fresh
+                && a.released_at_ms.is_none()
+                && broker_lease_admission_is_well_formed(snapshot, a)
+        })
+        .ok_or_else(|| invalid_snapshot("terminal readoption fresh admission missing"))?;
+    for prior in &previous {
+        if prior.lifecycle_status != ManifoldMediaSessionLifecycleStatus::Stopped
+            || prior.product_binding != request.product_binding
+            || prior.runtime_client_id != command.requester_id
+            || prior.provider_epoch_id != snapshot.provider_epoch_id
+        {
+            return Err(invalid_snapshot(
+                "terminal readoption subject not identically stopped",
+            ));
+        }
+        let ended = prior
+            .ended_at_ms
+            .ok_or_else(|| invalid_snapshot("terminal readoption end missing"))?;
+        let released = snapshot
+            .broker_lease_admissions
+            .iter()
+            .filter(|a| {
+                a.runtime_lease.lease_id == prior.runtime_lease_id
+                    && a.admitted_at_ms <= prior.accepted_at_ms
+                    && a.released_at_ms
+                        .is_some_and(|t| t >= ended && t < fresh_admission.admitted_at_ms)
+                    && a.release_id.is_some()
+                    && a.runtime_lease != *fresh
+                    && broker_lease_admission_is_well_formed(snapshot, a)
+            })
+            .count();
+        if released != 1 {
+            return Err(invalid_snapshot(
+                "terminal readoption prior release missing",
+            ));
+        }
+        let routes: Vec<_> = snapshot
+            .pair_media_routes
+            .routes
+            .iter()
+            .filter(|r| r.media_session_decision_id() == &prior.decision_id)
+            .collect();
+        if routes.is_empty()
+            || routes.iter().any(|r| {
+                *r.lifecycle_status()
+                    == rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Current
+                    || *r.cleanup_status()
+                        != rusty_manifold_peer::ManifoldPairMediaRouteCleanupStatus::Completed
+                    || !snapshot
+                        .pair_media_routes
+                        .cleanup_receipts
+                        .iter()
+                        .any(|c| c.grant_id() == r.grant_id() && c.completed_at_ms() >= ended)
+            })
+        {
+            return Err(invalid_snapshot(
+                "terminal readoption retained physical cleanup missing",
+            ));
+        }
+    }
+    Ok(previous
+        .iter()
+        .max_by_key(|s| s.accepted_at_ms)
+        .map(|s| s.decision_id.clone()))
+}
+
+fn validate_terminal_media_readoption_history(
+    snapshot: &ManifoldPeerRuntimeHostSnapshot,
+) -> Result<(), ManifoldPeerRuntimeHostError> {
+    for accepted in &snapshot.media_sessions.sessions {
+        for prior in snapshot.media_sessions.sessions.iter().filter(|p| {
+            p.session_id == accepted.session_id
+                && p.accepted_at_ms < accepted.accepted_at_ms
+                && p.session_authority_revision >= accepted.session_authority_revision
+        }) {
+            let ended = prior
+                .ended_at_ms
+                .ok_or_else(|| invalid_snapshot("readoption history terminal time missing"))?;
+            let fresh = snapshot
+                .broker_lease_admissions
+                .iter()
+                .find(|a| {
+                    a.runtime_lease.lease_id == accepted.runtime_lease_id
+                        && a.admitted_at_ms == accepted.accepted_at_ms
+                        && broker_lease_admission_is_well_formed(snapshot, a)
+                })
+                .ok_or_else(|| invalid_snapshot("readoption history fresh admission missing"))?;
+            if prior.lifecycle_status != ManifoldMediaSessionLifecycleStatus::Stopped
+                || prior.product_binding != accepted.product_binding
+                || prior.runtime_client_id != accepted.runtime_client_id
+                || prior.provider_epoch_id != accepted.provider_epoch_id
+                || snapshot
+                    .broker_lease_admissions
+                    .iter()
+                    .filter(|a| {
+                        a.runtime_lease.lease_id == prior.runtime_lease_id
+                            && a.admitted_at_ms <= prior.accepted_at_ms
+                            && a.released_at_ms
+                                .is_some_and(|t| t >= ended && t < accepted.accepted_at_ms)
+                            && a.release_id.is_some()
+                            && a.runtime_lease != fresh.runtime_lease
+                            && broker_lease_admission_is_well_formed(snapshot, a)
+                    })
+                    .count()
+                    != 1
+            {
+                return Err(invalid_snapshot(
+                    "readoption history release/subject lineage missing",
+                ));
+            }
+            let routes: Vec<_> = snapshot
+                .pair_media_routes
+                .routes
+                .iter()
+                .filter(|r| r.media_session_decision_id() == &prior.decision_id)
+                .collect();
+            if routes.is_empty()
+                || routes.iter().any(|r| {
+                    *r.cleanup_status()
+                        != rusty_manifold_peer::ManifoldPairMediaRouteCleanupStatus::Completed
+                        || *r.lifecycle_status()
+                            == rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Current
+                        || !snapshot.pair_media_routes.cleanup_receipts.iter().any(|c| {
+                            c.grant_id() == r.grant_id()
+                                && c.completed_at_ms() >= ended
+                                && c.completed_at_ms() < accepted.accepted_at_ms
+                        })
+                })
+            {
+                return Err(invalid_snapshot(
+                    "readoption history physical cleanup missing",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn pair_route_runtime_lease_is_retained(
+    snapshot: &ManifoldPeerRuntimeHostSnapshot,
+    lease: &ManifoldRuntimeLease,
+) -> bool {
+    lease.derivative_binding.is_none()
+        || snapshot
+            .broker_lease_admissions
+            .iter()
+            .filter(|admission| {
+                (&admission.runtime_lease == lease || snapshot.concurrent_media_renewals.iter().any(|renewal|
+                        renewal.prior_inner_lease.derivative_binding == admission.runtime_lease.derivative_binding
+                            && (&renewal.prior_inner_lease == lease || &renewal.renewed_inner_lease == lease)))
+                    && broker_lease_admission_is_well_formed(snapshot, admission)
+            })
+            .count()
+            == 1
 }
 
 fn runtime_application_is_closed(
@@ -6890,7 +7175,7 @@ fn validate_media_command_runtime(
                     .broker_lease_admissions
                     .iter()
                     .filter(|admission| {
-                        admission.released_at_ms.is_none() && admission.runtime_lease == *lease
+                        admission.released_at_ms.is_none() && effective_admitted_lease(snapshot,admission) == lease
                     })
                     .count()
                     != 1
@@ -6947,7 +7232,7 @@ fn broker_lease_admission_is_well_formed(
         return false;
     };
     let active_lease = snapshot.media_command_runtime.leases.iter().any(|lease| {
-        lease == &admission.runtime_lease
+        lease == effective_admitted_lease(snapshot, admission)
             && lease.scope == snapshot.trust_policy.media_runtime_lease_scope_id
             && lease.holder_id == grant.client_id
     });
