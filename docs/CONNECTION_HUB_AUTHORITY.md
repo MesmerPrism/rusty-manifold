@@ -236,3 +236,28 @@ zero-argument vectors, repeatable history rollover with active-state
 preservation and prior replay closure, command-spam cleanup reservation,
 provider-death cleanup, explicit revocation/expiry, deterministic restart
 bytes, unknown-field rejection, and snapshot/audit damage rejection.
+
+## Interpreting adapter receipts
+
+Use the current native receipt and audit request, not only an adapter's example
+vector. `rusty.manifold.connection_hub.session.v2` is a public typed identity
+with controller/session ids, expiry, transport epoch and transport evidence.
+It is not the opaque authentication cookie, pairing code or other credential
+owned by the adapter. A public session object may be retained under its exact
+schema; credentials must not enter authority receipts or diagnostic logs.
+
+Join the native command authorization to its audit request, external request
+digest and sequence, expected transport epoch, current provider/surface
+instance, contract and typed parameters. Platform adapters may normalize
+request ids; do not assume a normalized native id equals the external id.
+An unchanged denied request can leave the next external sequence unchanged;
+an accepted request consumes one. Preserve the owner's actual sequence
+outcome instead of treating every rejection as a consumed request.
+
+Authorization does not prove an application effect. The selected platform
+executor owns effective completion; a transport acknowledgement or accepted
+command alone cannot establish rendered pixels, media delivery or hardware
+readiness. Adapter receipt status names and clock representations remain in
+the adapter contract. Current native session, transport epoch, capability,
+lease and expiry checks remain authoritative regardless of a carrier's
+connection lifetime or local timeout.
