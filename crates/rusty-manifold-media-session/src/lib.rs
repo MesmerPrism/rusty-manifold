@@ -489,15 +489,46 @@ pub fn review_and_apply_media_session_acceptance(
     ManifoldMediaSessionAcceptanceState,
     ManifoldMediaSessionAcceptanceReceipt,
 ) {
+    review_media_acceptance_inner(state, request, runtime, now_ms, None)
+}
+
+/// Re-adopts an identical stopped descriptor only after the composing authority
+/// has joined the named terminal decision to retained release/cleanup evidence.
+/// This does not advance the immutable descriptor revision or accept replay.
+#[must_use]
+pub fn review_and_apply_media_session_terminal_readoption(
+    state: &ManifoldMediaSessionAcceptanceState,
+    request: &ManifoldMediaSessionAcceptanceRequest,
+    runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
+    now_ms: u64,
+    terminal_decision_id: &DottedId,
+) -> (
+    ManifoldMediaSessionAcceptanceState,
+    ManifoldMediaSessionAcceptanceReceipt,
+) {
+    review_media_acceptance_inner(state, request, runtime, now_ms, Some(terminal_decision_id))
+}
+
+fn review_media_acceptance_inner(
+    state: &ManifoldMediaSessionAcceptanceState,
+    request: &ManifoldMediaSessionAcceptanceRequest,
+    runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
+    now_ms: u64,
+    terminal_decision_id: Option<&DottedId>,
+) -> (
+    ManifoldMediaSessionAcceptanceState,
+    ManifoldMediaSessionAcceptanceReceipt,
+) {
     let prior = state.authority_revision;
-    let rejection = validate_acceptance_request(state, request, runtime, now_ms)
-        .err()
-        .or_else(|| {
-            prior
-                .next()
-                .is_none()
-                .then_some(ManifoldMediaSessionAcceptanceRejectionReason::RevisionExhausted)
-        });
+    let rejection =
+        validate_acceptance_request(state, request, runtime, now_ms, terminal_decision_id)
+            .err()
+            .or_else(|| {
+                prior
+                    .next()
+                    .is_none()
+                    .then_some(ManifoldMediaSessionAcceptanceRejectionReason::RevisionExhausted)
+            });
     if let Some(reason) = rejection {
         return (
             state.clone(),
@@ -576,6 +607,38 @@ pub fn review_and_apply_media_session_termination(
     ManifoldMediaSessionAcceptanceState,
     ManifoldMediaSessionMutationReceipt,
 ) {
+    review_and_apply_media_session_termination_inner(state, request, runtime, now_ms, false)
+}
+
+/// Applies a trusted, freshly command-authorized Revoke to a retained expired decision.
+/// Original deadlines and all prior mutation evidence remain retained.
+#[must_use]
+pub fn review_and_apply_media_session_revoker_recovery(
+    state: &ManifoldMediaSessionAcceptanceState,
+    request: &ManifoldMediaSessionTerminationRequest,
+    runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
+    now_ms: u64,
+) -> (
+    ManifoldMediaSessionAcceptanceState,
+    ManifoldMediaSessionMutationReceipt,
+) {
+    let recovery = request.action == ManifoldMediaSessionTerminationAction::Revoke
+        && runtime
+            .trusted_revoker_ids
+            .contains(&runtime.command_request.requester_id);
+    review_and_apply_media_session_termination_inner(state, request, runtime, now_ms, recovery)
+}
+
+fn review_and_apply_media_session_termination_inner(
+    state: &ManifoldMediaSessionAcceptanceState,
+    request: &ManifoldMediaSessionTerminationRequest,
+    runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
+    now_ms: u64,
+    revoker_recovery: bool,
+) -> (
+    ManifoldMediaSessionAcceptanceState,
+    ManifoldMediaSessionMutationReceipt,
+) {
     let prior = state.authority_revision;
     let expected_command = match request.action {
         ManifoldMediaSessionTerminationAction::Stop => MANIFOLD_MEDIA_SESSION_STOP_COMMAND,
@@ -606,8 +669,14 @@ pub fn review_and_apply_media_session_termination(
             session.decision_id == request.decision_id
                 && session.session_id == request.session_id
                 && session.provider_epoch_id == request.expected_provider_epoch_id
-                && session.lifecycle_status == ManifoldMediaSessionLifecycleStatus::Current
-                && session.expires_at_ms > now_ms
+                && ((session.lifecycle_status == ManifoldMediaSessionLifecycleStatus::Current
+                    && session.expires_at_ms > now_ms)
+                    || (revoker_recovery
+                        && matches!(
+                            session.lifecycle_status,
+                            ManifoldMediaSessionLifecycleStatus::Current
+                                | ManifoldMediaSessionLifecycleStatus::Expired
+                        )))
         }) {
             Some(ManifoldMediaSessionAcceptanceRejectionReason::SessionNotCurrent)
         } else if state.sessions.iter().any(|session| {
@@ -811,6 +880,7 @@ fn validate_acceptance_request(
     request: &ManifoldMediaSessionAcceptanceRequest,
     runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
     now_ms: u64,
+    terminal_decision_id: Option<&DottedId>,
 ) -> Result<(), ManifoldMediaSessionAcceptanceRejectionReason> {
     if state.schema_id.as_str() != MANIFOLD_MEDIA_SESSION_ACCEPTANCE_STATE_SCHEMA
         || request.schema_id.as_str() != MANIFOLD_MEDIA_SESSION_ACCEPTANCE_REQUEST_SCHEMA
@@ -919,9 +989,20 @@ fn validate_acceptance_request(
     }) {
         return Err(ManifoldMediaSessionAcceptanceRejectionReason::SubjectLineageMismatch);
     }
+    let terminal_readoption = terminal_decision_id.is_some_and(|decision| {
+        state.sessions.iter().any(|prior| {
+            &prior.decision_id == decision
+                && prior.session_id == descriptor.session_id
+                && prior.lifecycle_status == ManifoldMediaSessionLifecycleStatus::Stopped
+                && prior.product_binding == request.product_binding
+        })
+    });
     if state.sessions.iter().any(|current| {
         current.session_id == descriptor.session_id
             && current.session_authority_revision >= descriptor.authority_revision
+            && !(terminal_readoption
+                && current.lifecycle_status == ManifoldMediaSessionLifecycleStatus::Stopped
+                && current.product_binding == request.product_binding)
     }) {
         return Err(ManifoldMediaSessionAcceptanceRejectionReason::StaleSessionRevision);
     }

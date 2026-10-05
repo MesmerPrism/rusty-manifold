@@ -1,5 +1,6 @@
 //! Standalone and embedded broker adapters over one Manifold Runtime Host.
 
+mod cleanup_credential;
 #[cfg(feature = "fixture-export")]
 mod fixture_export;
 mod lease_authority;
@@ -8,6 +9,7 @@ mod lease_projection;
 mod pmb_v3;
 mod runtime;
 
+pub use cleanup_credential::*;
 #[cfg(feature = "fixture-export")]
 #[doc(hidden)]
 pub use fixture_export::export_broker_adapter_fixtures;
