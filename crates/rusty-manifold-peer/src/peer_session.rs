@@ -1233,7 +1233,11 @@ pub fn review_and_apply_signed_peer_session_v2(
 pub fn review_and_apply_common_lan_session_renewal(
     state: &ManifoldPeerSessionAuthorityStateV2,
     case: ManifoldCommonLanSignedPeerSessionReviewCase<'_>,
-) -> (ManifoldPeerSessionAuthorityStateV2, ManifoldPeerSessionDecisionV2, ManifoldSignedPeerTopologyAuthorizationV2) {
+) -> (
+    ManifoldPeerSessionAuthorityStateV2,
+    ManifoldPeerSessionDecisionV2,
+    ManifoldSignedPeerTopologyAuthorizationV2,
+) {
     review_and_apply_common_lan_session(state, case, true)
 }
 
@@ -1249,11 +1253,16 @@ fn review_and_apply_common_lan_session(
     let proposal = case.proposal;
     let prior = state.authority_revision;
     let previous = state.sessions.iter().find_map(|session| match session {
-        ManifoldAcceptedPeerSessionV2::CommonLan(session) if session.proposal.session_id == proposal.session_id => Some(session),
+        ManifoldAcceptedPeerSessionV2::CommonLan(session)
+            if session.proposal.session_id == proposal.session_id =>
+        {
+            Some(session)
+        }
         _ => None,
     });
     let renewal_scope_valid = previous.is_some_and(|old| {
-        !old.revoked && old.proposal.expires_at_ms > case.now_ms
+        !old.revoked
+            && old.proposal.expires_at_ms > case.now_ms
             && proposal.expires_at_ms > old.proposal.expires_at_ms
             && proposal.subject_peer_id == old.proposal.subject_peer_id
             && proposal.candidate_peer_id == old.proposal.candidate_peer_id
@@ -1341,23 +1350,28 @@ fn review_and_apply_common_lan_session(
             })
     }) {
         rejection = Some(ManifoldPeerSessionRejectionReason::PeerNotAcceptedForRendezvous);
-    } else if !renewal && state.sessions.iter().any(|session| match session {
-        ManifoldAcceptedPeerSessionV2::WifiDirect(value) => {
-            value.proposal.session_id == proposal.session_id && !value.revoked
-        }
-        ManifoldAcceptedPeerSessionV2::CommonLan(value) => {
-            value.proposal.session_id == proposal.session_id
-                && !value.revoked
-                && value.proposal != *proposal
-        }
-    }) {
+    } else if !renewal
+        && state.sessions.iter().any(|session| match session {
+            ManifoldAcceptedPeerSessionV2::WifiDirect(value) => {
+                value.proposal.session_id == proposal.session_id && !value.revoked
+            }
+            ManifoldAcceptedPeerSessionV2::CommonLan(value) => {
+                value.proposal.session_id == proposal.session_id
+                    && !value.revoked
+                    && value.proposal != *proposal
+            }
+        })
+    {
         rejection = Some(ManifoldPeerSessionRejectionReason::SessionIdentityCollision);
     }
     let resulting = rejection
         .as_ref()
         .map_or_else(|| prior.next().unwrap_or(prior), |_| prior);
     let decision_id = if renewal && renewal_scope_valid {
-        previous.expect("validated current renewal scope").decision_id.clone()
+        previous
+            .expect("validated current renewal scope")
+            .decision_id
+            .clone()
     } else {
         derived("decision.common-lan-peer-session", &proposal.proposal_id)
     };
@@ -1374,7 +1388,15 @@ fn review_and_apply_common_lan_session(
         schema_id: schema(COMMON_LAN_SIGNED_PEER_TOPOLOGY_AUTHORIZATION_SCHEMA),
         decision_id: decision_id.clone(),
         session_id: proposal.session_id.clone(),
-        proposal_id: if renewal && renewal_scope_valid { previous.expect("validated renewal scope").proposal.proposal_id.clone() } else { proposal.proposal_id.clone() },
+        proposal_id: if renewal && renewal_scope_valid {
+            previous
+                .expect("validated renewal scope")
+                .proposal
+                .proposal_id
+                .clone()
+        } else {
+            proposal.proposal_id.clone()
+        },
         authority_revision: resulting,
         initiator_peer_id: proposal.initiator_peer_id.clone(),
         responder_peer_id: proposal.responder_peer_id.clone(),
@@ -1402,7 +1424,9 @@ fn review_and_apply_common_lan_session(
         let mut original = previous.expect("validated renewal scope").proposal.clone();
         original.expires_at_ms = proposal.expires_at_ms;
         original
-    } else { proposal.clone() };
+    } else {
+        proposal.clone()
+    };
     let accepted = ManifoldAcceptedPeerSessionV2::CommonLan(ManifoldAcceptedCommonLanPeerSession {
         proposal: accepted_proposal,
         decision_id,

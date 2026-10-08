@@ -2038,18 +2038,45 @@ impl ManifoldBrokerRuntime {
 
     /// Advances a still-current packaged grant through its actual renewal-scoped token.
     pub fn renew_current_admission_grant(
-        &mut self, request: &rusty_manifold_admission::ManifoldAdmissionGrantRenewalRequest, now_ms: u64,
-    ) -> Result<rusty_manifold_admission::ManifoldAdmissionGrantRenewalReceipt, rusty_manifold_admission::ManifoldAdmissionError> {
+        &mut self,
+        request: &rusty_manifold_admission::ManifoldAdmissionGrantRenewalRequest,
+        now_ms: u64,
+    ) -> Result<
+        rusty_manifold_admission::ManifoldAdmissionGrantRenewalReceipt,
+        rusty_manifold_admission::ManifoldAdmissionError,
+    > {
         // Retry reads the actual retained owner receipt; no new use is issued.
-        if self.admission.snapshot().audit_events.iter().any(|event|event.operation==rusty_manifold_admission::ManifoldAdmissionOperation::RenewGrant && event.request_id==request.request_id) {
+        if self.admission.snapshot().audit_events.iter().any(|event| {
+            event.operation == rusty_manifold_admission::ManifoldAdmissionOperation::RenewGrant
+                && event.request_id == request.request_id
+        }) {
             return self.admission.renew_current_grant(request, now_ms);
         }
-        let authorized=self.authorize_use(&request.authorization,now_ms);
-        if !authorized.applied {return Err(rusty_manifold_admission::ManifoldAdmissionError::InvalidSnapshot("grant_renewal_broker_authorization_rejected"));}
-        let consumed=self.consume_capability_use(&request.authorization.request_id,&request.authorization.token_id,
-            authorized.resulting_authority_revision,&request.authorization.identity,&request.authorization.capability_id,now_ms);
-        if !consumed.applied {return Err(rusty_manifold_admission::ManifoldAdmissionError::InvalidSnapshot("grant_renewal_broker_consumption_rejected"));}
-        self.admission.renew_current_grant_after_authorized_use(request, &authorized, now_ms)
+        let authorized = self.authorize_use(&request.authorization, now_ms);
+        if !authorized.applied {
+            return Err(
+                rusty_manifold_admission::ManifoldAdmissionError::InvalidSnapshot(
+                    "grant_renewal_broker_authorization_rejected",
+                ),
+            );
+        }
+        let consumed = self.consume_capability_use(
+            &request.authorization.request_id,
+            &request.authorization.token_id,
+            authorized.resulting_authority_revision,
+            &request.authorization.identity,
+            &request.authorization.capability_id,
+            now_ms,
+        );
+        if !consumed.applied {
+            return Err(
+                rusty_manifold_admission::ManifoldAdmissionError::InvalidSnapshot(
+                    "grant_renewal_broker_consumption_rejected",
+                ),
+            );
+        }
+        self.admission
+            .renew_current_grant_after_authorized_use(request, &authorized, now_ms)
     }
 
     /// Issues a token through Manifold admission.

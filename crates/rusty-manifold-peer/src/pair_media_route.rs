@@ -763,7 +763,10 @@ pub fn pair_media_route_state_v2_is_well_formed(
             && state.last_observed_at_ms.is_some_and(|last| {
                 (match route {
                     ManifoldAcceptedPairMediaRouteV2::WifiDirect(v) => v.valid_from_ms <= last,
-                    ManifoldAcceptedPairMediaRouteV2::CommonLan(v) => v.valid_from_ms <= last && v.renewed_at_ms.map_or(true, |observed| observed <= last),
+                    ManifoldAcceptedPairMediaRouteV2::CommonLan(v) => {
+                        v.valid_from_ms <= last
+                            && v.renewed_at_ms.map_or(true, |observed| observed <= last)
+                    }
                 }) && route.ended_at_ms().map_or(true, |ended| ended <= last)
             })
             && match route {
@@ -2430,11 +2433,20 @@ pub fn review_and_apply_pair_media_route_termination_v2(
         && target.map_or(true, |route| {
             route.authority_provider_epoch_id() != &request.expected_authority_provider_epoch_id
                 || route.platform_runtime_spec_id() != &request.expected_platform_runtime_spec_id
-                || ((!matches!(route.lifecycle_status(),ManifoldPairMediaRouteLifecycleStatus::Current|ManifoldPairMediaRouteLifecycleStatus::Expired)
-                    || route.expires_at_ms() <= now_ms)
-                    && !(request.action==ManifoldPairMediaRouteTerminationAction::Revoke
-                        && runtime.trusted_media_revoker_ids.contains(&runtime.command_request.requester_id)
-                        && matches!(route.lifecycle_status(),ManifoldPairMediaRouteLifecycleStatus::Current|ManifoldPairMediaRouteLifecycleStatus::Expired)))
+                || ((!matches!(
+                    route.lifecycle_status(),
+                    ManifoldPairMediaRouteLifecycleStatus::Current
+                        | ManifoldPairMediaRouteLifecycleStatus::Expired
+                ) || route.expires_at_ms() <= now_ms)
+                    && !(request.action == ManifoldPairMediaRouteTerminationAction::Revoke
+                        && runtime
+                            .trusted_media_revoker_ids
+                            .contains(&runtime.command_request.requester_id)
+                        && matches!(
+                            route.lifecycle_status(),
+                            ManifoldPairMediaRouteLifecycleStatus::Current
+                                | ManifoldPairMediaRouteLifecycleStatus::Expired
+                        )))
         })
     {
         rejection = Some(ManifoldPairMediaRouteRejectionReason::RouteNotCurrent);
@@ -3846,7 +3858,9 @@ fn valid_common_lan_route_record(r: &ManifoldAcceptedCommonLanPairMediaRoute) ->
         && r.runtime_command_id.as_str() == PAIR_MEDIA_ROUTE_ISSUE_COMMAND
         && valid_sha256(&r.runtime_params_digest.canonical_sha256)
         && r.renewed_at_ms.unwrap_or(r.valid_from_ms) >= r.signed_topology_evidence.valid_from_ms
-        && r.renewed_at_ms.map_or(true, |observed| observed >= r.valid_from_ms && observed < r.expires_at_ms)
+        && r.renewed_at_ms.map_or(true, |observed| {
+            observed >= r.valid_from_ms && observed < r.expires_at_ms
+        })
         && r.valid_from_ms < r.expires_at_ms
         && r.expires_at_ms <= r.signed_topology_evidence.expires_at_ms
         && r.expires_at_ms <= r.authority_runtime_lease_expires_at_ms

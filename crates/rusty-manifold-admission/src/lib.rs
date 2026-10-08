@@ -315,7 +315,7 @@ pub struct ManifoldAdmissionAuditEvent {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub use_authorization: Option<ManifoldAdmissionUseAuthorizationBinding>,
     /// Actual current-grant renewal; absent for all legacy operations.
-    #[serde(default,skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grant_renewal: Option<ManifoldAdmissionGrantRenewalBinding>,
 }
 
@@ -1543,7 +1543,7 @@ fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), Manifol
         let sequence = (index as u64) + 1;
         let operation_valid = match event.operation {
             ManifoldAdmissionOperation::RenewGrant
-                        | ManifoldAdmissionOperation::IssueToken
+            | ManifoldAdmissionOperation::IssueToken
             | ManifoldAdmissionOperation::RevokeToken
             | ManifoldAdmissionOperation::AdministrativeRevokeToken
                 if event.applied =>

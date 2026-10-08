@@ -607,30 +607,38 @@ pub fn review_and_apply_media_session_termination(
     ManifoldMediaSessionAcceptanceState,
     ManifoldMediaSessionMutationReceipt,
 ) {
-    review_and_apply_media_session_termination_inner(state,request,runtime,now_ms,false)
+    review_and_apply_media_session_termination_inner(state, request, runtime, now_ms, false)
 }
 
 /// Applies a trusted, freshly command-authorized Revoke to a retained expired decision.
 /// Original deadlines and all prior mutation evidence remain retained.
 #[must_use]
 pub fn review_and_apply_media_session_revoker_recovery(
-    state:&ManifoldMediaSessionAcceptanceState,
-    request:&ManifoldMediaSessionTerminationRequest,
-    runtime:ManifoldMediaSessionRuntimeCommandContext<'_>,
-    now_ms:u64,
-)->(ManifoldMediaSessionAcceptanceState,ManifoldMediaSessionMutationReceipt) {
-    let recovery=request.action==ManifoldMediaSessionTerminationAction::Revoke
-        && runtime.trusted_revoker_ids.contains(&runtime.command_request.requester_id);
-    review_and_apply_media_session_termination_inner(state,request,runtime,now_ms,recovery)
+    state: &ManifoldMediaSessionAcceptanceState,
+    request: &ManifoldMediaSessionTerminationRequest,
+    runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
+    now_ms: u64,
+) -> (
+    ManifoldMediaSessionAcceptanceState,
+    ManifoldMediaSessionMutationReceipt,
+) {
+    let recovery = request.action == ManifoldMediaSessionTerminationAction::Revoke
+        && runtime
+            .trusted_revoker_ids
+            .contains(&runtime.command_request.requester_id);
+    review_and_apply_media_session_termination_inner(state, request, runtime, now_ms, recovery)
 }
 
 fn review_and_apply_media_session_termination_inner(
-    state:&ManifoldMediaSessionAcceptanceState,
-    request:&ManifoldMediaSessionTerminationRequest,
-    runtime:ManifoldMediaSessionRuntimeCommandContext<'_>,
-    now_ms:u64,
-    revoker_recovery:bool,
-)->(ManifoldMediaSessionAcceptanceState,ManifoldMediaSessionMutationReceipt) {
+    state: &ManifoldMediaSessionAcceptanceState,
+    request: &ManifoldMediaSessionTerminationRequest,
+    runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
+    now_ms: u64,
+    revoker_recovery: bool,
+) -> (
+    ManifoldMediaSessionAcceptanceState,
+    ManifoldMediaSessionMutationReceipt,
+) {
     let prior = state.authority_revision;
     let expected_command = match request.action {
         ManifoldMediaSessionTerminationAction::Stop => MANIFOLD_MEDIA_SESSION_STOP_COMMAND,
@@ -661,8 +669,14 @@ fn review_and_apply_media_session_termination_inner(
             session.decision_id == request.decision_id
                 && session.session_id == request.session_id
                 && session.provider_epoch_id == request.expected_provider_epoch_id
-                && ((session.lifecycle_status == ManifoldMediaSessionLifecycleStatus::Current && session.expires_at_ms > now_ms)
-                    || (revoker_recovery && matches!(session.lifecycle_status,ManifoldMediaSessionLifecycleStatus::Current|ManifoldMediaSessionLifecycleStatus::Expired)))
+                && ((session.lifecycle_status == ManifoldMediaSessionLifecycleStatus::Current
+                    && session.expires_at_ms > now_ms)
+                    || (revoker_recovery
+                        && matches!(
+                            session.lifecycle_status,
+                            ManifoldMediaSessionLifecycleStatus::Current
+                                | ManifoldMediaSessionLifecycleStatus::Expired
+                        )))
         }) {
             Some(ManifoldMediaSessionAcceptanceRejectionReason::SessionNotCurrent)
         } else if state.sessions.iter().any(|session| {
