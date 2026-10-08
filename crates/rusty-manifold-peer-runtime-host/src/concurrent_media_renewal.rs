@@ -308,12 +308,20 @@ pub(super) fn validate_concurrent_media_renewals(
         return Err(invalid_snapshot("coupled renewal capacity"));
     }
     let mut seen = BTreeSet::new();
-    let mut latest = BTreeMap::new();
+    let mut latest_lease = BTreeMap::new();
+    let mut latest_graph = BTreeMap::new();
+    let mut latest_id = BTreeMap::new();
     for receipt in &snapshot.concurrent_media_renewals {
         let mut lease = receipt.prior_inner_lease.clone();
         lease.expires_at_ms = receipt.renewed_inner_lease.expires_at_ms;
         let mut media = receipt.prior_media.clone();
         media.expires_at_ms = receipt.renewed_media.expires_at_ms;
+        let binding = lease
+            .derivative_binding
+            .as_ref()
+            .ok_or_else(|| invalid_snapshot("renewal derivative lifetime missing"))?;
+        let lifetime = (lease.lease_id.clone(), binding.binding_id.clone());
+        let graph = (lifetime.clone(), media.decision_id.clone());
         let lifecycle = &receipt.broker_lifecycle_receipt;
         let paired = &receipt.paired_session_receipt;
         let transition = lifecycle
@@ -367,10 +375,14 @@ pub(super) fn validate_concurrent_media_renewals(
             || use_.bounded_use.capability_id.as_str() != "capability.manifold.control_lease.renew"
             || receipt.prior_routes.is_empty()
             || receipt.prior_routes.len() != receipt.renewed_routes.len()
-            || latest.get(&lease.lease_id).is_some_and(
+            || latest_lease.get(&lifetime).is_some_and(
                 |previous: &&ManifoldConcurrentMediaAuthorityRenewalReceipt| {
                     previous.renewed_inner_lease != receipt.prior_inner_lease
-                        || previous.renewed_media != receipt.prior_media
+                },
+            )
+            || latest_graph.get(&graph).is_some_and(
+                |previous: &&ManifoldConcurrentMediaAuthorityRenewalReceipt| {
+                    previous.renewed_media != receipt.prior_media
                         || previous.renewed_routes != receipt.prior_routes
                 },
             )
@@ -398,9 +410,25 @@ pub(super) fn validate_concurrent_media_renewals(
                 ));
             }
         }
-        latest.insert(lease.lease_id.clone(), receipt);
+        if let Some(previous) = latest_id.get(&lease.lease_id).copied() {
+            let previous: &ManifoldConcurrentMediaAuthorityRenewalReceipt = previous;
+            if previous.renewed_inner_lease.derivative_binding
+                != receipt.prior_inner_lease.derivative_binding
+                || previous.renewed_media.decision_id != receipt.prior_media.decision_id
+            {
+                if latest_lease.contains_key(&lifetime) || latest_graph.contains_key(&graph) {
+                    return Err(invalid_snapshot(
+                        "renewal returned to an old lifetime or graph",
+                    ));
+                }
+                validate_renewal_readoption(snapshot, previous, receipt)?;
+            }
+        }
+        latest_lease.insert(lifetime, receipt);
+        latest_graph.insert(graph, receipt);
+        latest_id.insert(lease.lease_id.clone(), receipt);
     }
-    for receipt in latest.values() {
+    for receipt in latest_graph.values() {
         if let Some(current) = snapshot.media_command_runtime.leases.iter().find(|lease| {
             lease.lease_id == receipt.renewed_inner_lease.lease_id
                 && lease.derivative_binding == receipt.renewed_inner_lease.derivative_binding
@@ -479,6 +507,94 @@ pub(super) fn validate_concurrent_media_renewals(
                 ));
             }
         }
+    }
+    Ok(())
+}
+
+// Fixed product lease ids may recur only after the retained graph was actually
+// stopped/cleaned and its admitted derivative released before a new admission.
+fn validate_renewal_readoption(
+    snapshot: &ManifoldPeerRuntimeHostSnapshot,
+    previous: &ManifoldConcurrentMediaAuthorityRenewalReceipt,
+    receipt: &ManifoldConcurrentMediaAuthorityRenewalReceipt,
+) -> Result<(), ManifoldPeerRuntimeHostError> {
+    validate_terminal_media_readoption_history(snapshot)?;
+    let prior = snapshot
+        .media_sessions
+        .sessions
+        .iter()
+        .find(|media| media.decision_id == previous.renewed_media.decision_id)
+        .ok_or_else(|| invalid_snapshot("renewal prior media lifetime missing"))?;
+    let fresh = &receipt.prior_media;
+    let ended = prior
+        .ended_at_ms
+        .ok_or_else(|| invalid_snapshot("renewal prior media end missing"))?;
+    if prior.lifecycle_status != ManifoldMediaSessionLifecycleStatus::Stopped
+        || prior.product_binding != fresh.product_binding
+        || prior.runtime_client_id != fresh.runtime_client_id
+        || prior.provider_epoch_id != fresh.provider_epoch_id
+        || ended >= fresh.accepted_at_ms
+        || fresh.lifecycle_status != ManifoldMediaSessionLifecycleStatus::Current
+    {
+        return Err(invalid_snapshot(
+            "renewal graph replacement not an identical stopped product",
+        ));
+    }
+    let old: Vec<_> = snapshot
+        .broker_lease_admissions
+        .iter()
+        .filter(|a| {
+            a.runtime_lease.lease_id == previous.renewed_inner_lease.lease_id
+                && a.runtime_lease.derivative_binding
+                    == previous.renewed_inner_lease.derivative_binding
+                && a.admitted_at_ms <= prior.accepted_at_ms
+                && a.released_at_ms
+                    .is_some_and(|at| at >= ended && at < fresh.accepted_at_ms)
+                && a.release_id.is_some()
+                && broker_lease_admission_is_well_formed(snapshot, a)
+        })
+        .collect();
+    let new: Vec<_> = snapshot
+        .broker_lease_admissions
+        .iter()
+        .filter(|a| {
+            a.runtime_lease.lease_id == receipt.prior_inner_lease.lease_id
+                && a.runtime_lease.derivative_binding
+                    == receipt.prior_inner_lease.derivative_binding
+                && a.admitted_at_ms == fresh.accepted_at_ms
+                && broker_lease_admission_is_well_formed(snapshot, a)
+        })
+        .collect();
+    if old.len() != 1
+        || new.len() != 1
+        || old[0].runtime_lease.derivative_binding == new[0].runtime_lease.derivative_binding
+    {
+        return Err(invalid_snapshot(
+            "renewal graph replacement release/admission lineage",
+        ));
+    }
+    let routes: Vec<_> = snapshot
+        .pair_media_routes
+        .routes
+        .iter()
+        .filter(|r| r.media_session_decision_id() == &prior.decision_id)
+        .collect();
+    if routes.is_empty()
+        || routes.iter().any(|r| {
+            *r.lifecycle_status()
+                == rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Current
+                || *r.cleanup_status()
+                    != rusty_manifold_peer::ManifoldPairMediaRouteCleanupStatus::Completed
+                || !snapshot.pair_media_routes.cleanup_receipts.iter().any(|c| {
+                    c.grant_id() == r.grant_id()
+                        && c.completed_at_ms() >= ended
+                        && c.completed_at_ms() < fresh.accepted_at_ms
+                })
+        })
+    {
+        return Err(invalid_snapshot(
+            "renewal graph replacement physical cleanup missing",
+        ));
     }
     Ok(())
 }
