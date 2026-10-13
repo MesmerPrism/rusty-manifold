@@ -348,6 +348,7 @@ fn open_session(host: &mut ManifoldConnectionHubAuthority) {
 
 fn admission_owner() -> ManifoldAdmissionAuthority {
     ManifoldAdmissionAuthority::from_snapshot(ManifoldAdmissionSnapshot {
+        root_renewal_policies: Vec::new(),
         schema_id: schema(ADMISSION_SNAPSHOT_SCHEMA),
         authority_id: id("authority.admission.synthetic"),
         authority_revision: Revision::INITIAL,

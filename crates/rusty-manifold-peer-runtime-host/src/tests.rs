@@ -3558,6 +3558,7 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
     );
     assert_eq!(outer_capability, grant.broker_capability_id);
     let admission_snapshot = ManifoldAdmissionSnapshot {
+        root_renewal_policies: Vec::new(),
         schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
         authority_id: id("authority.admission.media-test"),
         authority_revision: Revision::INITIAL,
@@ -5265,6 +5266,7 @@ fn cleanup_live_fixture() -> (ManifoldPeerRuntimeHost, ManifoldBrokerRuntime, Do
     );
     assert_eq!(outer_capability, grant.broker_capability_id);
     let admission_snapshot = ManifoldAdmissionSnapshot {
+        root_renewal_policies: Vec::new(),
         schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
         authority_id: id("authority.admission.media-test"),
         authority_revision: Revision::INITIAL,

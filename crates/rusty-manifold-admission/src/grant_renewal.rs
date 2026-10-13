@@ -1,6 +1,54 @@
 //! Current grant deadline renewal authorized before expiry by its actual scoped token.
 use super::*;
 
+/// Trusted, grant-scoped root renewal policy; operation token policy is separate.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ManifoldAdmissionRootRenewalPolicy {
+    /// Existing authenticated grant receiving the finite renewal horizon.
+    pub grant_id: DottedId,
+    /// Whole-minute horizon from five through sixty minutes.
+    pub horizon_ms: u64,
+}
+
+fn default_root_renewal_horizon_ms() -> u64 {
+    300_000
+}
+fn is_default_root_renewal_horizon_ms(value: &u64) -> bool {
+    *value == 300_000
+}
+
+impl ManifoldAdmissionSnapshot {
+    /// Returns the configured grant horizon, retaining five minutes by default.
+    pub fn root_renewal_horizon_ms(&self, grant_id: &DottedId) -> u64 {
+        self.root_renewal_policies
+            .iter()
+            .find(|p| &p.grant_id == grant_id)
+            .map_or(300_000, |p| p.horizon_ms)
+    }
+}
+
+pub(super) fn validate_root_renewal_policies(
+    snapshot: &ManifoldAdmissionSnapshot,
+) -> Result<(), ManifoldAdmissionError> {
+    if snapshot.root_renewal_policies.len() > snapshot.grants.len()
+        || snapshot
+            .root_renewal_policies
+            .windows(2)
+            .any(|p| p[0].grant_id >= p[1].grant_id)
+        || snapshot.root_renewal_policies.iter().any(|p| {
+            !(300_000..=3_600_000).contains(&p.horizon_ms)
+                || p.horizon_ms % 60_000 != 0
+                || !snapshot.grants.iter().any(|g| g.grant_id == p.grant_id)
+        })
+    {
+        return Err(ManifoldAdmissionError::InvalidSnapshot(
+            "root_renewal_policy_scope_or_horizon",
+        ));
+    }
+    Ok(())
+}
+
 /// Exact current grant and accepted paired proof selected by the owning product composition.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -25,6 +73,12 @@ pub struct ManifoldAdmissionGrantRenewalBinding {
     pub prior_grant: ManifoldAdmissionGrant,
     pub renewed_grant: ManifoldAdmissionGrant,
     pub use_authorization: ManifoldAdmissionReceipt,
+    /// Exact owner policy bound retained by this accepted renewal.
+    #[serde(
+        default = "default_root_renewal_horizon_ms",
+        skip_serializing_if = "is_default_root_renewal_horizon_ms"
+    )]
+    pub root_renewal_horizon_ms: u64,
 }
 
 /// Actual admission owner application with its scoped authorization receipt.
@@ -114,7 +168,9 @@ impl ManifoldAdmissionAuthority {
             || request
                 .expires_at_ms
                 .checked_sub(now_ms)
-                .map_or(true, |ttl| ttl == 0 || ttl > 300_000)
+                .map_or(true, |ttl| {
+                    ttl == 0 || ttl > self.snapshot.root_renewal_horizon_ms(&request.grant_id)
+                })
             || !valid_sha256(&request.accepted_evidence_sha256)
             || self
                 .snapshot
@@ -201,6 +257,7 @@ impl ManifoldAdmissionAuthority {
             None,
         );
         let binding = ManifoldAdmissionGrantRenewalBinding {
+            root_renewal_horizon_ms: self.snapshot.root_renewal_horizon_ms(&request.grant_id),
             request: request.clone(),
             observed_at_ms: now_ms,
             prior_grant,
@@ -235,7 +292,9 @@ pub(super) fn validate_grant_renewal_history(
                         && use_.request_id == request.authorization.request_id
                         && use_.applied
                 });
-                if expected != binding.renewed_grant
+                if binding.root_renewal_horizon_ms
+                    != snapshot.root_renewal_horizon_ms(&request.grant_id)
+                    || expected != binding.renewed_grant
                     || binding.prior_grant.revoked
                     || binding.prior_grant.grant_id != request.grant_id
                     || binding.prior_grant.identity != request.authorization.identity
@@ -245,7 +304,9 @@ pub(super) fn validate_grant_renewal_history(
                     || request
                         .expires_at_ms
                         .checked_sub(binding.observed_at_ms)
-                        .map_or(true, |ttl| ttl == 0 || ttl > 300_000)
+                        .map_or(true, |ttl| {
+                            ttl == 0 || ttl > snapshot.root_renewal_horizon_ms(&request.grant_id)
+                        })
                     || request.authorization.capability_id.as_str()
                         != "capability.manifold.control_lease.renew"
                     || !valid_sha256(&request.accepted_evidence_sha256)
@@ -303,6 +364,13 @@ mod tests {
     }
     #[test]
     fn scoped_current_grant_renewal_retains_22_real_token_uses_and_rejects_tampering() {
+        run_scoped_renewals(300_000);
+    }
+    #[test]
+    fn finite_thirty_minute_root_policy_preserves_real_renewals_and_durable_scope() {
+        run_scoped_renewals(1_800_000);
+    }
+    fn run_scoped_renewals(horizon: u64) {
         let identity = ManifoldClientIdentity {
             client_id: id("client.renewal"),
             platform_subject: "test.actual.authority".to_owned(),
@@ -310,6 +378,14 @@ mod tests {
         };
         let capability = id("capability.manifold.control_lease.renew");
         let mut owner = ManifoldAdmissionAuthority::from_snapshot(ManifoldAdmissionSnapshot {
+            root_renewal_policies: if horizon == 300_000 {
+                Vec::new()
+            } else {
+                vec![ManifoldAdmissionRootRenewalPolicy {
+                    grant_id: id("grant.renewal"),
+                    horizon_ms: horizon,
+                }]
+            },
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
             authority_id: id("authority.renewal"),
             authority_revision: Revision::INITIAL,
@@ -319,7 +395,11 @@ mod tests {
                 client_lock_fingerprint: format!("sha256:{}", "b".repeat(64)),
                 identity: identity.clone(),
                 capabilities: vec![capability.clone()],
-                expires_at_ms: 100000,
+                expires_at_ms: if horizon == 300_000 {
+                    100000
+                } else {
+                    1000 + horizon
+                },
                 revoked: false,
             }],
             active_tokens: Vec::new(),
@@ -331,6 +411,27 @@ mod tests {
             max_token_ttl_ms: 5000,
         })
         .unwrap();
+        for invalid in [0, 299_999, 300_001, 3_600_001, u64::MAX] {
+            let mut bad = owner.snapshot().clone();
+            bad.root_renewal_policies = vec![ManifoldAdmissionRootRenewalPolicy {
+                grant_id: id("grant.renewal"),
+                horizon_ms: invalid,
+            }];
+            assert!(ManifoldAdmissionAuthority::from_snapshot(bad).is_err());
+        }
+        let mut duplicate = owner.snapshot().clone();
+        duplicate.root_renewal_policies = vec![
+            ManifoldAdmissionRootRenewalPolicy {
+                grant_id: id("grant.renewal"),
+                horizon_ms: horizon
+            };
+            2
+        ];
+        assert!(ManifoldAdmissionAuthority::from_snapshot(duplicate).is_err());
+        let mut malformed = serde_json::to_value(owner.snapshot()).unwrap();
+        malformed["root_renewal_policies"] =
+            serde_json::json!([{"grant_id":"grant.renewal","horizon_ms":"1800000"}]);
+        assert!(ManifoldAdmissionAuthority::restart_from_json(&malformed.to_string()).is_err());
         for cycle in 0..22u64 {
             let now = 2000 + ((cycle / 2) * 120000) + (cycle % 2);
             let issued = owner.issue_token(
@@ -363,10 +464,17 @@ mod tests {
                 },
                 grant_id: id("grant.renewal"),
                 prior_expires_at_ms: owner.snapshot().grants[0].expires_at_ms,
-                expires_at_ms: now + 300000,
+                expires_at_ms: now + horizon,
                 accepted_evidence_id: id(&format!("receipt.signed.r{cycle}")),
                 accepted_evidence_sha256: format!("sha256:{}", "c".repeat(64)),
             };
+            let mut bad = request.clone();
+            bad.expires_at_ms = request.prior_expires_at_ms;
+            let prior_nonextension = owner.clone();
+            assert!(owner.renew_current_grant(&bad, now).is_err());
+            assert_eq!(owner, prior_nonextension);
+            bad.expires_at_ms = u64::MAX;
+            assert!(owner.renew_current_grant(&bad, now).is_err());
             let mut bad = request.clone();
             bad.authorization.identity.signing_fingerprint = format!("sha256:{}", "d".repeat(64));
             let prior = owner.clone();
@@ -377,6 +485,24 @@ mod tests {
             assert_eq!(owner.renew_current_grant(&request, now).unwrap(), receipt);
             let json = owner.snapshot_json().unwrap();
             assert!(ManifoldAdmissionAuthority::restart_from_json(&json).is_ok());
+            let mut malformed_policy = owner.snapshot().clone();
+            malformed_policy.root_renewal_policies = vec![ManifoldAdmissionRootRenewalPolicy {
+                grant_id: id("grant.unknown"),
+                horizon_ms: horizon,
+            }];
+            assert!(ManifoldAdmissionAuthority::from_snapshot(malformed_policy).is_err());
+            let mut malformed_policy = owner.snapshot().clone();
+            malformed_policy.root_renewal_policies = vec![ManifoldAdmissionRootRenewalPolicy {
+                grant_id: id("grant.renewal"),
+                horizon_ms: 4_000_000,
+            }];
+            assert!(ManifoldAdmissionAuthority::from_snapshot(malformed_policy).is_err());
+            let mut drifted_policy = owner.snapshot().clone();
+            drifted_policy.root_renewal_policies = vec![ManifoldAdmissionRootRenewalPolicy {
+                grant_id: id("grant.renewal"),
+                horizon_ms: 3_600_000,
+            }];
+            assert!(ManifoldAdmissionAuthority::from_snapshot(drifted_policy).is_err());
             let mut malformed = owner.snapshot().clone();
             malformed.grants[0].expires_at_ms += 1;
             assert!(ManifoldAdmissionAuthority::from_snapshot(malformed).is_err());
