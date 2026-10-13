@@ -15,6 +15,23 @@ Manifold starts with JSON fixtures and deterministic schema export.
 Binary formats, HTTP descriptions, event descriptions, and language bindings
 can be generated later from stable Manifold contracts.
 
+## Opted-in finite admission root renewal
+
+Admission snapshots may explicitly bind `root_renewal_policies` to existing
+grant ids. Each finite horizon is a whole minute from five through sixty
+minutes; omission retains the five-minute renewal policy. This scoped policy
+does not change operation-token TTL limits or bypass current use authorization,
+strict deadline extension, identity, scope, or accepted-evidence checks.
+
+The opted-in snapshot field and nondefault `root_renewal_horizon_ms` in retained
+grant-renewal bindings require a compatible admission owner and typed reader.
+Older strict readers reject these records; there is no downgrade, migration,
+or inference of a policy from a long deadline. Default empty policy lists and
+five-minute binding fields are omitted during serialization, preserving legacy
+fixture bytes. Restart validation requires every retained binding to match its
+grant's policy. API requests and real v1 application/adoption receipts retain
+their meanings; the policy is authenticated owner state, not a caller TTL grant.
+
 Connection Hub internal policy/request/state/snapshot v3 is an explicit
 pre-release transition from v2. It adds fixed authenticated-activity sliding
 windows and exact per-session external sequence fences. No v2 snapshot

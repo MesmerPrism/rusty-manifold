@@ -345,6 +345,9 @@ pub struct ManifoldAdmissionSnapshot {
     pub reviewed_sweep_ids: Vec<DottedId>,
     /// Append-only audit events.
     pub audit_events: Vec<ManifoldAdmissionAuditEvent>,
+    /// Per-grant finite root renewal bounds selected by trusted owner configuration.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub root_renewal_policies: Vec<ManifoldAdmissionRootRenewalPolicy>,
     /// Maximum token lifetime.
     pub max_token_ttl_ms: u64,
 }
@@ -1093,6 +1096,7 @@ fn migrate_legacy_admission_snapshot(
         .collect::<Vec<_>>();
     migrated_token_ids.sort();
     let snapshot = ManifoldAdmissionSnapshot {
+        root_renewal_policies: Vec::new(),
         schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
         authority_id: legacy.authority_id,
         authority_revision: legacy.authority_revision,
@@ -1396,6 +1400,7 @@ fn validate_token(
 }
 
 fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), ManifoldAdmissionError> {
+    grant_renewal::validate_root_renewal_policies(snapshot)?;
     validate_grant_renewal_history(snapshot)?;
     if snapshot.schema_id.as_str() != ADMISSION_SNAPSHOT_SCHEMA || snapshot.max_token_ttl_ms == 0 {
         return Err(ManifoldAdmissionError::InvalidSnapshot("schema_or_ttl"));
@@ -1728,6 +1733,7 @@ mod tests {
 
     fn authority() -> ManifoldAdmissionAuthority {
         ManifoldAdmissionAuthority::from_snapshot(ManifoldAdmissionSnapshot {
+            root_renewal_policies: Vec::new(),
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
             authority_id: id("authority.admission.quest"),
             authority_revision: Revision::new(1).expect("revision"),
