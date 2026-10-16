@@ -55,6 +55,10 @@ impl ManifoldPeerRuntimeHost {
                 "coupled renewal replay changed source receipt",
             ));
         }
+        if self.snapshot.ongoing_media_policy.is_some() {
+            self.cumulative_concurrent_media_renewals()?.checked_add(1)
+                .ok_or_else(|| invalid_snapshot("cumulative renewal count exhausted"))?;
+        }
         if self.snapshot.concurrent_media_renewals.len() >= 32
             || !paired.applied
             || !self.snapshot.concurrent_session_renewals.contains(paired)
@@ -378,12 +382,14 @@ pub(super) fn validate_concurrent_media_renewals(
             || latest_lease.get(&lifetime).is_some_and(
                 |previous: &&ManifoldConcurrentMediaAuthorityRenewalReceipt| {
                     previous.renewed_inner_lease != receipt.prior_inner_lease
+                        && !ongoing_media::checkpoint_bridges(snapshot, previous, receipt)
                 },
             )
             || latest_graph.get(&graph).is_some_and(
                 |previous: &&ManifoldConcurrentMediaAuthorityRenewalReceipt| {
-                    previous.renewed_media != receipt.prior_media
-                        || previous.renewed_routes != receipt.prior_routes
+                    (previous.renewed_media != receipt.prior_media
+                        || previous.renewed_routes != receipt.prior_routes)
+                        && !ongoing_media::checkpoint_bridges(snapshot, previous, receipt)
                 },
             )
         {

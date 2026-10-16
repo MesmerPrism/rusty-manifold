@@ -8,6 +8,8 @@
 use std::collections::BTreeSet;
 use std::fmt;
 
+mod ongoing_media;
+pub use ongoing_media::*;
 mod concurrent_media_renewal;
 pub use concurrent_media_renewal::*;
 
@@ -438,6 +440,12 @@ pub struct ManifoldPeerRuntimeHostSnapshot {
     /// Successful source-bound coupled deadline adoptions.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub concurrent_media_renewals: Vec<ManifoldConcurrentMediaAuthorityRenewalReceipt>,
+    /// Explicit prospective continuation policy; absent is the finite contract.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ongoing_media_policy: Option<ManifoldOngoingMediaPolicy>,
+    /// Latest constant-size checkpoint, authenticated separately on restore.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub concurrent_media_checkpoint: Option<ManifoldConcurrentMediaCheckpoint>,
     /// Append-only cross-authority audit records.
     pub audit_events: Vec<ManifoldPeerRuntimeAuditEvent>,
 }
@@ -890,6 +898,8 @@ impl ManifoldPeerRuntimeHost {
                 concurrent_credential_refreshes: Vec::new(),
                 concurrent_session_renewals: Vec::new(),
                 concurrent_media_renewals: Vec::new(),
+                ongoing_media_policy: None,
+                concurrent_media_checkpoint: None,
                 audit_events: Vec::new(),
             },
             &expected_trust_policy,
@@ -913,6 +923,9 @@ impl ManifoldPeerRuntimeHost {
         }
         if &snapshot.provider_epoch_id != expected_provider_epoch_id {
             return Err(invalid_snapshot("provider epoch substitution"));
+        }
+        if snapshot.ongoing_media_policy.is_some() || snapshot.concurrent_media_checkpoint.is_some() {
+            return Err(invalid_snapshot("ongoing restore requires independent owner seal"));
         }
         validate_snapshot(&snapshot)?;
         if !snapshot.broker_lease_admissions.is_empty()
@@ -948,6 +961,9 @@ impl ManifoldPeerRuntimeHost {
         }
         if &snapshot.provider_epoch_id != expected_provider_epoch_id {
             return Err(invalid_snapshot("provider epoch substitution"));
+        }
+        if snapshot.ongoing_media_policy.is_some() || snapshot.concurrent_media_checkpoint.is_some() {
+            return Err(invalid_snapshot("ongoing restore requires independent owner seal"));
         }
         validate_snapshot(&snapshot)?;
         validate_live_broker_restoration(&snapshot, &broker_runtime.evidence())?;
@@ -4944,6 +4960,8 @@ fn decode_peer_runtime_snapshot_with_migration(
                     concurrent_credential_refreshes: Vec::new(),
                     concurrent_session_renewals: Vec::new(),
                     concurrent_media_renewals: Vec::new(),
+                ongoing_media_policy: None,
+                concurrent_media_checkpoint: None,
                     audit_events: legacy.audit_events,
                 },
                 true,
@@ -4990,6 +5008,8 @@ fn decode_peer_runtime_snapshot_with_migration(
                     concurrent_credential_refreshes: Vec::new(),
                     concurrent_session_renewals: Vec::new(),
                     concurrent_media_renewals: Vec::new(),
+                ongoing_media_policy: None,
+                concurrent_media_checkpoint: None,
                     audit_events: legacy.audit_events,
                 },
                 true,
@@ -5036,6 +5056,8 @@ fn decode_peer_runtime_snapshot_with_migration(
                     concurrent_credential_refreshes: Vec::new(),
                     concurrent_session_renewals: Vec::new(),
                     concurrent_media_renewals: Vec::new(),
+                ongoing_media_policy: None,
+                concurrent_media_checkpoint: None,
                     audit_events: legacy.audit_events,
                 },
                 true,
@@ -5080,6 +5102,8 @@ fn decode_peer_runtime_snapshot_with_migration(
                     concurrent_credential_refreshes: Vec::new(),
                     concurrent_session_renewals: Vec::new(),
                     concurrent_media_renewals: Vec::new(),
+                ongoing_media_policy: None,
+                concurrent_media_checkpoint: None,
                     audit_events: legacy.audit_events,
                 },
                 true,
@@ -5689,6 +5713,7 @@ fn validate_live_broker_restoration(
 fn validate_snapshot(
     snapshot: &ManifoldPeerRuntimeHostSnapshot,
 ) -> Result<(), ManifoldPeerRuntimeHostError> {
+    ongoing_media::validate_ongoing_media(snapshot)?;
     validate_snapshot_schemas(snapshot)?;
     validate_snapshot_capacity(snapshot)?;
     validate_trust_policy(&snapshot.trust_policy)?;

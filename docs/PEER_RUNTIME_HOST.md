@@ -128,6 +128,11 @@ reimplement enrollment, signature, session, mesh, route, or lease decisions.
 
 ## Boundary
 
+The prospective owner-held concurrent-history checkpoint and its explicit
+restore trust boundary are documented in
+[Ongoing media continuation](ONGOING_MEDIA_CONTINUATION.md). It preserves the
+finite default and does not yet remove generic lifetime history capacities.
+
 The crate has no Android, Quest, Termux, sidecar, socket, transport, codec, UI,
 or media-payload dependency. An optional generic media-session descriptor is a
 low-rate authority reference consumed by the existing direct-lane validator;
