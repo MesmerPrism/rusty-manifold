@@ -1283,6 +1283,7 @@ mod tests {
         let lease_id = id("lease.runtime.media-test");
         let scope = id("scope.media.session.authority");
         let snapshot = ManifoldRuntimeHostSnapshot {
+            history_checkpoint: None,
             schema_id: schema(HOST_SNAPSHOT_SCHEMA),
             host_id: runtime_host_id.clone(),
             authority_revision: Revision::INITIAL,

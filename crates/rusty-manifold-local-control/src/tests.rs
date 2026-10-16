@@ -95,6 +95,7 @@ fn policy(max_commands_per_window: u16) -> ManifoldLocalControlPolicy {
 
 fn admission(policy: &ManifoldLocalControlPolicy) -> ManifoldAdmissionAuthority {
     ManifoldAdmissionAuthority::from_snapshot(ManifoldAdmissionSnapshot {
+        history_checkpoint: None,
         root_renewal_policies: Vec::new(),
         schema_id: schema(ADMISSION_SNAPSHOT_SCHEMA),
         authority_id: id("authority.quest.local_control.admission"),
@@ -179,6 +180,7 @@ fn lease_authority(policy: &ManifoldLocalControlPolicy) -> ManifoldAuthoritySnap
 
 fn runtime_host(policy: &ManifoldLocalControlPolicy) -> ManifoldRuntimeHost {
     ManifoldRuntimeHost::from_snapshot(ManifoldRuntimeHostSnapshot {
+        history_checkpoint: None,
         schema_id: schema(HOST_SNAPSHOT_SCHEMA),
         host_id: id("host.quest.local_control"),
         authority_revision: Revision::INITIAL,

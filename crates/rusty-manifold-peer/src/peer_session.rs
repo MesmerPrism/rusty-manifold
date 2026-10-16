@@ -2118,6 +2118,7 @@ mod tests {
             expires_at_ms: 50_000,
         };
         let reciprocal = ManifoldReciprocalEd25519AuthorityStateV3 {
+            history_checkpoint: None,
             schema_id: schema(crate::RECIPROCAL_ED25519_STATE_V3_SCHEMA),
             authority_revision: Revision::new(2).unwrap(),
             applied_request_ids: vec![request_id],

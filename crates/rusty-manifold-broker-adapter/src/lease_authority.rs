@@ -1,5 +1,9 @@
 //! Broker-owned control-lease authority state and Runtime Host projection closure.
 
+#[path = "lease_history.rs"]
+mod ongoing_history;
+pub use ongoing_history::*;
+
 use crate::{
     ManifoldBrokerRuntimeLeaseProjection, ManifoldBrokerRuntimeLeaseProjectionError,
     ManifoldBrokerRuntimeLeaseProjector, MAX_BROKER_RUNTIME_LEASE_CLOCK_UNCERTAINTY_NS,
@@ -210,6 +214,9 @@ pub struct ManifoldBrokerControlLeaseAuthorityEvidenceV2 {
     /// Schema identifier.
     #[serde(rename = "$schema")]
     pub schema_id: SchemaId,
+    /// Actual live-owner baseline; absent preserves finite v3 replay semantics.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_checkpoint: Option<ManifoldBrokerControlLeaseHistoryCheckpoint>,
     /// Immutable v1 adoption baseline.
     pub baseline: ManifoldBrokerControlLeaseAuthorityEvidence,
     /// Resulting accepted authority state after replaying all transitions.
@@ -263,6 +270,7 @@ impl ManifoldBrokerControlLeaseAuthority {
             lease_sources,
         };
         Self::from_v2_evidence(ManifoldBrokerControlLeaseAuthorityEvidenceV2 {
+            history_checkpoint: None,
             schema_id: schema_id(BROKER_CONTROL_LEASE_AUTHORITY_EVIDENCE_V3_SCHEMA),
             baseline,
             current_authority_snapshot,
@@ -303,6 +311,7 @@ impl ManifoldBrokerControlLeaseAuthority {
     ) -> Result<Self, ManifoldBrokerControlLeaseAuthorityError> {
         Self::refresh_from_v2_evidence(
             ManifoldBrokerControlLeaseAuthorityEvidenceV2 {
+                history_checkpoint: None,
                 schema_id: schema_id(BROKER_CONTROL_LEASE_AUTHORITY_EVIDENCE_V3_SCHEMA),
                 baseline: evidence.clone(),
                 current_authority_snapshot: evidence.current_authority_snapshot,
@@ -340,9 +349,24 @@ impl ManifoldBrokerControlLeaseAuthority {
     }
 
     fn from_v2_evidence(
-        mut evidence: ManifoldBrokerControlLeaseAuthorityEvidenceV2,
+        evidence: ManifoldBrokerControlLeaseAuthorityEvidenceV2,
     ) -> Result<Self, ManifoldBrokerControlLeaseAuthorityError> {
-        if evidence.schema_id.as_str() != BROKER_CONTROL_LEASE_AUTHORITY_EVIDENCE_V3_SCHEMA {
+        Self::from_live_checkpoint_evidence(evidence, None)
+    }
+
+    fn from_live_checkpoint_evidence(
+        mut evidence: ManifoldBrokerControlLeaseAuthorityEvidenceV2,
+        live_checkpoint: Option<&ManifoldBrokerControlLeaseHistoryCheckpoint>,
+    ) -> Result<Self, ManifoldBrokerControlLeaseAuthorityError> {
+        if evidence.schema_id.as_str()
+            != if evidence.history_checkpoint.is_some() {
+                BROKER_CONTROL_LEASE_AUTHORITY_EVIDENCE_V4_SCHEMA
+            } else {
+                BROKER_CONTROL_LEASE_AUTHORITY_EVIDENCE_V3_SCHEMA
+            }
+            || (evidence.history_checkpoint.is_some()
+                && evidence.history_checkpoint.as_ref() != live_checkpoint)
+        {
             return Err(ManifoldBrokerControlLeaseAuthorityError::SchemaMismatch);
         }
         if evidence.transitions.len() > MAX_BROKER_CONTROL_LEASE_TRANSITIONS {
@@ -350,7 +374,11 @@ impl ManifoldBrokerControlLeaseAuthority {
         }
         validate_v2_evidence_size(&evidence)?;
         let (baseline, mut product_leases, mut issue_sources) =
-            validate_and_canonicalize_baseline(evidence.baseline)?;
+            if let Some(checkpoint) = &evidence.history_checkpoint {
+                ongoing_history::validate_live_baseline(evidence.baseline, checkpoint)?
+            } else {
+                validate_and_canonicalize_baseline(evidence.baseline)?
+            };
         evidence.baseline = baseline;
 
         let mut rolling_snapshot = evidence.baseline.current_authority_snapshot.clone();
@@ -366,10 +394,16 @@ impl ManifoldBrokerControlLeaseAuthority {
             if transition.schema_id.as_str() != BROKER_CONTROL_LEASE_TRANSITION_SCHEMA {
                 return Err(ManifoldBrokerControlLeaseAuthorityError::SchemaMismatch);
             }
-            if transition.sequence != (index as u64) + 1 {
+            if ongoing_history::transition_base(&evidence)
+                .checked_add(index as u64)
+                .and_then(|n| n.checked_add(1))
+                != Some(transition.sequence)
+            {
                 return Err(ManifoldBrokerControlLeaseAuthorityError::TransitionLineage);
             }
-            if !request_ids.insert(transition.application.request_id().clone()) {
+            if !ongoing_history::request_matches(&evidence, transition.application.request_id())
+                || !request_ids.insert(transition.application.request_id().clone())
+            {
                 return Err(ManifoldBrokerControlLeaseAuthorityError::TransitionReplay);
             }
             if transition.prior_authority_snapshot != rolling_snapshot {
@@ -684,7 +718,10 @@ impl ManifoldBrokerControlLeaseAuthority {
         self.ensure_transition_capacity(application.kind())?;
         let transition = ManifoldBrokerControlLeaseTransition {
             schema_id: schema_id(BROKER_CONTROL_LEASE_TRANSITION_SCHEMA),
-            sequence: (self.evidence.transitions.len() as u64) + 1,
+            sequence: ongoing_history::transition_base(&self.evidence)
+                .checked_add(self.evidence.transitions.len() as u64)
+                .and_then(|n| n.checked_add(1))
+                .ok_or(ManifoldBrokerControlLeaseAuthorityError::TransitionCapacityExceeded)?,
             prior_authority_snapshot: self.evidence.current_authority_snapshot.clone(),
             application,
         };
@@ -712,7 +749,10 @@ impl ManifoldBrokerControlLeaseAuthority {
         {
             return Err(ManifoldBrokerControlLeaseAuthorityError::CleanupCapacityReserved);
         }
-        let candidate = Self::from_v2_evidence(evidence)?;
+        let candidate = Self::from_live_checkpoint_evidence(
+            evidence,
+            self.evidence.history_checkpoint.as_ref(),
+        )?;
         *self = candidate;
         Ok(transition)
     }
@@ -732,7 +772,10 @@ impl ManifoldBrokerControlLeaseAuthority {
             .transitions
             .iter()
             .any(|transition| transition.application.request_id() == request_id);
-        if baseline_replay || transition_replay {
+        if !ongoing_history::request_matches(&self.evidence, request_id)
+            || baseline_replay
+            || transition_replay
+        {
             Err(ManifoldBrokerControlLeaseAuthorityError::TransitionReplay)
         } else {
             Ok(())
@@ -772,6 +815,7 @@ impl ManifoldBrokerControlLeaseAuthority {
         evidence: &ManifoldBrokerControlLeaseAuthorityEvidenceV2,
     ) -> bool {
         self.evidence.baseline == evidence.baseline
+            && self.evidence.history_checkpoint == evidence.history_checkpoint
             && self.evidence.transitions == evidence.transitions
             && self.evidence.current_authority_snapshot.authority_id
                 == evidence.current_authority_snapshot.authority_id
@@ -1368,6 +1412,7 @@ mod tests {
             )
             .expect("authority");
         let mut snapshot = ManifoldRuntimeHostSnapshot {
+            history_checkpoint: None,
             schema_id: schema_id("rusty.manifold.runtime_host.snapshot.v2"),
             host_id: DottedId::new("host.test").expect("id"),
             authority_revision: rusty_manifold_model::Revision::INITIAL,
@@ -1572,5 +1617,229 @@ mod tests {
             MAX_BROKER_CONTROL_LEASE_TRANSITIONS
         );
         assert_eq!(transition.sequence, 1);
+    }
+
+    #[test]
+    fn ongoing_live_lease_5000_renewals_preserve_authority_and_replay_without_reissue() {
+        let mut owner =
+            ManifoldBrokerControlLeaseAuthority::from_caller_attested_retained_authority_state(
+                current_snapshot(),
+                current_clock(),
+                vec![accepted_source()],
+            )
+            .unwrap();
+        let original = owner.runtime_leases()[0].clone();
+        let original_revision = owner.authority_snapshot().authority_revision;
+        owner.enable_ongoing_history().unwrap();
+        assert_eq!(owner.runtime_leases()[0], original);
+        assert_eq!(
+            owner.authority_snapshot().authority_revision,
+            original_revision
+        );
+        let mut first = None;
+        let mut old_evidence = None;
+        for cycle in 0..5000u64 {
+            let mut clock = owner.current_clock().clone();
+            clock.sequence += 1;
+            clock.monotonic_elapsed_ns += 1_000_000;
+            clock.wall_unix_ms += 1;
+            let request = ManifoldControlLeaseRenewalRequest {
+                schema_id: schema_id("rusty.manifold.command.lease_renewal_request.v1"),
+                request_id: owner
+                    .current_history_request_id(
+                        &DottedId::new(format!("request.renew.r{cycle}")).unwrap(),
+                    )
+                    .unwrap(),
+                lease_id: original.lease_id.clone(),
+                holder_id: original.holder_id.clone(),
+                expected_authority_revision: owner.authority_snapshot().authority_revision,
+                scope: original.scope.clone(),
+                requested_ttl_ms: 60_000,
+                renewal_reason: DottedId::new("holder.continue").unwrap(),
+                requested_at_ms: clock.wall_unix_ms as u64,
+            };
+            assert!(owner
+                .renew_control_lease(
+                    request.clone(),
+                    clock,
+                    vec![DottedId::new("evidence.current").unwrap()]
+                )
+                .unwrap()
+                .application
+                .applied_snapshot()
+                .is_some());
+            if first.is_none() {
+                first = Some(request);
+            }
+            if cycle % 16 == 15 {
+                let before = owner.evidence();
+                let before_leases = owner.runtime_leases().to_vec();
+                let c = owner.checkpoint_ongoing_history().unwrap();
+                assert_eq!(c.transition_sequence, cycle + 1);
+                assert_eq!(c.request_epoch, 2 + cycle / 16);
+                assert_eq!(owner.runtime_leases(), before_leases);
+                assert_eq!(
+                    owner.authority_snapshot(),
+                    &before.current_authority_snapshot
+                );
+                assert_eq!(owner.current_clock(), &before.current_clock);
+                assert!(owner.evidence.transitions.is_empty());
+                assert!(owner.evidence.baseline.lease_sources.is_empty());
+                assert_eq!(
+                    owner
+                        .evidence
+                        .history_checkpoint
+                        .as_ref()
+                        .unwrap()
+                        .product_leases
+                        .len(),
+                    1
+                );
+                assert!(
+                    ManifoldBrokerControlLeaseAuthority::from_v2_evidence(owner.evidence())
+                        .is_err()
+                );
+                let anchor = owner.seal_ongoing_history().unwrap();
+                ManifoldBrokerControlLeaseAuthority::verify_ongoing_history(
+                    &owner.evidence(),
+                    &anchor,
+                )
+                .unwrap();
+                if let Some(old) = old_evidence.take() {
+                    assert!(ManifoldBrokerControlLeaseAuthority::verify_ongoing_history(
+                        &old, &anchor
+                    )
+                    .is_err());
+                }
+                let mut damaged = owner.evidence();
+                damaged.history_checkpoint.as_mut().unwrap().product_leases[0].expires_at_ms += 1;
+                assert!(ManifoldBrokerControlLeaseAuthority::verify_ongoing_history(
+                    &damaged, &anchor
+                )
+                .is_err());
+                let saved = owner.evidence();
+                assert!(owner.restore_ongoing_history(damaged).is_err());
+                assert_eq!(owner.evidence(), saved);
+                owner.restore_ongoing_history(saved.clone()).unwrap();
+                assert_eq!(owner.evidence(), saved);
+                old_evidence = Some(owner.evidence());
+                let mut replay = first.clone().unwrap();
+                replay.expected_authority_revision = owner.authority_snapshot().authority_revision;
+                replay.requested_at_ms = owner.current_clock().wall_unix_ms as u64;
+                let before = owner.evidence();
+                assert!(matches!(
+                    owner.renew_control_lease(
+                        replay,
+                        owner.current_clock().clone(),
+                        vec![DottedId::new("evidence.current").unwrap()]
+                    ),
+                    Err(ManifoldBrokerControlLeaseAuthorityError::TransitionReplay)
+                ));
+                assert_eq!(owner.evidence(), before);
+            }
+            assert_eq!(owner.runtime_leases()[0].lease_id, original.lease_id);
+            assert_eq!(owner.runtime_leases()[0].holder_id, original.holder_id);
+            assert_eq!(owner.runtime_leases()[0].scope, original.scope);
+            assert!(owner.evidence.transitions.len() <= 16);
+        }
+        assert_eq!(
+            owner.authority_snapshot().authority_revision.get(),
+            original_revision.get() + 5000
+        );
+        assert!(serde_json::to_vec(&owner.evidence()).unwrap().len() < 256 * 1024);
+        let clock = owner.current_clock().clone();
+        owner
+            .release_control_lease(
+                ManifoldControlLeaseReleaseRequest {
+                    schema_id: schema_id("rusty.manifold.command.lease_release_request.v1"),
+                    request_id: owner
+                        .current_history_request_id(&DottedId::new("request.stop").unwrap())
+                        .unwrap(),
+                    lease_id: original.lease_id,
+                    holder_id: original.holder_id,
+                    scope: original.scope,
+                    expected_authority_revision: owner.authority_snapshot().authority_revision,
+                    release_reason: DottedId::new("holder.stop").unwrap(),
+                    requested_at_ms: clock.wall_unix_ms as u64,
+                },
+                clock,
+                vec![DottedId::new("evidence.current").unwrap()],
+            )
+            .unwrap();
+        assert!(owner.runtime_leases().is_empty());
+        owner.checkpoint_ongoing_history().unwrap();
+        assert!(owner
+            .evidence
+            .history_checkpoint
+            .unwrap()
+            .product_leases
+            .is_empty());
+    }
+
+    #[test]
+    fn ongoing_live_lease_transition_and_epoch_overflow_are_terminal() {
+        let mut owner =
+            ManifoldBrokerControlLeaseAuthority::from_caller_attested_retained_authority_state(
+                current_snapshot(),
+                current_clock(),
+                vec![accepted_source()],
+            )
+            .unwrap();
+        owner.enable_ongoing_history().unwrap();
+        let c = owner.evidence.history_checkpoint.as_mut().unwrap();
+        c.request_epoch = u64::MAX;
+        c.transition_sequence = u64::MAX - 1;
+        c.prior_checkpoint_sha256 = Some(format!("sha256:{}", "a".repeat(64)));
+        let original = owner.runtime_leases()[0].clone();
+        let request = |owner: &ManifoldBrokerControlLeaseAuthority, suffix: &str| {
+            ManifoldControlLeaseRenewalRequest {
+                schema_id: schema_id("rusty.manifold.command.lease_renewal_request.v1"),
+                request_id: owner
+                    .current_history_request_id(&DottedId::new(suffix).unwrap())
+                    .unwrap(),
+                lease_id: original.lease_id.clone(),
+                holder_id: original.holder_id.clone(),
+                scope: original.scope.clone(),
+                expected_authority_revision: owner.authority_snapshot().authority_revision,
+                requested_ttl_ms: 60_000,
+                renewal_reason: DottedId::new("holder.continue").unwrap(),
+                requested_at_ms: owner.current_clock().wall_unix_ms as u64,
+            }
+        };
+        let mut clock = owner.current_clock().clone();
+        clock.wall_unix_ms += 100;
+        clock.sequence += 1;
+        clock.monotonic_elapsed_ns += 1_000_000;
+        let mut next = request(&owner, "request.last");
+        next.requested_at_ms = clock.wall_unix_ms as u64;
+        assert_eq!(
+            owner
+                .renew_control_lease(
+                    next,
+                    clock,
+                    vec![DottedId::new("evidence.current").unwrap()]
+                )
+                .unwrap()
+                .sequence,
+            u64::MAX
+        );
+        let before = owner.evidence();
+        assert!(owner.checkpoint_ongoing_history().is_err());
+        assert_eq!(owner.evidence(), before);
+        let mut clock = owner.current_clock().clone();
+        clock.wall_unix_ms += 1;
+        clock.sequence += 1;
+        clock.monotonic_elapsed_ns += 1_000_000;
+        let mut next = request(&owner, "request.overflow");
+        next.requested_at_ms = clock.wall_unix_ms as u64;
+        assert!(matches!(
+            owner.renew_control_lease(
+                next,
+                clock,
+                vec![DottedId::new("evidence.current").unwrap()]
+            ),
+            Err(ManifoldBrokerControlLeaseAuthorityError::TransitionCapacityExceeded)
+        ));
+        assert_eq!(owner.evidence(), before);
     }
 }

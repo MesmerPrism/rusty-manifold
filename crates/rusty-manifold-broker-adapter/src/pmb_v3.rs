@@ -136,6 +136,7 @@ impl ManifoldPmbPlacementAdapter {
             .map_err(|_| ManifoldPmbAdapterError::InvalidLock)?;
         validate_config(&config, &lock, lock_bytes)?;
         let host = ManifoldRuntimeHost::from_snapshot(ManifoldRuntimeHostSnapshot {
+            history_checkpoint: None,
             schema_id: schema(HOST_SNAPSHOT_SCHEMA),
             host_id: config.authority_host_id.clone(),
             authority_revision: Revision::new(1).expect("initial revision"),

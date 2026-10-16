@@ -1,5 +1,8 @@
 //! Source-only Manifold Runtime Host with deterministic review and application.
 
+mod ongoing_history;
+pub use ongoing_history::*;
+
 use rusty_manifold_model::{
     DottedId, ManifoldAuthorityExpirySweepAuthorityApplication,
     ManifoldAuthorityExpirySweepAuthorityApplicationOutcome, ManifoldAuthoritySnapshot,
@@ -167,6 +170,9 @@ pub struct ManifoldRuntimeHostSnapshot {
     pub host_id: DottedId,
     /// Accepted authority revision.
     pub authority_revision: Revision,
+    /// Explicit ongoing baseline; omitted for ordinary finite v4 state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_checkpoint: Option<ManifoldRuntimeHistoryCheckpoint>,
     /// Registered command descriptors.
     pub commands: Vec<ManifoldRuntimeCommandDescriptor>,
     /// Active accepted leases.
@@ -903,6 +909,11 @@ impl ManifoldRuntimeHost {
     pub fn from_snapshot(
         snapshot: ManifoldRuntimeHostSnapshot,
     ) -> Result<Self, ManifoldRuntimeHostError> {
+        if snapshot.history_checkpoint.is_some() {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "ongoing_restore_requires_live_owner",
+            ));
+        }
         validate_snapshot(&snapshot)?;
         Ok(Self { snapshot })
     }
@@ -996,7 +1007,7 @@ impl ManifoldRuntimeHost {
         now_ms: u64,
     ) -> ManifoldRuntimeApplicationReceipt {
         let prior = self.snapshot.authority_revision;
-        if self.snapshot.audit_events.len() >= MAX_RUNTIME_AUDIT_EVENTS {
+        if ongoing_history::audit_capacity_exhausted(&self.snapshot) {
             return application_receipt(
                 request,
                 &self.snapshot.host_id,
@@ -1042,7 +1053,7 @@ impl ManifoldRuntimeHost {
         }
         let resulting = self.snapshot.authority_revision;
         let event = audit_event(
-            (self.snapshot.audit_events.len() as u64) + 1,
+            ongoing_history::next_sequence(&self.snapshot),
             ManifoldRuntimeAuditKind::CommandApplication,
             &request.request_id,
             prior,
@@ -1077,7 +1088,7 @@ impl ManifoldRuntimeHost {
         request: &ManifoldRuntimeControlLeaseAdoptionRequest,
     ) -> ManifoldRuntimeControlLeaseAdoptionReceipt {
         let prior = self.snapshot.authority_revision;
-        if self.snapshot.audit_events.len() >= MAX_RUNTIME_AUDIT_EVENTS {
+        if ongoing_history::audit_capacity_exhausted(&self.snapshot) {
             return control_lease_adoption_receipt(
                 &self.snapshot,
                 request,
@@ -1107,7 +1118,9 @@ impl ManifoldRuntimeHost {
             );
         }
 
-        let result = if replayed {
+        let result = if replayed
+            || !ongoing_history::request_matches(&self.snapshot, &request.adoption_id)
+        {
             Err(ManifoldRuntimeRejectionReason::ReplayedControlLeaseAdoption)
         } else if request.schema_id.as_str() != HOST_CONTROL_LEASE_ADOPTION_REQUEST_SCHEMA {
             Err(ManifoldRuntimeRejectionReason::SchemaMismatch)
@@ -1136,7 +1149,7 @@ impl ManifoldRuntimeHost {
         }
         let resulting = self.snapshot.authority_revision;
         self.snapshot.audit_events.push(audit_event(
-            (self.snapshot.audit_events.len() as u64) + 1,
+            ongoing_history::next_sequence(&self.snapshot),
             ManifoldRuntimeAuditKind::ControlLeaseAdoption,
             &request.adoption_id,
             prior,
@@ -1172,7 +1185,7 @@ impl ManifoldRuntimeHost {
         request: &ManifoldRuntimeDerivativeLeaseRevocationRequest,
     ) -> ManifoldRuntimeDerivativeLeaseRevocationReceipt {
         let prior = self.snapshot.authority_revision;
-        if self.snapshot.audit_events.len() >= MAX_RUNTIME_AUDIT_EVENTS
+        if ongoing_history::audit_capacity_exhausted(&self.snapshot)
             || request.exact_leases.len() > MAX_RUNTIME_DERIVATIVE_LEASE_REVOCATION_LEASES
         {
             return derivative_lease_revocation_receipt(
@@ -1221,7 +1234,9 @@ impl ManifoldRuntimeHost {
             .cloned()
             .collect::<Vec<_>>();
         accepted_derivative_leases.sort_by(|left, right| left.lease_id.cmp(&right.lease_id));
-        let result = if replayed {
+        let result = if replayed
+            || !ongoing_history::request_matches(&self.snapshot, &request.revocation_id)
+        {
             Err(ManifoldRuntimeRejectionReason::ReplayedDerivativeLeaseRevocation)
         } else if request.schema_id.as_str() != HOST_DERIVATIVE_LEASE_REVOCATION_REQUEST_SCHEMA {
             Err(ManifoldRuntimeRejectionReason::SchemaMismatch)
@@ -1273,7 +1288,7 @@ impl ManifoldRuntimeHost {
                 prior.next().expect("authority revision must advance");
         }
         let resulting = self.snapshot.authority_revision;
-        let sequence = (self.snapshot.audit_events.len() as u64) + 1;
+        let sequence = ongoing_history::next_sequence(&self.snapshot);
         let event_id = runtime_audit_id(sequence);
         self.snapshot.audit_events.push(ManifoldRuntimeAuditEvent {
             schema_id: schema_id(HOST_AUDIT_EVENT_SCHEMA),
@@ -1323,7 +1338,7 @@ impl ManifoldRuntimeHost {
         now_ms: u64,
     ) -> ManifoldRuntimeLeaseExpiryReceipt {
         let prior = self.snapshot.authority_revision;
-        if self.snapshot.audit_events.len() >= MAX_RUNTIME_AUDIT_EVENTS {
+        if ongoing_history::audit_capacity_exhausted(&self.snapshot) {
             return ManifoldRuntimeLeaseExpiryReceipt {
                 schema_id: schema_id(HOST_LEASE_EXPIRY_RECEIPT_SCHEMA),
                 sweep_id,
@@ -1349,7 +1364,8 @@ impl ManifoldRuntimeHost {
         }
         let mut removed = Vec::new();
         let replayed = self.snapshot.reviewed_sweep_ids.contains(&sweep_id);
-        let rejection = if replayed {
+        let rejection = if replayed || !ongoing_history::request_matches(&self.snapshot, &sweep_id)
+        {
             Some(ManifoldRuntimeRejectionReason::ReplayedSweep)
         } else if expected_revision != prior {
             Some(ManifoldRuntimeRejectionReason::StaleAuthorityRevision)
@@ -1381,7 +1397,7 @@ impl ManifoldRuntimeHost {
         }
         let resulting = self.snapshot.authority_revision;
         self.snapshot.audit_events.push(audit_event(
-            (self.snapshot.audit_events.len() as u64) + 1,
+            ongoing_history::next_sequence(&self.snapshot),
             ManifoldRuntimeAuditKind::LeaseExpiry,
             &sweep_id,
             prior,
@@ -1787,6 +1803,7 @@ fn migrate_legacy_runtime_host_snapshot_v1(
     let source_schema_id = legacy.schema_id;
     let migrated_audit_event_count = audit_events.len();
     let snapshot = ManifoldRuntimeHostSnapshot {
+        history_checkpoint: None,
         schema_id: schema_id(HOST_SNAPSHOT_SCHEMA),
         host_id: legacy.host_id,
         authority_revision: legacy.authority_revision,
@@ -1824,6 +1841,7 @@ fn migrate_legacy_runtime_host_snapshot_v2(
     let source_schema_id = legacy.schema_id;
     let migrated_audit_event_count = legacy.audit_events.len();
     let snapshot = ManifoldRuntimeHostSnapshot {
+        history_checkpoint: None,
         schema_id: schema_id(HOST_SNAPSHOT_SCHEMA),
         host_id: legacy.host_id,
         authority_revision: legacy.authority_revision,
@@ -1886,6 +1904,7 @@ fn migrate_legacy_runtime_host_snapshot_v3(
     let source_schema_id = legacy.schema_id;
     let migrated_audit_event_count = legacy.audit_events.len();
     let snapshot = ManifoldRuntimeHostSnapshot {
+        history_checkpoint: None,
         schema_id: schema_id(HOST_SNAPSHOT_SCHEMA),
         host_id: legacy.host_id,
         authority_revision: legacy.authority_revision,
@@ -2043,9 +2062,7 @@ fn runtime_host_migration_receipt(
 fn validate_snapshot(
     snapshot: &ManifoldRuntimeHostSnapshot,
 ) -> Result<(), ManifoldRuntimeHostError> {
-    if snapshot.schema_id.as_str() != HOST_SNAPSHOT_SCHEMA {
-        return Err(ManifoldRuntimeHostError::InvalidSnapshot("schema_mismatch"));
-    }
+    ongoing_history::validate_checkpoint(snapshot)?;
     if snapshot.commands.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
         || snapshot.leases.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
         || snapshot.applied_request_ids.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
@@ -2194,13 +2211,29 @@ fn validate_snapshot(
             "audit_replay_set_mismatch",
         ));
     }
-    let mut rolling_revision = Revision::INITIAL;
+    let mut rolling_revision = snapshot
+        .history_checkpoint
+        .as_ref()
+        .map_or(Revision::INITIAL, |c| c.authority_revision);
     let mut seen_applied_commands = BTreeSet::new();
     let mut seen_sweeps = BTreeSet::new();
     let mut seen_adoptions = BTreeSet::new();
     let mut seen_derivative_revocations = BTreeSet::new();
     for (index, event) in snapshot.audit_events.iter().enumerate() {
-        let sequence = (index as u64) + 1;
+        let retained = snapshot
+            .history_checkpoint
+            .as_ref()
+            .is_some_and(|c| c.retained_event_ids.contains(&event.event_id));
+        let sequence = if retained {
+            event.sequence
+        } else {
+            ongoing_history::audit_base(snapshot)
+                .checked_add(index as u64)
+                .and_then(|n| n.checked_add(1))
+                .ok_or(ManifoldRuntimeHostError::InvalidSnapshot(
+                    "history_sequence_exhausted",
+                ))?
+        };
         let semantic_valid = match event.event_kind {
             ManifoldRuntimeAuditKind::CommandApplication if event.applied => {
                 event.rejection_reason.is_none()
@@ -2210,7 +2243,8 @@ fn validate_snapshot(
                 event.rejection_reason.is_some()
                     && (event.rejection_reason
                         != Some(ManifoldRuntimeRejectionReason::ReplayedRequest)
-                        || seen_applied_commands.contains(&event.source_id))
+                        || seen_applied_commands.contains(&event.source_id)
+                        || !ongoing_history::request_matches(snapshot, &event.source_id))
             }
             ManifoldRuntimeAuditKind::LeaseExpiry
                 if seen_sweeps.insert(event.source_id.clone()) =>
@@ -2281,7 +2315,7 @@ fn validate_snapshot(
         if event.schema_id.as_str() != HOST_AUDIT_EVENT_SCHEMA
             || event.sequence != sequence
             || event.event_id != runtime_audit_id(sequence)
-            || event.prior_authority_revision != rolling_revision
+            || (!retained && event.prior_authority_revision != rolling_revision)
             || (event.applied
                 && event.prior_authority_revision.next()
                     != Some(event.resulting_authority_revision))
@@ -2299,11 +2333,16 @@ fn validate_snapshot(
                     .reviewed_derivative_lease_revocation_ids
                     .contains(&event.source_id))
             || !derivative_binding_valid
+            || (event.applied
+                && !retained
+                && !ongoing_history::request_matches(snapshot, &event.source_id))
             || !semantic_valid
         {
             return Err(ManifoldRuntimeHostError::InvalidSnapshot("audit_lineage"));
         }
-        rolling_revision = event.resulting_authority_revision;
+        if !retained {
+            rolling_revision = event.resulting_authority_revision;
+        }
     }
     if rolling_revision != snapshot.authority_revision {
         return Err(ManifoldRuntimeHostError::InvalidSnapshot(
@@ -2335,7 +2374,9 @@ fn validate_request(
     if request.expected_authority_revision != snapshot.authority_revision {
         return Err(ManifoldRuntimeRejectionReason::StaleAuthorityRevision);
     }
-    if snapshot.applied_request_ids.contains(&request.request_id) {
+    if !ongoing_history::request_matches(snapshot, &request.request_id)
+        || snapshot.applied_request_ids.contains(&request.request_id)
+    {
         return Err(ManifoldRuntimeRejectionReason::ReplayedRequest);
     }
     if request.issued_at_ms > now_ms || request.expires_at_ms <= now_ms {

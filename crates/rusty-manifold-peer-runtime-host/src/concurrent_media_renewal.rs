@@ -56,7 +56,8 @@ impl ManifoldPeerRuntimeHost {
             ));
         }
         if self.snapshot.ongoing_media_policy.is_some() {
-            self.cumulative_concurrent_media_renewals()?.checked_add(1)
+            self.cumulative_concurrent_media_renewals()?
+                .checked_add(1)
                 .ok_or_else(|| invalid_snapshot("cumulative renewal count exhausted"))?;
         }
         if self.snapshot.concurrent_media_renewals.len() >= 32
@@ -212,7 +213,7 @@ impl ManifoldPeerRuntimeHost {
             prior_routes: routes,
             renewed_routes: renewed_routes.clone(),
         };
-        let mut candidate = self.clone();
+        let mut candidate = self.copy_for_transaction();
         *candidate
             .snapshot
             .media_command_runtime
@@ -250,8 +251,12 @@ impl ManifoldPeerRuntimeHost {
             true,
             None,
         )?;
+        candidate.project_media_runtime_snapshot(
+            candidate.snapshot.media_command_runtime.clone(),
+            now_ms,
+        )?;
         validate_snapshot(&candidate.snapshot)?;
-        self.snapshot = candidate.snapshot;
+        self.commit_transaction_candidate(candidate)?;
         Ok(receipt)
     }
 }

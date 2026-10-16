@@ -1,5 +1,71 @@
 # Broker Adapters
 
+## Prospective live control-lease history storage
+
+The owner implementation in `src/lease_authority.rs` and `src/lease_history.rs`
+supports explicit control-lease authority evidence v4 checkpoints. Finite v3
+evidence and its existing restore route remain the default. Selection occurs
+on the actual source owner before chronological lifecycle work; an original
+accepted Issue baseline may already contain the product's live leases.
+
+The v4 `history_checkpoint` records `request_epoch`, cumulative
+`transition_sequence`, the bounded exact current `product_leases`, and source
+and previous checkpoint commitments. Its baseline is the already accepted
+current authority snapshot and clock. Renewed leases are retained with their
+current deadlines and identities; no replacement Issue application is created.
+Checkpointing advances neither accepted authority revision nor the clock and
+neither renews nor replaces a live resource. The chronological suffix retains
+the unchanged pure generic review/application validation.
+
+Only `install_history_checkpoint`, reached through the actual live owner's
+validated mutation gate, can admit that baseline. Public detached v3 restore
+rejects v4. A private-field borrowed
+`ManifoldBrokerControlLeaseHistoryRestoreAnchor` verifies only a read-only
+projection; it cannot construct a second owner. Exact same-process restoration
+runs in place under `&mut` the actual current owner and rejects every target
+that differs from its current accepted evidence. Hashes alone grant no
+baseline authority. Process-death authenticated storage restore is not
+implemented. Subsequent internal staging validates against the current actual
+owner's checkpoint, never a baseline selected from target JSON.
+
+All subsequent lifecycle request identities use the actual owner's current
+epoch. A checkpoint replaces the replay prefix with a namespace fence, so an
+old identity remains rejected even after its exact row is removed. Transition
+sequence and epoch arithmetic fail closed on exhaustion. The original 64 live
+lease bound, current expiry checks, generic transition validation and cleanup
+reserves remain enforced.
+
+`runtime_history.rs` composes these owners through the existing private Broker
+staging gate. Explicit core evidence v7 retains one bounded
+`ManifoldBrokerHistoryCheckpoint` with cumulative consumed-use, mutation and
+lifecycle counts. It preserves provider epoch, grants and live resources.
+Actual accepted token expiry is reviewed before compacting the completed
+prefix; current token TTLs and scoped root-renewal horizons are unchanged.
+Pending uses, administrative revocation barriers and registered cleanup
+credentials refuse this supported checkpoint mode. These are unresolved owner
+obligations, never inferred as drained or successful.
+
+A bounded set of original accepted mutation/use proofs may remain pinned for
+live downstream lease ancestry. Callers select exact existing use ids, never
+supply replacement proof bodies. Admission retains those exact accepted
+bindings alongside its current live baseline. Completed root/child suffixes
+compact together. Future authority requests use each actual child owner's
+current namespace; no host counter or caller timestamp grants authority.
+
+`ManifoldBrokerRuntime` remains non-Clone. Read-only borrowed seals return no
+new writable owner. `restore_ongoing_history` replaces only the exact current
+exclusive owner in place. Private candidate staging still commits before
+observation and cannot escape through the public API. Detached core v7 restore
+is refused; this does not implement authenticated process-death persistence.
+
+The focused owner suite crosses 4,096 transitions with 5,000 real lease
+renewals and exact release. The composed Broker suite performs 5,000 actual
+issue/use/command/revoke cycles with an original live-obligation proof retained
+through checkpoints. These owner checks do not yet prove an ongoing media
+product: peer/reciprocal histories, signed epoch guards, per-lifetime ancestry
+and product adoption must also be integrated and qualified. Whole-product
+until-Stop support remains incomplete.
+
 ## PMB V3 placement parity
 
 PMB V3 standalone and embedded configs differ only in their selected permitted

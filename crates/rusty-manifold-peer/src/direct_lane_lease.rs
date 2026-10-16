@@ -1639,6 +1639,7 @@ mod tests {
         let lease_id = id("lease.runtime.media-test");
         let scope = id("scope.direct-lane.authority");
         let mut host = ManifoldRuntimeHost::from_snapshot(ManifoldRuntimeHostSnapshot {
+            history_checkpoint: None,
             schema_id: schema(HOST_SNAPSHOT_SCHEMA),
             host_id: host_id.clone(),
             authority_revision: Revision::INITIAL,
@@ -1930,6 +1931,7 @@ mod tests {
         let runtime_lease_id = id("lease.runtime.media-test");
         let runtime_scope = id("scope.media.session.authority");
         let mut runtime = ManifoldRuntimeHost::from_snapshot(ManifoldRuntimeHostSnapshot {
+            history_checkpoint: None,
             schema_id: schema(HOST_SNAPSHOT_SCHEMA),
             host_id: runtime_host_id.clone(),
             authority_revision: Revision::INITIAL,

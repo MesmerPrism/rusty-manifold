@@ -611,6 +611,7 @@ dependencies = [
  "rusty-manifold-model",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -730,6 +731,7 @@ dependencies = [
  "rusty-manifold-model",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]

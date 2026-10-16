@@ -66,6 +66,51 @@ The design intentionally rejects broad shared secrets and unauthenticated
 localhost mutation as product defaults. Network transport and cross-device peer
 trust are separate checkpoints.
 
+## Explicit ongoing history checkpoints
+
+Fresh trusted owners may call `enable_ongoing_history` before their first
+mutable action. This selects `rusty.manifold.admission.snapshot.v3`; ordinary
+v2 construction and serialized bytes remain unchanged. Selection preserves
+the exact grants, root-renewal policies, token TTL and accepted revision.
+
+`history_checkpoint` retains a monotonic `request_epoch`, cumulative
+`audit_sequence`, accepted `authority_revision`, the exact baseline grants and
+retained tokens, and source/prior SHA-256 commitments. Checkpoints hold no
+recursive previous checkpoint body. They preserve the current token objects,
+grants and deadlines byte for byte and clear only the completed audit/replay
+suffix. Expiry and revocation still require their actual existing operations.
+Current live-state cardinality bounds remain enforced.
+A downstream owner may pin a bounded set of still-required original use proofs
+through `checkpoint_ongoing_history_with_retained_uses`. Each id must select an
+already accepted exact use in this owner. Callers cannot provide a proof body.
+Those historical bindings permit no new operation; they retain the original
+lease ancestry while current token expiry/revocation still rejects new uses.
+
+
+Every new issue/use/renew/revoke/sweep identity must use the actual owner's
+`current_history_request_id` namespace. A checkpoint advances that namespace;
+even an old request relabelled with the current accepted revision rejects.
+Future random token ids also include the new epoch, so dropping old removed
+token tombstones cannot cause old entropy to reissue an old bearer identity.
+Retries of an unresolved action must retain their original request identity.
+The embedding Broker must finish its pending phases before compacting its own
+dependent proof. Admission alone cannot assert that another owner finished.
+
+A SHA-256 checkpoint does not authenticate its baseline. Public detached
+snapshot/JSON constructors reject ongoing state. Same-process restore requires
+`ManifoldAdmissionHistoryRestoreAnchor`, privately minted from and borrowing
+the current actual live owner; the entire target and current owner must still
+match its exact seal. A stale or damaged target cannot select a new baseline.
+Process-death recovery requires a separately authenticated deployment-owner
+storage anchor and is deliberately unsupported by this API.
+
+The focused production test performs 5,000 scoped sliding grant renewals with
+one unchanged live token and checkpoints every 16 renewals, crossing the finite
+replay/audit capacities with bounded retained suffixes. It does not prove the
+whole Broker/peer/runtime composition is ongoing: those owners' independent
+histories, pending-phase joins and restore anchors must also be implemented
+before a product can advertise continuous operation until Stop.
+
 ## Validation
 
 ```powershell

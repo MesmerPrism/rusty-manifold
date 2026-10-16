@@ -21,6 +21,14 @@ impl ManifoldOngoingMediaPolicy {
             schema_id: schema("rusty.manifold.peer.ongoing_media_policy.v1"),
         }
     }
+    /// Explicit generic history composition. Requires fresh actual signed and
+    /// command owners plus an independently selected live Broker history owner.
+    #[must_use]
+    pub fn active_checkpoint_v2() -> Self {
+        Self {
+            schema_id: schema("rusty.manifold.peer.ongoing_media_policy.v2"),
+        }
+    }
 }
 
 /// Constant-size commitment to a validated concurrent-history prefix.
@@ -42,6 +50,20 @@ pub struct ManifoldConcurrentMediaCheckpoint {
     pub original: ManifoldConcurrentMediaAuthorityRenewalReceipt,
     /// Latest fully adopted renewal at this checkpoint.
     pub baseline: ManifoldConcurrentMediaAuthorityRenewalReceipt,
+    /// V2 count for the current exact Start/derivative lifetime. The cumulative
+    /// count above remains monotonic across every completed media lifetime.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_lifetime_renewal_count: Option<u64>,
+}
+
+pub(super) fn retained_anchor_count(checkpoint: &ManifoldConcurrentMediaCheckpoint) -> usize {
+    if checkpoint.current_lifetime_renewal_count.is_some()
+        && checkpoint.original == checkpoint.baseline
+    {
+        1
+    } else {
+        2
+    }
 }
 
 /// Same-process restore authority minted only from the actual live owner.
@@ -68,26 +90,47 @@ pub(super) fn validate_ongoing_media(
     if snapshot
         .ongoing_media_policy
         .as_ref()
-        .is_some_and(|policy| *policy != ManifoldOngoingMediaPolicy::active_checkpoint_v1())
+        .is_some_and(|policy| {
+            *policy != ManifoldOngoingMediaPolicy::active_checkpoint_v1()
+                && !(runtime_history::selected(snapshot)
+                    && policy.schema_id.as_str() == "rusty.manifold.peer.ongoing_media_policy.v2")
+        })
         || (snapshot.concurrent_media_checkpoint.is_some()
             && snapshot.ongoing_media_policy.is_none())
     {
         return Err(invalid_snapshot("ongoing media policy"));
     }
     if let Some(checkpoint) = &snapshot.concurrent_media_checkpoint {
-        if checkpoint.schema_id.as_str() != "rusty.manifold.peer.concurrent_media_checkpoint.v1"
-            || !valid_checkpoint_sequence(
-                checkpoint.checkpoint_sequence,
-                checkpoint.cumulative_renewals,
-                checkpoint.prior_checkpoint_sha256.is_some(),
-            )
+        let history = runtime_history::selected(snapshot);
+        let count_valid = if history {
+            checkpoint.schema_id.as_str() == "rusty.manifold.peer.concurrent_media_checkpoint.v2"
+                && checkpoint.checkpoint_sequence > 0
+                && checkpoint.checkpoint_sequence <= checkpoint.cumulative_renewals
+                && (checkpoint.checkpoint_sequence > 1)
+                    == checkpoint.prior_checkpoint_sha256.is_some()
+                && checkpoint
+                    .current_lifetime_renewal_count
+                    .is_some_and(|count| count > 0 && count <= checkpoint.cumulative_renewals)
+        } else {
+            checkpoint.schema_id.as_str() == "rusty.manifold.peer.concurrent_media_checkpoint.v1"
+                && checkpoint.current_lifetime_renewal_count.is_none()
+                && valid_checkpoint_sequence(
+                    checkpoint.checkpoint_sequence,
+                    checkpoint.cumulative_renewals,
+                    checkpoint.prior_checkpoint_sha256.is_some(),
+                )
+        };
+        if !count_valid
             || !valid_sha256(&checkpoint.source_history_sha256)
             || checkpoint
                 .prior_checkpoint_sha256
                 .as_ref()
                 .is_some_and(|hash| !valid_sha256(hash))
             || snapshot.concurrent_media_renewals.first() != Some(&checkpoint.original)
-            || snapshot.concurrent_media_renewals.get(1) != Some(&checkpoint.baseline)
+            || snapshot
+                .concurrent_media_renewals
+                .get(retained_anchor_count(checkpoint) - 1)
+                != Some(&checkpoint.baseline)
             || checkpoint.original.provider_epoch_id != snapshot.provider_epoch_id
             || checkpoint.baseline.provider_epoch_id != snapshot.provider_epoch_id
             || checkpoint.original.prior_inner_lease.derivative_binding
@@ -120,6 +163,8 @@ impl ManifoldPeerRuntimeHost {
         &self,
         broker: &ManifoldBrokerRuntime,
     ) -> Result<(), ManifoldPeerRuntimeHostError> {
+        self.validate_media_runtime_owner()?;
+        self.validate_signed_history_owner()?;
         validate_snapshot(&self.snapshot)?;
         validate_live_broker_restoration(&self.snapshot, &broker.evidence())
     }
@@ -130,6 +175,19 @@ impl ManifoldPeerRuntimeHost {
         broker: &ManifoldBrokerRuntime,
         policy: ManifoldOngoingMediaPolicy,
     ) -> Result<(), ManifoldPeerRuntimeHostError> {
+        self.validate_signed_history_owner()?;
+        if policy == ManifoldOngoingMediaPolicy::active_checkpoint_v2() {
+            if broker.evidence().history_checkpoint.is_none() {
+                return Err(invalid_snapshot(
+                    "ongoing v2 requires actual ongoing Broker owner",
+                ));
+            }
+            if self.snapshot.ongoing_media_policy.as_ref() == Some(&policy) {
+                return self.validate_owned_state_with_live_broker(broker);
+            }
+            self.validate_owned_state_with_live_broker(broker)?;
+            return self.enable_owned_runtime_history();
+        }
         if policy != ManifoldOngoingMediaPolicy::active_checkpoint_v1()
             || self.snapshot.concurrent_media_checkpoint.is_some()
             || (self.snapshot.ongoing_media_policy.is_none()
@@ -137,6 +195,7 @@ impl ManifoldPeerRuntimeHost {
         {
             return Err(invalid_snapshot("ongoing media policy selection"));
         }
+        self.validate_media_runtime_owner()?;
         validate_snapshot(&self.snapshot)?;
         validate_live_broker_restoration(&self.snapshot, &broker.evidence())?;
         self.snapshot.ongoing_media_policy = Some(policy);
@@ -156,11 +215,69 @@ impl ManifoldPeerRuntimeHost {
                     self.snapshot
                         .concurrent_media_renewals
                         .len()
-                        .saturating_sub(2),
+                        .saturating_sub(retained_anchor_count(checkpoint)),
                 )
             },
         );
         checked_total(base, suffix)
+    }
+
+    /// Actual accepted count for the latest exact Start/derivative lifetime.
+    /// The global cumulative count remains independent and never resets on Start.
+    pub fn current_lifetime_concurrent_media_renewals(
+        &self,
+    ) -> Result<u64, ManifoldPeerRuntimeHostError> {
+        let latest_media = self
+            .snapshot
+            .media_sessions
+            .sessions
+            .iter()
+            .max_by_key(|media| media.accepted_at_ms);
+        if latest_media.is_some_and(|media| {
+            self.snapshot
+                .concurrent_media_renewals
+                .last()
+                .map_or(true, |last| {
+                    last.prior_media.decision_id != media.decision_id
+                })
+        }) {
+            return Ok(0);
+        }
+        if let Some(checkpoint) = &self.snapshot.concurrent_media_checkpoint {
+            if let Some(count) = checkpoint.current_lifetime_renewal_count.filter(|_| {
+                self.snapshot
+                    .concurrent_media_renewals
+                    .last()
+                    .is_some_and(|last| {
+                        last.prior_media.decision_id == checkpoint.original.prior_media.decision_id
+                            && last.prior_inner_lease.derivative_binding
+                                == checkpoint.original.prior_inner_lease.derivative_binding
+                    })
+            }) {
+                return checked_total(
+                    count,
+                    self.snapshot
+                        .concurrent_media_renewals
+                        .len()
+                        .saturating_sub(retained_anchor_count(checkpoint)),
+                );
+            }
+        }
+        let Some(current) = self.snapshot.concurrent_media_renewals.last() else {
+            return Ok(0);
+        };
+        u64::try_from(
+            self.snapshot
+                .concurrent_media_renewals
+                .iter()
+                .filter(|receipt| {
+                    receipt.prior_media.decision_id == current.prior_media.decision_id
+                        && receipt.prior_inner_lease.derivative_binding
+                            == current.prior_inner_lease.derivative_binding
+                })
+                .count(),
+        )
+        .map_err(|_| invalid_snapshot("lifetime renewal count exhausted"))
     }
 
     /// Checkpoints only a complete live same-graph renewal prefix.
@@ -173,9 +290,34 @@ impl ManifoldPeerRuntimeHost {
         adopted: &ManifoldConcurrentMediaAuthorityRenewalReceipt,
         now_ms: u64,
     ) -> Result<Option<ManifoldConcurrentMediaCheckpoint>, ManifoldPeerRuntimeHostError> {
+        if runtime_history::selected(&self.snapshot) {
+            return Err(invalid_snapshot(
+                "v2 requires composed media and generic checkpoint publication",
+            ));
+        }
+        let Some((candidate, checkpoint)) =
+            self.prepare_concurrent_media_checkpoint(broker, adopted, now_ms)?
+        else {
+            return Ok(None);
+        };
+        validate_snapshot(&candidate.snapshot)?;
+        validate_live_broker_restoration(&candidate.snapshot, &broker.evidence())?;
+        self.commit_transaction_candidate(candidate)?;
+        Ok(Some(checkpoint))
+    }
+    // A private candidate is not accepted authority and cannot escape before
+    // complete enclosing-owner validation/publication.
+    pub(super) fn prepare_concurrent_media_checkpoint(
+        &self,
+        broker: &ManifoldBrokerRuntime,
+        adopted: &ManifoldConcurrentMediaAuthorityRenewalReceipt,
+        now_ms: u64,
+    ) -> Result<Option<(Self, ManifoldConcurrentMediaCheckpoint)>, ManifoldPeerRuntimeHostError>
+    {
         if self.snapshot.ongoing_media_policy.is_none() {
             return Ok(None);
         }
+        let history = runtime_history::selected(&self.snapshot);
         if self.snapshot.concurrent_media_renewals.last() != Some(adopted)
             || adopted.expires_at_ms <= now_ms
             || adopted.renewed_media.lifecycle_status
@@ -193,48 +335,111 @@ impl ManifoldPeerRuntimeHost {
             || self.snapshot.pair_media_routes.routes.iter().any(|route| {
                 *route.lifecycle_status()
                     != rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Current
+                    && (!history
+                        || *route.cleanup_status()
+                            != rusty_manifold_peer::ManifoldPairMediaRouteCleanupStatus::Completed)
             })
         {
             return Err(invalid_snapshot(
                 "checkpoint requires complete current live media graph",
             ));
         }
+        self.validate_media_runtime_owner()?;
         validate_snapshot(&self.snapshot)?;
         validate_live_broker_restoration(&self.snapshot, &broker.evidence())?;
         if let Some(checkpoint) = &self.snapshot.concurrent_media_checkpoint {
             if &checkpoint.baseline == adopted {
-                return Ok(Some(checkpoint.clone()));
+                return Ok(Some((self.copy_for_transaction(), checkpoint.clone())));
             }
         }
         let suffix = self.snapshot.concurrent_media_renewals.len()
-            - if self.snapshot.concurrent_media_checkpoint.is_some() {
-                2
-            } else {
-                0
-            };
-        if suffix < 16 {
+            - self
+                .snapshot
+                .concurrent_media_checkpoint
+                .as_ref()
+                .map_or(0, retained_anchor_count);
+        let current_original = self
+            .snapshot
+            .concurrent_media_renewals
+            .iter()
+            .find(|r| {
+                r.prior_media.decision_id == adopted.prior_media.decision_id
+                    && r.prior_inner_lease.derivative_binding
+                        == adopted.prior_inner_lease.derivative_binding
+            })
+            .ok_or_else(|| invalid_snapshot("current lifetime original missing"))?
+            .clone();
+        let changed_lifetime = self
+            .snapshot
+            .concurrent_media_renewals
+            .first()
+            .is_some_and(|r| {
+                r.prior_media.decision_id != adopted.prior_media.decision_id
+                    || r.prior_inner_lease.derivative_binding
+                        != adopted.prior_inner_lease.derivative_binding
+            });
+        if suffix < 16 && !(history && changed_lifetime) {
             return Ok(None);
         }
         let cumulative = self.cumulative_concurrent_media_renewals()?;
         let prior = self.snapshot.concurrent_media_checkpoint.as_ref();
+        let lifetime_count = if history {
+            Some(if changed_lifetime {
+                u64::try_from(
+                    self.snapshot
+                        .concurrent_media_renewals
+                        .iter()
+                        .filter(|r| r.prior_media.decision_id == adopted.prior_media.decision_id)
+                        .count(),
+                )
+                .map_err(|_| invalid_snapshot("current lifetime count exhausted"))?
+            } else if let Some(prior) = prior {
+                checked_total(
+                    prior.current_lifetime_renewal_count.ok_or_else(|| {
+                        invalid_snapshot("current lifetime checkpoint count missing")
+                    })?,
+                    suffix,
+                )?
+            } else {
+                cumulative
+            })
+        } else {
+            None
+        };
         let checkpoint = ManifoldConcurrentMediaCheckpoint {
-            schema_id: schema("rusty.manifold.peer.concurrent_media_checkpoint.v1"),
+            schema_id: schema(if history {
+                "rusty.manifold.peer.concurrent_media_checkpoint.v2"
+            } else {
+                "rusty.manifold.peer.concurrent_media_checkpoint.v1"
+            }),
             checkpoint_sequence: prior
                 .map_or(Some(1), |value| value.checkpoint_sequence.checked_add(1))
                 .ok_or_else(|| invalid_snapshot("checkpoint sequence overflow"))?,
             cumulative_renewals: cumulative,
             prior_checkpoint_sha256: prior.map(digest).transpose()?,
-            source_history_sha256: digest(&(
-                &self.snapshot.concurrent_media_renewals,
-                &self.snapshot.concurrent_session_renewals,
-                &self.snapshot.concurrent_credential_refreshes,
-            ))?,
-            original: self.snapshot.concurrent_media_renewals[0].clone(),
+            source_history_sha256: if history {
+                digest(&self.snapshot)?
+            } else {
+                digest(&(
+                    &self.snapshot.concurrent_media_renewals,
+                    &self.snapshot.concurrent_session_renewals,
+                    &self.snapshot.concurrent_credential_refreshes,
+                ))?
+            },
+            original: if history {
+                current_original
+            } else {
+                self.snapshot.concurrent_media_renewals[0].clone()
+            },
             baseline: adopted.clone(),
+            current_lifetime_renewal_count: lifetime_count,
         };
-        let mut candidate = self.clone();
+        let mut candidate = self.copy_for_transaction();
         candidate.snapshot.concurrent_media_renewals =
             vec![checkpoint.original.clone(), adopted.clone()];
+        if retained_anchor_count(&checkpoint) == 1 {
+            candidate.snapshot.concurrent_media_renewals.truncate(1);
+        }
         candidate
             .snapshot
             .concurrent_session_renewals
@@ -251,10 +456,7 @@ impl ManifoldPeerRuntimeHost {
             candidate.snapshot.concurrent_credential_refreshes = vec![last];
         }
         candidate.snapshot.concurrent_media_checkpoint = Some(checkpoint.clone());
-        validate_snapshot(&candidate.snapshot)?;
-        validate_live_broker_restoration(&candidate.snapshot, &broker.evidence())?;
-        *self = candidate;
-        Ok(Some(checkpoint))
+        Ok(Some((candidate, checkpoint)))
     }
 
     /// Seals the exact current owner state for a same-process restore.
@@ -262,9 +464,11 @@ impl ManifoldPeerRuntimeHost {
         &self,
         broker: &ManifoldBrokerRuntime,
     ) -> Result<ManifoldOngoingMediaRestoreAnchor<'_>, ManifoldPeerRuntimeHostError> {
+        self.validate_signed_history_owner()?;
         if self.snapshot.ongoing_media_policy.is_none() {
             return Err(invalid_snapshot("ongoing snapshot policy absent"));
         }
+        self.validate_media_runtime_owner()?;
         validate_snapshot(&self.snapshot)?;
         validate_live_broker_restoration(&self.snapshot, &broker.evidence())?;
         Ok(ManifoldOngoingMediaRestoreAnchor {
@@ -284,7 +488,9 @@ impl ManifoldPeerRuntimeHost {
     ) -> Result<Self, ManifoldPeerRuntimeHostError> {
         let snapshot: ManifoldPeerRuntimeHostSnapshot =
             serde_json::from_str(json).map_err(ManifoldPeerRuntimeHostError::Deserialize)?;
+        Self::verify_ongoing_media_snapshot(json, anchor, broker)?;
         if snapshot.ongoing_media_policy.is_none()
+            || anchor.owner.signed_history_owner.is_some()
             || snapshot.trust_policy != anchor.trust_policy
             || snapshot.provider_epoch_id != anchor.provider_epoch_id
             || digest(&snapshot)? != anchor.snapshot_sha256
@@ -297,7 +503,54 @@ impl ManifoldPeerRuntimeHost {
         }
         validate_snapshot(&snapshot)?;
         validate_live_broker_restoration(&snapshot, &broker.evidence())?;
-        Ok(Self { snapshot })
+        Ok(Self {
+            snapshot,
+            media_runtime_owner: anchor.owner.media_runtime_owner.clone(),
+            signed_history_owner: None,
+            signed_history_candidate: None,
+        })
+    }
+
+    /// Checks exact sealed evidence without constructing or cloning a writer.
+    pub fn verify_ongoing_media_snapshot(
+        json: &str,
+        anchor: &ManifoldOngoingMediaRestoreAnchor<'_>,
+        broker: &ManifoldBrokerRuntime,
+    ) -> Result<(), ManifoldPeerRuntimeHostError> {
+        let snapshot: ManifoldPeerRuntimeHostSnapshot =
+            serde_json::from_str(json).map_err(ManifoldPeerRuntimeHostError::Deserialize)?;
+        anchor.owner.validate_owned_state_with_live_broker(broker)?;
+        if snapshot.ongoing_media_policy.is_none()
+            || snapshot.trust_policy != anchor.trust_policy
+            || snapshot.provider_epoch_id != anchor.provider_epoch_id
+            || digest(&snapshot)? != anchor.snapshot_sha256
+            || digest(anchor.owner.snapshot())? != anchor.snapshot_sha256
+            || digest(&broker.evidence())? != anchor.broker_evidence_sha256
+        {
+            return Err(invalid_snapshot(
+                "ongoing verification requires actual current owner seal",
+            ));
+        }
+        validate_snapshot(&snapshot)?;
+        validate_live_broker_restoration(&snapshot, &broker.evidence())
+    }
+
+    /// Reconciles exact current bytes in place, preserving the same non-cloneable
+    /// signed gate. Detached target bytes cannot replace this actual owner.
+    pub fn restore_current_ongoing_media_snapshot(
+        &mut self,
+        json: &str,
+        broker: &ManifoldBrokerRuntime,
+    ) -> Result<(), ManifoldPeerRuntimeHostError> {
+        let snapshot: ManifoldPeerRuntimeHostSnapshot =
+            serde_json::from_str(json).map_err(ManifoldPeerRuntimeHostError::Deserialize)?;
+        self.validate_owned_state_with_live_broker(broker)?;
+        if self.snapshot != snapshot || self.snapshot.ongoing_media_policy.is_none() {
+            return Err(invalid_snapshot(
+                "in-place restore requires actual current owner bytes",
+            ));
+        }
+        Ok(())
     }
 }
 
@@ -306,6 +559,120 @@ fn checked_total(base: u64, suffix: usize) -> Result<u64, ManifoldPeerRuntimeHos
         .ok()
         .and_then(|suffix| base.checked_add(suffix))
         .ok_or_else(|| invalid_snapshot("cumulative renewal count exhausted"))
+}
+
+// Called only after the complete actual source validates the old→new adoption
+// chain. Terminal records disappear only with their accepted Stop, derivative
+// release and completed route cleanup, all committed by the source digest.
+pub(super) fn prune_completed_media_lifetimes(
+    snapshot: &mut ManifoldPeerRuntimeHostSnapshot,
+    current: &ManifoldConcurrentMediaAuthorityRenewalReceipt,
+) -> Result<(), ManifoldPeerRuntimeHostError> {
+    if !snapshot.broker_lease_revocation_convergences.is_empty()
+        || !snapshot
+            .broker_lease_revocation_cleanup_completions
+            .is_empty()
+    {
+        return Err(invalid_snapshot(
+            "retired lifetime still has revocation obligations",
+        ));
+    }
+    let retired = snapshot
+        .media_sessions
+        .sessions
+        .iter()
+        .filter(|media| media.decision_id != current.prior_media.decision_id)
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut retired_admissions = BTreeSet::new();
+    let mut retired_routes = BTreeSet::new();
+    for media in &retired {
+        if media.lifecycle_status != ManifoldMediaSessionLifecycleStatus::Stopped
+            || media.ended_at_ms.is_none()
+            || media.ended_by_id.is_none()
+        {
+            return Err(invalid_snapshot(
+                "retired media lifetime is not exactly stopped",
+            ));
+        }
+        let ended = media.ended_at_ms.unwrap();
+        let routes = snapshot
+            .pair_media_routes
+            .routes
+            .iter()
+            .filter(|route| route.media_session_decision_id() == &media.decision_id)
+            .collect::<Vec<_>>();
+        if routes.is_empty()
+            || routes.iter().any(|route| {
+                *route.lifecycle_status()
+                    == rusty_manifold_peer::ManifoldPairMediaRouteLifecycleStatus::Current
+                    || *route.cleanup_status()
+                        != rusty_manifold_peer::ManifoldPairMediaRouteCleanupStatus::Completed
+                    || !snapshot
+                        .pair_media_routes
+                        .cleanup_receipts
+                        .iter()
+                        .any(|receipt| {
+                            receipt.grant_id() == route.grant_id()
+                                && receipt.completed_at_ms() >= ended
+                                && receipt.completed_at_ms() < current.prior_media.accepted_at_ms
+                        })
+            })
+        {
+            return Err(invalid_snapshot(
+                "retired lifetime route cleanup is unresolved",
+            ));
+        }
+        retired_routes.extend(routes.iter().map(|route| route.grant_id().clone()));
+        let admissions = snapshot
+            .broker_lease_admissions
+            .iter()
+            .filter(|admission| {
+                admission.runtime_lease.lease_id == media.runtime_lease_id
+                    && admission.runtime_lease.holder_id == media.runtime_client_id
+                    && admission.admitted_at_ms == media.accepted_at_ms
+            })
+            .collect::<Vec<_>>();
+        if admissions.len() != 1
+            || admissions.iter().any(|admission| {
+                admission.release_id.is_none()
+                    || !admission
+                        .released_at_ms
+                        .is_some_and(|at| at >= ended && at < current.prior_media.accepted_at_ms)
+                    || admission.runtime_lease.derivative_binding
+                        == current.prior_inner_lease.derivative_binding
+            })
+        {
+            return Err(invalid_snapshot(
+                "retired lifetime derivative release is unresolved",
+            ));
+        }
+        retired_admissions.extend(
+            admissions
+                .iter()
+                .map(|admission| admission.broker_receipt.admission_use_request_id.clone()),
+        );
+    }
+    let retired_media = retired
+        .iter()
+        .map(|media| media.decision_id.clone())
+        .collect::<BTreeSet<_>>();
+    snapshot
+        .media_sessions
+        .sessions
+        .retain(|media| !retired_media.contains(&media.decision_id));
+    snapshot
+        .pair_media_routes
+        .routes
+        .retain(|route| !retired_routes.contains(route.grant_id()));
+    snapshot
+        .pair_media_routes
+        .cleanup_receipts
+        .retain(|receipt| !retired_routes.contains(receipt.grant_id()));
+    snapshot.broker_lease_admissions.retain(|admission| {
+        !retired_admissions.contains(&admission.broker_receipt.admission_use_request_id)
+    });
+    Ok(())
 }
 
 fn valid_checkpoint_sequence(sequence: u64, cumulative: u64, prior_present: bool) -> bool {

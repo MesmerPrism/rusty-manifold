@@ -2544,6 +2544,7 @@ pub fn review_and_apply_pair_media_route_termination_v2(
     next.authority_revision = resulting;
     next.last_observed_at_ms = Some(now_ms);
     next.applied_request_ids.push(request.request_id.clone());
+    next.applied_request_ids.sort();
     (
         next,
         mutation_receipt(

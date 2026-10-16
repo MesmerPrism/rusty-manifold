@@ -54,3 +54,68 @@ restore, partial-adoption retry and unchanged physical graph. The pure counter
 overflow controls are in `ongoing_media.rs`. These host checks prove no
 Android effect, uninterrupted video, process-death recovery or runtime
 adoption. Products must explicitly select and qualify this candidate.
+
+## Prospective complete-owner history composition (v2)
+
+`active_checkpoint_v2()` selects peer snapshot v6 and explicit policy
+`rusty.manifold.peer.ongoing_media_policy.v2`. It requires a prospectively
+selected actual Broker ongoing owner. The Peer retains its actual nested
+Runtime Host and non-cloneable signed-history owner. A public Peer clone is a
+read-only projection; a private transaction candidate holds only a staged plan.
+Before checkpoint publication, borrowed verified plans fence the exact current
+Broker and signed owner. All fallible source checks finish before either gate
+changes; publication then moves those same owners without invoking effects.
+
+Parent event sequence and authority revisions remain global. Admission,
+control-lease, Broker, command, reciprocal and parent request epochs are owned
+independently. Fresh requests use the appropriate owner's qualifier; retries
+keep the original exact identities. Signed correlation IDs are authenticated
+by the accepted Ed25519 context and scoped to the current signed-owner epoch.
+Nonce entropy remains unchanged; compacted nonce reuse cannot authorize an old
+signed context in a later epoch. The default finite replay contract is intact.
+
+The parent checkpoint retains exact accepted audit sources required by current
+Broker-derived leases and routes. Nested Runtime Host checkpoints retain exact
+accepted command application bodies needed by those routes. Retained bodies
+are selected from the actual owner, never supplied by a target JSON document.
+Sparse retained audit prefixes coexist with a contiguous suffix and monotonic
+revision baselines. Terminal media records leave the live baseline only after
+actual Stop, derivative release and completed route cleanup precede the next
+accepted Start. Unresolved obligations block compaction.
+
+Concurrent checkpoint v2 carries `cumulative_renewals` across all accepted
+media lifetimes and `current_lifetime_renewal_count` for its exact current
+Start/derivative binding. A first renewal after a new Start checkpoints that
+new lifetime's original ancestry; it does not reset the cumulative count or
+reuse the prior lifetime's media decision. Sliding expiry rules are unchanged.
+
+Snapshot verification may borrow the actual live owner without creating a
+writer. A v2 writer restores only in place to its exact current snapshot;
+static restore cannot fork its signed gate. Process-death restore remains
+unsupported without a separate authenticated deployment-owner anchor.
+
+This successor is under focused source qualification. It does not yet claim
+operation until human Stop, native adapter adoption, or physical continuity.
+The preceding first-candidate qualifications remain specific to v1.
+
+The focused v2 production seam completes 103 coupled renewals across three
+media lifetimes, with actual normal Stop/cleanup/new Start after 36 and 70.
+Its checkpoints cover 16,32,37,53,69,71,87,103; the final global count is 103
+and current-lifetime count 33. It verifies unchanged within-lifetime resources,
+exact checkpoint retry, stale/relabel/damaged restore refusal, final normal
+Stop/revoker and expired uncertain cleanup. The receiving owner verifies the
+third Start's retained enrollment and cleanup certificate. These accelerated
+host results remain separate from physical continuity or runtime adoption.
+
+The source boundaries are:
+
+| Owner source | Accepted responsibility |
+| --- | --- |
+| `rusty-manifold-admission/src/ongoing_history.rs` | Current grants/tokens and pinned accepted uses; admission epoch |
+| `rusty-manifold-broker-adapter/src/lease_history.rs` | Actual generic lease baseline and lifecycle epoch |
+| `rusty-manifold-broker-adapter/src/runtime_history.rs` | Broker one-use closure and verified checkpoint plan |
+| `rusty-manifold-runtime-host/src/ongoing_history.rs` | Accepted command audit baseline, retained applications and command epoch |
+| `rusty-manifold-peer/src/reciprocal_history.rs` | Non-cloneable signed owner and signed correlation epoch |
+| `rusty-manifold-peer-runtime-host/src/owned_signed_history.rs` | Actual signed gate versus read-only/private candidates |
+| `rusty-manifold-peer-runtime-host/src/owned_media_runtime.rs` | Existing actual nested command owner and accepted derivative deltas |
+| `rusty-manifold-peer-runtime-host/src/runtime_history.rs` | All-source validation and single coupled checkpoint publication |

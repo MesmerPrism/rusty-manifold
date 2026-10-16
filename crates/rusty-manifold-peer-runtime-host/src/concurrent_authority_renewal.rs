@@ -94,7 +94,10 @@ impl ManifoldPeerRuntimeHost {
         let next_revision = prior
             .next()
             .ok_or_else(|| invalid_snapshot("credential refresh revision exhausted"))?;
-        let request_id = derived("request.concurrent.credentials", &proof.receipt_id);
+        let request_id = self.current_runtime_history_request_id(&derived(
+            "request.concurrent.credentials",
+            &proof.receipt_id,
+        ))?;
         if self
             .snapshot
             .enrollment
@@ -103,7 +106,7 @@ impl ManifoldPeerRuntimeHost {
         {
             return Err(invalid_snapshot("credential refresh unbound replay"));
         }
-        let mut candidate = self.clone();
+        let mut candidate = self.copy_for_transaction();
         let mut old_keys = Vec::new();
         let mut new_keys = Vec::new();
         for peer_id in &proof.peer_ids {
@@ -168,7 +171,7 @@ impl ManifoldPeerRuntimeHost {
             let (_, application) = candidate.review_peer_status(
                 ManifoldPeerStatusProposal {
                     schema_id: schema(rusty_manifold_peer::PEER_PROPOSAL_SCHEMA),
-                    proposal_id: derived(
+                    proposal_id: candidate.current_runtime_history_request_id(&derived(
                         "proposal.concurrent.status",
                         &DottedId::new(format!(
                             "{}.{}",
@@ -176,7 +179,7 @@ impl ManifoldPeerRuntimeHost {
                             peer_id.as_str()
                         ))
                         .map_err(|_| invalid_snapshot("status request id"))?,
-                    ),
+                    ))?,
                     expected_authority_revision: candidate
                         .snapshot
                         .accepted_peers
@@ -220,7 +223,7 @@ impl ManifoldPeerRuntimeHost {
             true,
             None,
         )?;
-        self.snapshot = candidate.snapshot;
+        self.commit_transaction_candidate(candidate)?;
         Ok(receipt)
     }
 
@@ -232,6 +235,7 @@ impl ManifoldPeerRuntimeHost {
         now_ms: u64,
     ) -> Result<ManifoldConcurrentPairSessionRenewalReceipt, ManifoldPeerRuntimeHostError> {
         self.ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::Rendezvous)?;
+        self.ensure_history_request(&proposal.proposal_id)?;
         self.ensure_event_capacity()?;
         if let Some(existing) = self
             .snapshot

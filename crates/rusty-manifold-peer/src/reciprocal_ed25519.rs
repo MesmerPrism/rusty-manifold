@@ -7,6 +7,10 @@ use rusty_manifold_model::{DottedId, Revision, SchemaId};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+#[path = "reciprocal_history.rs"]
+mod ongoing_history;
+pub use ongoing_history::*;
+
 use crate::{
     ManifoldPeerCredentialRecord, ManifoldPeerCredentialStatus, ManifoldPeerEnrollmentState,
     ManifoldRendezvousReceipt, ManifoldRendezvousRole, PEER_ENROLLMENT_STATE_SCHEMA,
@@ -82,6 +86,195 @@ pub struct ManifoldReciprocalEd25519Revisions {
 mod mixed_authority_tests {
     use super::*;
     use ed25519_dalek::{Signer, SigningKey};
+
+    #[test]
+    fn ongoing_4200_actual_signed_reviews_keep_revision_and_bound_epoch_replay() {
+        let alpha = SigningKey::from_bytes(&[7; 32]);
+        let beta = SigningKey::from_bytes(&[11; 32]);
+        let enrollment = super::tests::enrollment(&alpha, &beta);
+        let host = id("host.peer.test");
+        let policy = id("policy.peer.test");
+        let mut owner = ManifoldReciprocalHistoryOwner::new();
+        let mut first = None;
+        let mut previous_checkpoint = None;
+        for cycle in 0..4200 {
+            let mut request = signed_common(
+                &enrollment,
+                owner.state(),
+                &alpha,
+                &beta,
+                &format!("r{cycle}"),
+            );
+            request.request_id = owner.current_request_id(&request.request_id).unwrap();
+            request.context.correlation_id = owner
+                .current_request_id(&request.context.correlation_id)
+                .unwrap();
+            resign_common(&mut request, &alpha, &beta);
+            let receipt = owner.review_common_lan(
+                &request,
+                super::tests::runtime(&host, &policy, &enrollment),
+                2000,
+            );
+            assert!(
+                receipt.accepted,
+                "cycle{cycle}: {:?}",
+                receipt.rejection_reason
+            );
+            first.get_or_insert(request.clone());
+            assert_eq!(owner.state().authority_revision.get(), cycle + 2);
+            assert!(reciprocal_ed25519_state_v3_is_well_formed(owner.state()));
+            if cycle % 16 == 15 {
+                let source = owner.state().clone();
+                let mut pins = vec![receipt.receipt_id.clone()];
+                let checkpoint = owner.checkpoint(&pins).unwrap();
+                assert_eq!(checkpoint.authority_revision, source.authority_revision);
+                assert_eq!(owner.state().accepted_receipts.len(), 1);
+                assert!(owner.restore_current(source).is_err());
+                if let Some(stale) = previous_checkpoint.take() {
+                    assert!(owner.restore_current(stale).is_err());
+                }
+                let held = owner.state().clone();
+                assert!(owner.restore_current(held.clone()).is_ok());
+                let mut damage = held.clone();
+                damage.authority_revision = damage.authority_revision.next().unwrap();
+                assert!(owner.restore_current(damage).is_err());
+                assert_eq!(owner.state(), &held);
+                let old = first.as_ref().unwrap();
+                assert_eq!(
+                    owner
+                        .review_common_lan(
+                            old,
+                            super::tests::runtime(&host, &policy, &enrollment),
+                            2000
+                        )
+                        .rejection_reason,
+                    Some(ManifoldReciprocalEd25519RejectionReason::Replay)
+                );
+                let mut relabel = old.clone();
+                relabel.request_id = owner.current_request_id(&id("request.relabel")).unwrap();
+                // An outer relabel cannot alter the signed old correlation domain.
+                assert_eq!(
+                    owner
+                        .review_common_lan(
+                            &relabel,
+                            super::tests::runtime(&host, &policy, &enrollment),
+                            2000
+                        )
+                        .rejection_reason,
+                    Some(ManifoldReciprocalEd25519RejectionReason::Replay)
+                );
+                relabel.context.correlation_id = owner
+                    .current_request_id(&id("correlation.relabel"))
+                    .unwrap();
+                relabel.context.revisions.reciprocal_authority_revision = held.authority_revision;
+                assert!(
+                    !owner
+                        .review_common_lan(
+                            &relabel,
+                            super::tests::runtime(&host, &policy, &enrollment),
+                            2000
+                        )
+                        .accepted
+                );
+                let (_, detached) = review_and_apply_reciprocal_ed25519_v3(
+                    &held,
+                    &ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(request),
+                    super::tests::runtime(&host, &policy, &enrollment),
+                    2000,
+                );
+                assert!(
+                    matches!(detached, ManifoldReciprocalEd25519ReceiptV3::CommonLan(v)
+                    if v.rejection_reason == Some(ManifoldReciprocalEd25519RejectionReason::InvalidAuthorityState))
+                );
+                pins.push(id("receipt.absent"));
+                pins.sort();
+                assert!(owner.checkpoint(&pins).is_err());
+                assert_eq!(owner.state(), &held);
+                previous_checkpoint = Some(held);
+            }
+            assert!(owner.state().accepted_receipts.len() <= 17);
+        }
+        assert_eq!(owner.state().authority_revision.get(), 4201);
+        assert!(serde_json::to_vec(owner.state()).unwrap().len() < 131072);
+    }
+
+    #[test]
+    fn ongoing_signed_plans_are_read_only_until_exact_source_commit_and_cannot_reopen() {
+        let alpha = SigningKey::from_bytes(&[7; 32]);
+        let beta = SigningKey::from_bytes(&[11; 32]);
+        let enrollment = super::tests::enrollment(&alpha, &beta);
+        let host = id("host.peer.test");
+        let policy = id("policy.peer.test");
+        let mut owner = ManifoldReciprocalHistoryOwner::new();
+        let source = owner.state().clone();
+        let mut request = signed_common(&enrollment, &source, &alpha, &beta, "planned");
+        request.request_id = owner.current_request_id(&request.request_id).unwrap();
+        request.context.correlation_id = owner
+            .current_request_id(&request.context.correlation_id)
+            .unwrap();
+        resign_common(&mut request, &alpha, &beta);
+        let discarded = owner
+            .plan_common_lan(
+                &request,
+                super::tests::runtime(&host, &policy, &enrollment),
+                2000,
+            )
+            .unwrap();
+        assert!(discarded.receipt().unwrap().accepted);
+        assert_eq!(owner.state(), &source);
+        drop(discarded);
+        let first = owner
+            .plan_common_lan(
+                &request,
+                super::tests::runtime(&host, &policy, &enrollment),
+                2000,
+            )
+            .unwrap();
+        let competing = owner
+            .plan_common_lan(
+                &request,
+                super::tests::runtime(&host, &policy, &enrollment),
+                2000,
+            )
+            .unwrap();
+        owner.commit(first).unwrap();
+        let accepted = owner.state().clone();
+        assert!(owner.commit(competing).is_err());
+        assert_eq!(owner.state(), &accepted);
+        let checkpoint = owner.plan_checkpoint(&[]).unwrap();
+        assert_eq!(owner.state(), &accepted);
+        owner.commit(checkpoint).unwrap();
+        assert!(owner.state().accepted_receipts.is_empty());
+        assert!(owner.restore_current(accepted).is_err());
+        let snapshot = owner.state().clone();
+        let replay = owner
+            .plan_common_lan(
+                &request,
+                super::tests::runtime(&host, &policy, &enrollment),
+                2000,
+            )
+            .unwrap();
+        assert_eq!(
+            replay.receipt().unwrap().rejection_reason,
+            Some(ManifoldReciprocalEd25519RejectionReason::Replay)
+        );
+        owner.commit(replay).unwrap();
+        assert_eq!(owner.state(), &snapshot);
+    }
+
+    fn resign_common(
+        request: &mut ManifoldCommonLanReciprocalEd25519ReviewRequest,
+        alpha: &SigningKey,
+        beta: &SigningKey,
+    ) {
+        let bytes = common_lan_reciprocal_ed25519_context_signing_bytes(&request.context);
+        let hash = common_lan_reciprocal_ed25519_context_sha256(&request.context);
+        request.initiator_signature.context_sha256 = hash.clone();
+        request.responder_signature.context_sha256 = hash;
+        request.initiator_signature.signature_hex =
+            encode_lower_hex(&alpha.sign(&bytes).to_bytes());
+        request.responder_signature.signature_hex = encode_lower_hex(&beta.sign(&bytes).to_bytes());
+    }
 
     fn id(value: &str) -> DottedId {
         DottedId::new(value).expect("id")
@@ -1076,6 +1269,9 @@ pub struct ManifoldReciprocalEd25519AuthorityStateV3 {
     pub consumed_nonce_sha256: Vec<String>,
     /// Accepted mixed receipts.
     pub accepted_receipts: Vec<ManifoldReciprocalEd25519ReceiptV3>,
+    /// Explicit live-owner storage policy; omitted for finite mixed v3.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_checkpoint: Option<ManifoldReciprocalHistoryCheckpoint>,
 }
 
 impl ManifoldReciprocalEd25519AuthorityStateV3 {
@@ -1092,6 +1288,7 @@ pub fn migrate_reciprocal_ed25519_state_v2_to_v3(
     legacy: ManifoldReciprocalEd25519AuthorityState,
 ) -> ManifoldReciprocalEd25519AuthorityStateV3 {
     ManifoldReciprocalEd25519AuthorityStateV3 {
+        history_checkpoint: None,
         schema_id: schema(RECIPROCAL_ED25519_STATE_V3_SCHEMA),
         authority_revision: legacy.authority_revision,
         applied_request_ids: legacy.applied_request_ids,
@@ -1717,6 +1914,26 @@ pub fn review_and_apply_reciprocal_ed25519_v3(
     ManifoldReciprocalEd25519AuthorityStateV3,
     ManifoldReciprocalEd25519ReceiptV3,
 ) {
+    if state.history_checkpoint.is_some() {
+        // A detached v4 projection is evidence, never an ongoing mutation gate.
+        let mut invalid = state.clone();
+        invalid.history_checkpoint = None;
+        let (_, receipt) =
+            review_and_apply_reciprocal_ed25519_owned(&invalid, request, runtime, now_ms);
+        return (state.clone(), receipt);
+    }
+    review_and_apply_reciprocal_ed25519_owned(state, request, runtime, now_ms)
+}
+
+fn review_and_apply_reciprocal_ed25519_owned(
+    state: &ManifoldReciprocalEd25519AuthorityStateV3,
+    request: &ManifoldReciprocalEd25519ReviewRequestV3,
+    runtime: ManifoldReciprocalEd25519RuntimeContext<'_>,
+    now_ms: u64,
+) -> (
+    ManifoldReciprocalEd25519AuthorityStateV3,
+    ManifoldReciprocalEd25519ReceiptV3,
+) {
     match request {
         ManifoldReciprocalEd25519ReviewRequestV3::WifiDirect(request) => {
             let context_sha256 = reciprocal_ed25519_context_sha256(&request.context);
@@ -1888,6 +2105,11 @@ fn validate_common_lan_review(
         return Err(ManifoldReciprocalEd25519RejectionReason::InvalidAuthorityState);
     }
     let context = &request.context;
+    if !ongoing_history::request_matches(state, &request.request_id)
+        || !ongoing_history::request_matches(state, &context.correlation_id)
+    {
+        return Err(ManifoldReciprocalEd25519RejectionReason::Replay);
+    }
     if request.schema_id.as_str() != COMMON_LAN_RECIPROCAL_ED25519_REVIEW_SCHEMA
         || context.schema_id.as_str() != COMMON_LAN_RECIPROCAL_ED25519_CONTEXT_SCHEMA
         || request.initiator_signature.schema_id.as_str()
@@ -2079,14 +2301,12 @@ fn decoded_nonce_sha256(value: &str) -> String {
 pub fn reciprocal_ed25519_state_v3_is_well_formed(
     state: &ManifoldReciprocalEd25519AuthorityStateV3,
 ) -> bool {
-    if state.schema_id.as_str() != RECIPROCAL_ED25519_STATE_V3_SCHEMA
+    if !ongoing_history::valid_checkpoint(state)
         || !unique(&state.applied_request_ids)
         || !unique(&state.consumed_correlation_ids)
         || !unique(&state.consumed_context_sha256)
         || !unique(&state.consumed_nonce_sha256)
-        || state.accepted_receipts.len()
-            != usize::try_from(state.authority_revision.get().saturating_sub(1))
-                .unwrap_or(usize::MAX)
+        || !ongoing_history::valid_receipt_count(state)
         || state.accepted_receipts.len() > MAX_RECIPROCAL_RECEIPTS
         || state.applied_request_ids.len() > MAX_RECIPROCAL_RECEIPTS
         || state.consumed_correlation_ids.len() > MAX_RECIPROCAL_RECEIPTS
@@ -2188,10 +2408,21 @@ pub fn reciprocal_ed25519_state_v3_is_well_formed(
         && correlations == state.consumed_correlation_ids.iter().cloned().collect()
         && contexts == state.consumed_context_sha256.iter().cloned().collect()
         && nonces == state.consumed_nonce_sha256.iter().cloned().collect()
-        && revisions.iter().enumerate().all(|(index, value)| {
-            let prior = Revision::new(index as u64 + 1).expect("nonzero revision");
-            value.4 == prior && value.5 == prior.next().unwrap_or(prior)
-        })
+        && ongoing_history::valid_pinned_receipts(state)
+        && revisions
+            .iter()
+            .filter(|value| value.5 > ongoing_history::baseline_revision(state))
+            .enumerate()
+            .all(|(index, value)| {
+                let Some(prior) = ongoing_history::baseline_revision(state)
+                    .get()
+                    .checked_add(index as u64)
+                    .and_then(Revision::new)
+                else {
+                    return false;
+                };
+                value.4 == prior && value.5 == prior.next().unwrap_or(prior)
+            })
 }
 
 fn common_lan_transport_is_valid(binding: &ManifoldCommonLanTransportBinding) -> bool {

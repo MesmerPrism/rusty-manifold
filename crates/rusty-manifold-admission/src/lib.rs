@@ -2,6 +2,8 @@
 
 mod grant_renewal;
 pub use grant_renewal::*;
+mod ongoing_history;
+pub use ongoing_history::*;
 
 use rusty_manifold_model::{DottedId, Revision, SchemaId};
 use serde::{Deserialize, Serialize};
@@ -330,6 +332,9 @@ pub struct ManifoldAdmissionSnapshot {
     pub authority_id: DottedId,
     /// Accepted revision.
     pub authority_revision: Revision,
+    /// Explicit owner-held ongoing checkpoint; omitted for finite v2 state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_checkpoint: Option<ManifoldAdmissionHistoryCheckpoint>,
     /// Trusted product/operator grants.
     pub grants: Vec<ManifoldAdmissionGrant>,
     /// Active issued tokens.
@@ -463,6 +468,11 @@ impl ManifoldAdmissionAuthority {
     pub fn from_snapshot(
         snapshot: ManifoldAdmissionSnapshot,
     ) -> Result<Self, ManifoldAdmissionError> {
+        if snapshot.history_checkpoint.is_some() {
+            return Err(ManifoldAdmissionError::InvalidSnapshot(
+                "ongoing_restore_requires_live_owner",
+            ));
+        }
         validate_snapshot(&snapshot)?;
         Ok(Self { snapshot })
     }
@@ -537,7 +547,7 @@ impl ManifoldAdmissionAuthority {
         now_ms: u64,
     ) -> ManifoldAdmissionReceipt {
         let prior = self.snapshot.authority_revision;
-        if self.snapshot.audit_events.len() >= MAX_ADMISSION_AUDIT_EVENTS {
+        if ongoing_history::audit_capacity_exhausted(&self.snapshot, 1) {
             return terminal_rejection(
                 ManifoldAdmissionOperation::IssueToken,
                 request.request_id.clone(),
@@ -550,7 +560,20 @@ impl ManifoldAdmissionAuthority {
             .grants
             .iter()
             .find(|grant| grant.identity.client_id == request.identity.client_id);
-        let token_id = token_id(entropy);
+        let token_id = self.snapshot.history_checkpoint.as_ref().map_or_else(
+            || token_id(entropy),
+            |c| {
+                DottedId::new(format!(
+                    "token.session.history.{}.{}",
+                    c.request_epoch,
+                    token_id(entropy)
+                        .as_str()
+                        .strip_prefix("token.session.")
+                        .expect("token prefix")
+                ))
+                .expect("qualified token id")
+            },
+        );
         let rejection = validate_common(
             request.schema_id.as_str(),
             ADMISSION_REQUEST_SCHEMA,
@@ -563,6 +586,10 @@ impl ManifoldAdmissionAuthority {
             now_ms,
         )
         .err()
+        .or_else(|| {
+            (!ongoing_history::request_matches(&self.snapshot, &request.request_id))
+                .then_some(ManifoldAdmissionRejectionReason::ReplayedRequest)
+        })
         .or_else(|| validate_grant(grant, request, now_ms).err())
         .or_else(|| {
             (request.requested_token_ttl_ms == 0
@@ -636,7 +663,7 @@ impl ManifoldAdmissionAuthority {
         now_ms: u64,
     ) -> ManifoldAdmissionReceipt {
         let prior = self.snapshot.authority_revision;
-        if self.snapshot.audit_events.len() >= MAX_ADMISSION_AUDIT_EVENTS {
+        if ongoing_history::audit_capacity_exhausted(&self.snapshot, 1) {
             return terminal_rejection(
                 ManifoldAdmissionOperation::AuthorizeUse,
                 request.request_id.clone(),
@@ -661,6 +688,10 @@ impl ManifoldAdmissionAuthority {
             now_ms,
         )
         .err()
+        .or_else(|| {
+            (!ongoing_history::request_matches(&self.snapshot, &request.request_id))
+                .then_some(ManifoldAdmissionRejectionReason::ReplayedRequest)
+        })
         .or_else(|| validate_token(token, request, &self.snapshot.revoked_token_ids, now_ms).err())
         .or_else(|| {
             (self.snapshot.consumed_use_request_ids.len() >= MAX_ADMISSION_RECORDS)
@@ -703,7 +734,7 @@ impl ManifoldAdmissionAuthority {
         request: &ManifoldAdmissionRevocationRequest,
     ) -> ManifoldAdmissionReceipt {
         let prior = self.snapshot.authority_revision;
-        if self.snapshot.audit_events.len() >= MAX_ADMISSION_AUDIT_EVENTS {
+        if ongoing_history::audit_capacity_exhausted(&self.snapshot, 1) {
             return terminal_rejection(
                 ManifoldAdmissionOperation::RevokeToken,
                 request.request_id.clone(),
@@ -720,6 +751,8 @@ impl ManifoldAdmissionAuthority {
             Some(ManifoldAdmissionRejectionReason::SchemaMismatch)
         } else if request.expected_authority_revision != prior {
             Some(ManifoldAdmissionRejectionReason::StaleAuthorityRevision)
+        } else if !ongoing_history::request_matches(&self.snapshot, &request.request_id) {
+            Some(ManifoldAdmissionRejectionReason::ReplayedRequest)
         } else if self
             .snapshot
             .consumed_request_ids
@@ -777,7 +810,7 @@ impl ManifoldAdmissionAuthority {
         request: &ManifoldAdmissionAdministrativeRevocationRequest,
     ) -> ManifoldAdmissionReceipt {
         let prior = self.snapshot.authority_revision;
-        if self.snapshot.audit_events.len() >= MAX_ADMISSION_AUDIT_EVENTS {
+        if ongoing_history::audit_capacity_exhausted(&self.snapshot, 1) {
             return terminal_rejection(
                 ManifoldAdmissionOperation::AdministrativeRevokeToken,
                 request.request_id.clone(),
@@ -797,6 +830,8 @@ impl ManifoldAdmissionAuthority {
                 Some(ManifoldAdmissionRejectionReason::AuthorityMismatch)
             } else if request.expected_authority_revision != prior {
                 Some(ManifoldAdmissionRejectionReason::StaleAuthorityRevision)
+            } else if !ongoing_history::request_matches(&self.snapshot, &request.request_id) {
+                Some(ManifoldAdmissionRejectionReason::ReplayedRequest)
             } else if self
                 .snapshot
                 .consumed_request_ids
@@ -851,7 +886,7 @@ impl ManifoldAdmissionAuthority {
         now_ms: u64,
     ) -> ManifoldAdmissionReceipt {
         let prior = self.snapshot.authority_revision;
-        if self.snapshot.audit_events.len() >= MAX_ADMISSION_AUDIT_EVENTS {
+        if ongoing_history::audit_capacity_exhausted(&self.snapshot, 1) {
             return terminal_rejection(
                 ManifoldAdmissionOperation::ExpireTokens,
                 sweep_id,
@@ -878,7 +913,9 @@ impl ManifoldAdmissionAuthority {
             .collect::<Vec<_>>();
         removed.sort();
         let replayed = self.snapshot.reviewed_sweep_ids.contains(&sweep_id);
-        let rejection = if replayed {
+        let rejection = if !ongoing_history::request_matches(&self.snapshot, &sweep_id) {
+            Some(ManifoldAdmissionRejectionReason::ReplayedSweep)
+        } else if replayed {
             Some(ManifoldAdmissionRejectionReason::ReplayedSweep)
         } else if expected_revision != prior {
             Some(ManifoldAdmissionRejectionReason::StaleAuthorityRevision)
@@ -934,13 +971,16 @@ impl ManifoldAdmissionAuthority {
         use_authorization: Option<ManifoldAdmissionUseAuthorizationBinding>,
     ) -> ManifoldAdmissionReceipt {
         let resulting = self.snapshot.authority_revision;
-        let audit_sequence = self.snapshot.audit_events.len() + 1;
+        let audit_sequence = ongoing_history::audit_base(&self.snapshot)
+            .checked_add(self.snapshot.audit_events.len() as u64)
+            .and_then(|value| value.checked_add(1))
+            .expect("audit capacity checked before mutation");
         self.snapshot
             .audit_events
             .push(ManifoldAdmissionAuditEvent {
                 schema_id: schema_id(ADMISSION_AUDIT_SCHEMA),
-                sequence: audit_sequence as u64,
-                event_id: admission_audit_id(audit_sequence as u64),
+                sequence: audit_sequence,
+                event_id: admission_audit_id(audit_sequence),
                 operation: operation.clone(),
                 request_id: request_id.clone(),
                 applied: rejection.is_none(),
@@ -1096,6 +1136,7 @@ fn migrate_legacy_admission_snapshot(
         .collect::<Vec<_>>();
     migrated_token_ids.sort();
     let snapshot = ManifoldAdmissionSnapshot {
+        history_checkpoint: None,
         root_renewal_policies: Vec::new(),
         schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
         authority_id: legacy.authority_id,
@@ -1400,9 +1441,10 @@ fn validate_token(
 }
 
 fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), ManifoldAdmissionError> {
+    ongoing_history::validate_checkpoint(snapshot)?;
     grant_renewal::validate_root_renewal_policies(snapshot)?;
     validate_grant_renewal_history(snapshot)?;
-    if snapshot.schema_id.as_str() != ADMISSION_SNAPSHOT_SCHEMA || snapshot.max_token_ttl_ms == 0 {
+    if snapshot.max_token_ttl_ms == 0 {
         return Err(ManifoldAdmissionError::InvalidSnapshot("schema_or_ttl"));
     }
     if snapshot.grants.len() > MAX_ADMISSION_RECORDS
@@ -1505,7 +1547,7 @@ fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), Manifol
         })
         .map(|event| event.request_id.clone())
         .collect::<BTreeSet<_>>();
-    let applied_use_sources = snapshot
+    let mut applied_use_sources = snapshot
         .audit_events
         .iter()
         .filter(|event| {
@@ -1513,6 +1555,14 @@ fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), Manifol
         })
         .map(|event| event.request_id.clone())
         .collect::<BTreeSet<_>>();
+    if let Some(checkpoint) = &snapshot.history_checkpoint {
+        applied_use_sources.extend(
+            checkpoint
+                .retained_use_authorizations
+                .iter()
+                .map(|event| event.request_id.clone()),
+        );
+    }
     let sweep_sources = snapshot
         .audit_events
         .iter()
@@ -1540,12 +1590,20 @@ fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), Manifol
     {
         return Err(ManifoldAdmissionError::InvalidSnapshot("audit_replay_sets"));
     }
-    let mut rolling_revision = Revision::INITIAL;
+    let mut rolling_revision = snapshot
+        .history_checkpoint
+        .as_ref()
+        .map_or(Revision::INITIAL, |c| c.authority_revision);
     let mut seen_sweeps = BTreeSet::new();
     let mut seen_applied_requests = BTreeSet::new();
     let mut seen_applied_uses = BTreeSet::new();
     for (index, event) in snapshot.audit_events.iter().enumerate() {
-        let sequence = (index as u64) + 1;
+        let sequence = ongoing_history::audit_base(snapshot)
+            .checked_add(index as u64)
+            .and_then(|value| value.checked_add(1))
+            .ok_or(ManifoldAdmissionError::InvalidSnapshot(
+                "history_audit_sequence_exhausted",
+            ))?;
         let operation_valid = match event.operation {
             ManifoldAdmissionOperation::RenewGrant
             | ManifoldAdmissionOperation::IssueToken
@@ -1598,11 +1656,16 @@ fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), Manifol
                                 .iter()
                                 .all(|capability| grant.capabilities.contains(capability))
                     })
-                    && snapshot.audit_events.iter().any(|issue| {
-                        issue.operation == ManifoldAdmissionOperation::IssueToken
-                            && issue.applied
-                            && issue.resulting_authority_revision == token.issued_authority_revision
-                    })
+                    && (snapshot
+                        .history_checkpoint
+                        .as_ref()
+                        .is_some_and(|c| c.active_tokens.contains(token))
+                        || snapshot.audit_events.iter().any(|issue| {
+                            issue.operation == ManifoldAdmissionOperation::IssueToken
+                                && issue.applied
+                                && issue.resulting_authority_revision
+                                    == token.issued_authority_revision
+                        }))
             }
             (_, _, None) => true,
             _ => false,
@@ -1618,6 +1681,7 @@ fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), Manifol
                 && event.prior_authority_revision != event.resulting_authority_revision)
             || event.resulting_authority_revision > snapshot.authority_revision
             || event.applied != event.rejection_reason.is_none()
+            || (event.applied && !ongoing_history::request_matches(snapshot, &event.request_id))
             || !operation_valid
             || !use_authorization_valid
         {
@@ -1733,6 +1797,7 @@ mod tests {
 
     fn authority() -> ManifoldAdmissionAuthority {
         ManifoldAdmissionAuthority::from_snapshot(ManifoldAdmissionSnapshot {
+            history_checkpoint: None,
             root_renewal_policies: Vec::new(),
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
             authority_id: id("authority.admission.quest"),
