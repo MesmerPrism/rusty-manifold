@@ -144,8 +144,7 @@ pub enum ManifoldPeerEnrollmentAction {
 }
 
 /// Revision-bound operator enrollment request.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct ManifoldPeerEnrollmentRequest {
     /// Schema identifier.
     #[serde(rename = "$schema")]
@@ -161,6 +160,103 @@ pub struct ManifoldPeerEnrollmentRequest {
     /// Requested mutation.
     #[serde(flatten)]
     pub action: ManifoldPeerEnrollmentAction,
+}
+
+// A flattened tagged action cannot be combined with an outer deny-unknown
+// decoder: serde otherwise rejects the legitimate action field on readback.
+// Decode each closed wire variant explicitly; the public serialized shape stays
+// unchanged and no extra/foreign-variant field is accepted.
+impl<'de> Deserialize<'de> for ManifoldPeerEnrollmentRequest {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(tag = "action", rename_all = "snake_case", deny_unknown_fields)]
+        enum Wire {
+            Enroll {
+                #[serde(rename = "$schema")]
+                schema_id: SchemaId,
+                request_id: DottedId,
+                expected_authority_revision: Revision,
+                operator_id: DottedId,
+                issued_at_ms: u64,
+                credential: ManifoldPeerCredentialRecord,
+            },
+            Rotate {
+                #[serde(rename = "$schema")]
+                schema_id: SchemaId,
+                request_id: DottedId,
+                expected_authority_revision: Revision,
+                operator_id: DottedId,
+                issued_at_ms: u64,
+                prior_key_id: DottedId,
+                credential: ManifoldPeerCredentialRecord,
+            },
+            Revoke {
+                #[serde(rename = "$schema")]
+                schema_id: SchemaId,
+                request_id: DottedId,
+                expected_authority_revision: Revision,
+                operator_id: DottedId,
+                issued_at_ms: u64,
+                key_id: DottedId,
+                reason_id: DottedId,
+            },
+        }
+        Ok(match Wire::deserialize(deserializer)? {
+            Wire::Enroll {
+                schema_id,
+                request_id,
+                expected_authority_revision,
+                operator_id,
+                issued_at_ms,
+                credential,
+            } => Self {
+                schema_id,
+                request_id,
+                expected_authority_revision,
+                operator_id,
+                issued_at_ms,
+                action: ManifoldPeerEnrollmentAction::Enroll { credential },
+            },
+            Wire::Rotate {
+                schema_id,
+                request_id,
+                expected_authority_revision,
+                operator_id,
+                issued_at_ms,
+                prior_key_id,
+                credential,
+            } => Self {
+                schema_id,
+                request_id,
+                expected_authority_revision,
+                operator_id,
+                issued_at_ms,
+                action: ManifoldPeerEnrollmentAction::Rotate {
+                    prior_key_id,
+                    credential,
+                },
+            },
+            Wire::Revoke {
+                schema_id,
+                request_id,
+                expected_authority_revision,
+                operator_id,
+                issued_at_ms,
+                key_id,
+                reason_id,
+            } => Self {
+                schema_id,
+                request_id,
+                expected_authority_revision,
+                operator_id,
+                issued_at_ms,
+                action: ManifoldPeerEnrollmentAction::Revoke { key_id, reason_id },
+            },
+        })
+    }
 }
 
 /// Stable enrollment rejection reason.
@@ -1209,6 +1305,175 @@ mod tests {
             operator_id: id("operator.peer.enrollment"),
             issued_at_ms: 1_000,
             action,
+        }
+    }
+
+    fn wire_enrollment_actions() -> Vec<ManifoldPeerEnrollmentAction> {
+        vec![
+            ManifoldPeerEnrollmentAction::Enroll {
+                credential: credential("peer.alpha", "key.peer.alpha.001", 1, &key(7)),
+            },
+            ManifoldPeerEnrollmentAction::Rotate {
+                prior_key_id: id("key.peer.alpha.001"),
+                credential: credential("peer.alpha", "key.peer.alpha.002", 2, &key(11)),
+            },
+            ManifoldPeerEnrollmentAction::Revoke {
+                key_id: id("key.peer.alpha.002"),
+                reason_id: id("reason.operator.revoked"),
+            },
+        ]
+    }
+
+    #[test]
+    fn enrollment_request_wire_roundtrips_all_closed_variants() {
+        for action in wire_enrollment_actions() {
+            let request = enrollment_request("request.enrollment.wire", Revision::INITIAL, action);
+            let encoded = serde_json::to_string(&request).expect("actual typed wire");
+            let decoded: ManifoldPeerEnrollmentRequest =
+                serde_json::from_str(&encoded).expect("closed action roundtrip");
+            assert_eq!(decoded, request);
+            assert_eq!(serde_json::to_string(&decoded).unwrap(), encoded);
+            let value = serde_json::to_value(&request).unwrap();
+            let expected: &[&str] = match request.action {
+                ManifoldPeerEnrollmentAction::Enroll { .. } => &[
+                    "$schema",
+                    "request_id",
+                    "expected_authority_revision",
+                    "operator_id",
+                    "issued_at_ms",
+                    "action",
+                    "credential",
+                ],
+                ManifoldPeerEnrollmentAction::Rotate { .. } => &[
+                    "$schema",
+                    "request_id",
+                    "expected_authority_revision",
+                    "operator_id",
+                    "issued_at_ms",
+                    "action",
+                    "prior_key_id",
+                    "credential",
+                ],
+                ManifoldPeerEnrollmentAction::Revoke { .. } => &[
+                    "$schema",
+                    "request_id",
+                    "expected_authority_revision",
+                    "operator_id",
+                    "issued_at_ms",
+                    "action",
+                    "key_id",
+                    "reason_id",
+                ],
+            };
+            let actual: BTreeSet<_> = value
+                .as_object()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect();
+            assert_eq!(actual, expected.iter().copied().collect());
+            assert_eq!(value["$schema"], PEER_ENROLLMENT_REQUEST_SCHEMA);
+        }
+    }
+
+    #[test]
+    fn enrollment_request_wire_refuses_extra_and_foreign_variant_fields() {
+        for action in wire_enrollment_actions() {
+            let request = enrollment_request("request.enrollment.wire", Revision::INITIAL, action);
+            let original = serde_json::to_value(&request).unwrap();
+            for (field, value) in [
+                ("unexpected", serde_json::json!(true)),
+                (
+                    match &request.action {
+                        ManifoldPeerEnrollmentAction::Enroll { .. } => "prior_key_id",
+                        ManifoldPeerEnrollmentAction::Rotate { .. } => "reason_id",
+                        ManifoldPeerEnrollmentAction::Revoke { .. } => "credential",
+                    },
+                    serde_json::json!("foreign.variant"),
+                ),
+            ] {
+                let mut damaged = original.clone();
+                damaged.as_object_mut().unwrap().insert(field.into(), value);
+                assert!(
+                    serde_json::from_value::<ManifoldPeerEnrollmentRequest>(damaged).is_err(),
+                    "extra/foreign field {field} must refuse"
+                );
+            }
+            if original.get("credential").is_some() {
+                let mut damaged = original;
+                damaged["credential"]
+                    .as_object_mut()
+                    .unwrap()
+                    .insert("unexpected".into(), serde_json::json!(true));
+                assert!(serde_json::from_value::<ManifoldPeerEnrollmentRequest>(damaged).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn enrollment_request_wire_refuses_missing_duplicate_and_malformed_fields() {
+        for action in wire_enrollment_actions() {
+            let request = enrollment_request("request.enrollment.wire", Revision::INITIAL, action);
+            let encoded = serde_json::to_string(&request).unwrap();
+            let original = serde_json::to_value(&request).unwrap();
+            for field in original.as_object().unwrap().keys() {
+                let mut damaged = original.clone();
+                damaged.as_object_mut().unwrap().remove(field);
+                assert!(
+                    serde_json::from_value::<ManifoldPeerEnrollmentRequest>(damaged).is_err(),
+                    "missing field {field} must refuse"
+                );
+            }
+            let duplicate = format!("{{\"issued_at_ms\":1000,{}", &encoded[1..]);
+            assert!(
+                serde_json::from_str::<serde_json::Value>(&duplicate).is_ok(),
+                "duplicate fixture must remain valid JSON"
+            );
+            let failure =
+                serde_json::from_str::<ManifoldPeerEnrollmentRequest>(&duplicate).unwrap_err();
+            assert!(
+                failure.to_string().contains("duplicate field"),
+                "wrong refusal: {failure}"
+            );
+            let duplicate = format!("{{\"action\":\"enroll\",{}", &encoded[1..]);
+            assert!(
+                serde_json::from_str::<serde_json::Value>(&duplicate).is_ok(),
+                "duplicate fixture must remain valid JSON"
+            );
+            let failure =
+                serde_json::from_str::<ManifoldPeerEnrollmentRequest>(&duplicate).unwrap_err();
+            assert!(
+                failure.to_string().contains("duplicate field"),
+                "wrong refusal: {failure}"
+            );
+            for action in [serde_json::json!("unknown"), serde_json::json!(true)] {
+                let mut damaged = original.clone();
+                damaged["action"] = action;
+                assert!(serde_json::from_value::<ManifoldPeerEnrollmentRequest>(damaged).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn enrollment_request_wire_decoded_actions_keep_actual_writer_results() {
+        let trusted = [id("operator.peer.enrollment")];
+        let mut state = ManifoldPeerEnrollmentState::empty();
+        for (index, action) in wire_enrollment_actions().into_iter().enumerate() {
+            let request = enrollment_request(
+                &format!("request.enrollment.wire.{index}"),
+                state.authority_revision,
+                action,
+            );
+            let encoded = serde_json::to_string(&request).unwrap();
+            let decoded: ManifoldPeerEnrollmentRequest = serde_json::from_str(&encoded).unwrap();
+            let expected = review_and_apply_peer_enrollment(&state, &request, &trusted, 2_000);
+            let actual = review_and_apply_peer_enrollment(&state, &decoded, &trusted, 2_000);
+            assert_eq!(actual, expected);
+            assert!(
+                actual.1.applied,
+                "actual enrollment action {index} rejected"
+            );
+            state = actual.0;
         }
     }
 
