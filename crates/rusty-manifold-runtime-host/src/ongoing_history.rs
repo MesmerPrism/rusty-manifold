@@ -425,7 +425,10 @@ impl ManifoldRuntimeHost {
             ));
         }
         validate_snapshot(&snapshot)?;
-        Ok(Self { snapshot })
+        Ok(Self {
+            snapshot,
+            source_bound_root_owner: anchor.owner.source_bound_root_owner.clone(),
+        })
     }
 }
 

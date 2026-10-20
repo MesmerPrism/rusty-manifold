@@ -1,5 +1,7 @@
 //! Source-only Manifold Runtime Host with deterministic review and application.
 
+mod source_bound_root_authority;
+pub use source_bound_root_authority::*;
 mod ongoing_history;
 pub use ongoing_history::*;
 
@@ -531,6 +533,8 @@ pub enum ManifoldRuntimeControlLeaseAdoptionOperation {
     Issue,
     /// Adopt an accepted control-lease renewal application.
     Renewal,
+    /// Adopt a separately earned source-bound root re-establishment.
+    SourceBoundReestablishment,
     /// Adopt an accepted control-lease release application.
     Release,
     /// Adopt an accepted authority-owned control-lease revocation application.
@@ -547,6 +551,10 @@ pub enum ManifoldRuntimeControlLeaseAuthorityApplication {
     Issue(ManifoldControlLeaseAuthorityApplication),
     /// Control-lease renewal application.
     Renewal(ManifoldControlLeaseRenewalAuthorityApplication),
+    /// Never accepted through the ordinary serialized v1 adoption route.
+    SourceBoundReestablishment(
+        rusty_manifold_model::ManifoldSourceBoundControlLeaseReestablishmentApplication,
+    ),
     /// Control-lease release application.
     Release(ManifoldControlLeaseReleaseAuthorityApplication),
     /// Authority-owned control-lease revocation application.
@@ -560,6 +568,9 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
         match self {
             Self::Issue(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Issue,
             Self::Renewal(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Renewal,
+            Self::SourceBoundReestablishment(_) => {
+                ManifoldRuntimeControlLeaseAdoptionOperation::SourceBoundReestablishment
+            }
             Self::Release(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Release,
             Self::Revocation(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Revocation,
             Self::Expiry(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Expiry,
@@ -570,6 +581,7 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
         match self {
             Self::Issue(application) => &application.authority_id,
             Self::Renewal(application) => &application.authority_id,
+            Self::SourceBoundReestablishment(application) => &application.authority_id,
             Self::Release(application) => &application.authority_id,
             Self::Revocation(application) => &application.authority_id,
             Self::Expiry(application) => &application.authority_id,
@@ -580,6 +592,7 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
         match self {
             Self::Issue(application) => &application.application_id,
             Self::Renewal(application) => &application.application_id,
+            Self::SourceBoundReestablishment(application) => &application.application_id,
             Self::Release(application) => &application.application_id,
             Self::Revocation(application) => &application.application_id,
             Self::Expiry(application) => &application.application_id,
@@ -590,6 +603,7 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
         match self {
             Self::Issue(application) => application.from_authority_revision,
             Self::Renewal(application) => application.from_authority_revision,
+            Self::SourceBoundReestablishment(application) => application.from_authority_revision,
             Self::Release(application) => application.from_authority_revision,
             Self::Revocation(application) => application.from_authority_revision,
             Self::Expiry(application) => application.from_authority_revision,
@@ -621,6 +635,12 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
                 .as_ref()
                 .map_or(application.from_authority_revision, |snapshot| {
                     snapshot.authority_revision
+                }),
+            Self::SourceBoundReestablishment(application) => application
+                .applied_snapshot
+                .as_ref()
+                .map_or(application.from_authority_revision, |s| {
+                    s.authority_revision
                 }),
             Self::Expiry(application) => application
                 .applied_snapshot
@@ -902,6 +922,7 @@ struct SchemaProbe {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManifoldRuntimeHost {
     snapshot: ManifoldRuntimeHostSnapshot,
+    source_bound_root_owner: Option<(ManifoldSourceBoundRootVerifier, DottedId)>,
 }
 
 impl ManifoldRuntimeHost {
@@ -915,7 +936,10 @@ impl ManifoldRuntimeHost {
             ));
         }
         validate_snapshot(&snapshot)?;
-        Ok(Self { snapshot })
+        Ok(Self {
+            snapshot,
+            source_bound_root_owner: None,
+        })
     }
 
     /// Restarts a host from deterministic JSON snapshot state.
@@ -1087,6 +1111,86 @@ impl ManifoldRuntimeHost {
         &mut self,
         request: &ManifoldRuntimeControlLeaseAdoptionRequest,
     ) -> ManifoldRuntimeControlLeaseAdoptionReceipt {
+        self.apply_control_lease_adoption_inner(request, None)
+    }
+    pub fn register_source_bound_root_owner(
+        &mut self,
+        verifier: ManifoldSourceBoundRootVerifier,
+        lease_id: DottedId,
+    ) -> Result<(), ManifoldRuntimeHostError> {
+        if self.source_bound_root_owner.is_some()
+            || self.snapshot.history_checkpoint.is_none()
+            || !self.snapshot.audit_events.is_empty()
+            || !self.snapshot.applied_request_ids.is_empty()
+            || !self.snapshot.reviewed_control_lease_adoption_ids.is_empty()
+            || self.snapshot.authority_revision != Revision::INITIAL
+        {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "root host registration not pristine ongoing",
+            ));
+        }
+        if !self.snapshot.leases.iter().any(|l| l.lease_id == lease_id) {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "root initial Host lease absent",
+            ));
+        }
+        self.source_bound_root_owner = Some((verifier, lease_id));
+        Ok(())
+    }
+    /// Rejoin the actual registered issuer at a final borrowed commit boundary.
+    pub fn validate_source_bound_root_permit(
+        &self,
+        permit: &ManifoldSourceBoundRootPermit<'_>,
+        now: u64,
+    ) -> Result<(), ManifoldRuntimeHostError> {
+        let (verifier, lease) = self.source_bound_root_owner.as_ref().ok_or(
+            ManifoldRuntimeHostError::InvalidSnapshot("root Host unselected"),
+        )?;
+        let evidence = verifier
+            .verify(permit, now)
+            .map_err(ManifoldRuntimeHostError::InvalidSnapshot)?;
+        if lease != &evidence.lease_id {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "root Host registered lease differs",
+            ));
+        }
+        Ok(())
+    }
+    pub fn apply_source_bound_control_lease_adoption(
+        &mut self,
+        permit: &ManifoldSourceBoundRootPermit<'_>,
+        request: &ManifoldRuntimeControlLeaseAdoptionRequest,
+        now: u64,
+    ) -> Result<ManifoldRuntimeControlLeaseAdoptionReceipt, ManifoldRuntimeHostError> {
+        let (verifier, lease_id) = self.source_bound_root_owner.as_ref().ok_or(
+            ManifoldRuntimeHostError::InvalidSnapshot("root host owner unselected"),
+        )?;
+        let evidence = verifier
+            .verify(permit, now)
+            .map_err(ManifoldRuntimeHostError::InvalidSnapshot)?;
+        let ManifoldRuntimeControlLeaseAuthorityApplication::SourceBoundReestablishment(
+            application,
+        ) = &request.application
+        else {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "root host exact operation",
+            ));
+        };
+        if &evidence.lease_id != lease_id
+            || &application.request.authority != evidence
+            || u64::try_from(application.recorded_clock.wall_unix_ms).ok() != Some(now)
+        {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "root host source/time",
+            ));
+        }
+        Ok(self.apply_control_lease_adoption_inner(request, Some(permit)))
+    }
+    fn apply_control_lease_adoption_inner(
+        &mut self,
+        request: &ManifoldRuntimeControlLeaseAdoptionRequest,
+        permit: Option<&ManifoldSourceBoundRootPermit<'_>>,
+    ) -> ManifoldRuntimeControlLeaseAdoptionReceipt {
         let prior = self.snapshot.authority_revision;
         if ongoing_history::audit_capacity_exhausted(&self.snapshot) {
             return control_lease_adoption_receipt(
@@ -1122,7 +1226,17 @@ impl ManifoldRuntimeHost {
             || !ongoing_history::request_matches(&self.snapshot, &request.adoption_id)
         {
             Err(ManifoldRuntimeRejectionReason::ReplayedControlLeaseAdoption)
-        } else if request.schema_id.as_str() != HOST_CONTROL_LEASE_ADOPTION_REQUEST_SCHEMA {
+        } else if match &request.application {
+            ManifoldRuntimeControlLeaseAuthorityApplication::SourceBoundReestablishment(_) => {
+                permit.is_none()
+                    || request.schema_id.as_str()
+                        != "rusty.manifold.runtime_host.control_lease_adoption_request.v3"
+            }
+            _ => {
+                permit.is_some()
+                    || request.schema_id.as_str() != HOST_CONTROL_LEASE_ADOPTION_REQUEST_SCHEMA
+            }
+        } {
             Err(ManifoldRuntimeRejectionReason::SchemaMismatch)
         } else if request.expected_host_authority_revision != prior {
             Err(ManifoldRuntimeRejectionReason::StaleAuthorityRevision)
@@ -1537,6 +1651,25 @@ fn derive_control_lease_delta(
             }
             Ok(ControlLeaseDelta::Remove(vec![revoked]))
         }
+        ManifoldRuntimeControlLeaseAuthorityApplication::SourceBoundReestablishment(
+            application,
+        ) => {
+            application
+                .validate_against_snapshot(&request.prior_authority_snapshot)
+                .map_err(|_| invalid.clone())?;
+            let prior = runtime_lease(&application.request.prior_lease);
+            if snapshot
+                .leases
+                .iter()
+                .find(|lease| lease.lease_id == prior.lease_id)
+                != Some(&prior)
+            {
+                return Err(mismatch);
+            }
+            Ok(ControlLeaseDelta::Renewal(runtime_lease(
+                &application.renewed_lease,
+            )))
+        }
         ManifoldRuntimeControlLeaseAuthorityApplication::Expiry(application) => {
             application
                 .validate_against_snapshot(&request.prior_authority_snapshot)
@@ -1609,7 +1742,16 @@ fn control_lease_adoption_receipt(
         ),
     };
     ManifoldRuntimeControlLeaseAdoptionReceipt {
-        schema_id: schema_id(HOST_CONTROL_LEASE_ADOPTION_RECEIPT_SCHEMA),
+        schema_id: schema_id(
+            if matches!(
+                request.application,
+                ManifoldRuntimeControlLeaseAuthorityApplication::SourceBoundReestablishment(_)
+            ) {
+                "rusty.manifold.runtime_host.control_lease_adoption_receipt.v3"
+            } else {
+                HOST_CONTROL_LEASE_ADOPTION_RECEIPT_SCHEMA
+            },
+        ),
         authority_host_id: snapshot.host_id.clone(),
         adoption_id: request.adoption_id.clone(),
         operation: request.application.operation(),

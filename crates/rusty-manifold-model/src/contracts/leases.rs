@@ -3,10 +3,12 @@ use super::*;
 mod release;
 mod renewal;
 mod revocation;
+mod source_bound_reestablishment;
 
 pub use self::release::*;
 pub use self::renewal::*;
 pub use self::revocation::*;
+pub use self::source_bound_reestablishment::*;
 
 /// Lease request descriptor used by tests and fixtures.
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]

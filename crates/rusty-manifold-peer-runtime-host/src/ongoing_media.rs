@@ -349,7 +349,10 @@ impl ManifoldPeerRuntimeHost {
         validate_live_broker_restoration(&self.snapshot, &broker.evidence())?;
         if let Some(checkpoint) = &self.snapshot.concurrent_media_checkpoint {
             if &checkpoint.baseline == adopted {
-                return Ok(Some((self.copy_for_transaction(), checkpoint.clone())));
+                return Ok(Some((
+                    self.copy_for_transaction(),
+                    checkpoint.as_ref().clone(),
+                )));
             }
         }
         let suffix = self.snapshot.concurrent_media_renewals.len()
@@ -357,7 +360,7 @@ impl ManifoldPeerRuntimeHost {
                 .snapshot
                 .concurrent_media_checkpoint
                 .as_ref()
-                .map_or(0, retained_anchor_count);
+                .map_or(0, |checkpoint| retained_anchor_count(checkpoint));
         let current_original = self
             .snapshot
             .concurrent_media_renewals
@@ -455,7 +458,28 @@ impl ManifoldPeerRuntimeHost {
         {
             candidate.snapshot.concurrent_credential_refreshes = vec![last];
         }
-        candidate.snapshot.concurrent_media_checkpoint = Some(checkpoint.clone());
+        // Box is storage only: serialized checkpoint and all signed receipt bytes
+        // remain identical. Avoid embedding two large renewal receipts in every
+        // Host snapshot and every deserializer's by-value stack frame.
+        let stored_checkpoint = Box::new(checkpoint.clone());
+        #[cfg(test)]
+        {
+            let raw = serde_json::to_vec(&checkpoint).expect("actual checkpoint serialization");
+            assert_eq!(
+                raw,
+                serde_json::to_vec(&stored_checkpoint).expect("boxed checkpoint serialization")
+            );
+            let restored: Box<ManifoldConcurrentMediaCheckpoint> =
+                serde_json::from_slice(&raw).expect("same checkpoint roundtrip");
+            assert_eq!(*restored, checkpoint);
+            assert_eq!(
+                rusty_manifold_peer::fresh_history_canonical(&checkpoint)
+                    .expect("actual checkpoint canonical bytes"),
+                rusty_manifold_peer::fresh_history_canonical(&restored)
+                    .expect("boxed checkpoint canonical bytes")
+            );
+        }
+        candidate.snapshot.concurrent_media_checkpoint = Some(stored_checkpoint);
         Ok(Some((candidate, checkpoint)))
     }
 

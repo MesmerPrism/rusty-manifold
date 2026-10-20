@@ -61,6 +61,9 @@ impl ManifoldPeerRuntimeHost {
                 .ok_or_else(|| invalid_snapshot("cumulative renewal count exhausted"))?;
         }
         if self.snapshot.concurrent_media_renewals.len() >= 32
+            || !self
+                .validate_peer_session_v2(&paired.session_id, now_ms)
+                .current
             || !paired.applied
             || !self.snapshot.concurrent_session_renewals.contains(paired)
             || !self.snapshot.signed_topology_authorizations.contains(

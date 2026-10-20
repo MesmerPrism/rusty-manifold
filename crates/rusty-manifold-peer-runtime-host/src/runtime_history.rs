@@ -26,6 +26,8 @@ pub struct ManifoldPeerRuntimeHistoryCheckpoint {
     pub prior_checkpoint_sha256: Option<String>,
     /// Exact fully adopted concurrent checkpoint already composed here.
     pub adopted_media_checkpoint_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fresh_history_archive: Option<ManifoldFreshHistoryParentCheckpoint>,
 }
 
 fn hash<T: Serialize>(value: &T) -> Result<String, ManifoldPeerRuntimeHostError> {
@@ -54,24 +56,43 @@ pub(super) fn validate(
     snapshot: &ManifoldPeerRuntimeHostSnapshot,
 ) -> Result<(), ManifoldPeerRuntimeHostError> {
     let Some(checkpoint) = &snapshot.runtime_history_checkpoint else {
-        if snapshot.schema_id.as_str() != PEER_RUNTIME_HOST_SNAPSHOT_SCHEMA {
+        if snapshot.schema_id.as_str()
+            != fresh_pair_setup::snapshot_schema(
+                snapshot.trust_policy.fresh_setup_policy.is_some(),
+                false,
+            )
+        {
             return Err(invalid_snapshot("parent history storage policy absent"));
         }
         return Ok(());
     };
-    if snapshot.schema_id.as_str() != PEER_ONGOING_HISTORY_SNAPSHOT_SCHEMA
+    if snapshot.schema_id.as_str()
+        != fresh_pair_setup::snapshot_schema(
+            snapshot.trust_policy.fresh_setup_policy.is_some(),
+            true,
+        )
         || snapshot
             .ongoing_media_policy
             .as_ref()
             .map(|p| p.schema_id.as_str())
             != Some("rusty.manifold.peer.ongoing_media_policy.v2")
-        || checkpoint.schema_id.as_str() != "rusty.manifold.peer.runtime_history_checkpoint.v1"
+        || !matches!(
+            checkpoint.schema_id.as_str(),
+            "rusty.manifold.peer.runtime_history_checkpoint.v1"
+                | "rusty.manifold.peer.runtime_history_checkpoint.v2"
+        )
+        || (checkpoint.schema_id.as_str() == "rusty.manifold.peer.runtime_history_checkpoint.v2")
+            != checkpoint.fresh_history_archive.is_some()
+        || (checkpoint.fresh_history_archive.is_some()
+            && snapshot.trust_policy.fresh_setup_policy.is_none())
         || checkpoint.request_epoch == 0
         || checkpoint.request_epoch.saturating_sub(1) > checkpoint.event_sequence
         || checkpoint.event_sequence > snapshot.event_sequence
         || checkpoint.pair_route_authority_revision > snapshot.pair_media_routes.authority_revision
         || (checkpoint.request_epoch > 1) != checkpoint.prior_checkpoint_sha256.is_some()
-        || (checkpoint.request_epoch > 1) != checkpoint.adopted_media_checkpoint_sha256.is_some()
+        || (checkpoint.schema_id.as_str() == "rusty.manifold.peer.runtime_history_checkpoint.v1"
+            && ((checkpoint.request_epoch > 1)
+                != checkpoint.adopted_media_checkpoint_sha256.is_some()))
         || !valid_sha256(&checkpoint.source_snapshot_sha256)
         || checkpoint
             .prior_checkpoint_sha256
@@ -86,6 +107,7 @@ pub(super) fn validate(
     {
         return Err(invalid_snapshot("parent history checkpoint shape"));
     }
+    fresh_history_archive::validate_fresh_parent_checkpoint(snapshot)?;
     Ok(())
 }
 pub(super) fn valid_audit_count(snapshot: &ManifoldPeerRuntimeHostSnapshot) -> bool {
@@ -171,7 +193,10 @@ impl ManifoldPeerRuntimeHost {
         candidate.snapshot.ongoing_media_policy = Some(ManifoldOngoingMediaPolicy {
             schema_id: schema("rusty.manifold.peer.ongoing_media_policy.v2"),
         });
-        candidate.snapshot.schema_id = schema(PEER_ONGOING_HISTORY_SNAPSHOT_SCHEMA);
+        candidate.snapshot.schema_id = schema(fresh_pair_setup::snapshot_schema(
+            candidate.snapshot.trust_policy.fresh_setup_policy.is_some(),
+            true,
+        ));
         candidate.snapshot.runtime_history_checkpoint =
             Some(Box::new(ManifoldPeerRuntimeHistoryCheckpoint {
                 schema_id: schema("rusty.manifold.peer.runtime_history_checkpoint.v1"),
@@ -182,7 +207,11 @@ impl ManifoldPeerRuntimeHost {
                 source_snapshot_sha256,
                 prior_checkpoint_sha256: None,
                 adopted_media_checkpoint_sha256: None,
+                fresh_history_archive: None,
             }));
+        if candidate.snapshot.trust_policy.fresh_setup_policy.is_some() {
+            candidate.initialize_fresh_prime_origin()?;
+        }
         validate_snapshot(&candidate.snapshot)?;
         *self = candidate;
         Ok(())
@@ -268,7 +297,7 @@ impl ManifoldPeerRuntimeHost {
             return Ok(None);
         }
         let checkpoint = ManifoldPeerRuntimeHistoryCheckpoint {
-            schema_id: prior.schema_id.clone(),
+            schema_id: schema("rusty.manifold.peer.runtime_history_checkpoint.v1"),
             request_epoch: prior
                 .request_epoch
                 .checked_add(1)
@@ -279,6 +308,7 @@ impl ManifoldPeerRuntimeHost {
             source_snapshot_sha256: hash(&self.snapshot)?,
             prior_checkpoint_sha256: Some(hash(prior)?),
             adopted_media_checkpoint_sha256: Some(media_sha),
+            fresh_history_archive: None,
         };
         // Preserve every source needed by current accepted derivative obligations.
         // The exact source audit bodies remain visible beside the bounded suffix.
@@ -337,10 +367,37 @@ impl ManifoldPeerRuntimeHost {
             .media_sessions
             .applied_request_ids
             .retain(|id| media_sources.contains(id));
+        let fresh_sources = candidate
+            .snapshot
+            .fresh_pair_setup
+            .as_ref()
+            .map(|s| {
+                s.receipts
+                    .iter()
+                    .map(|r| r.local_request_id.clone())
+                    .chain(
+                        s.prime_enrollments
+                            .iter()
+                            .map(|e| e.request.request_id.clone()),
+                    )
+                    .chain(
+                        s.phase_preparations
+                            .iter()
+                            .map(|r| r.local_request_id.clone()),
+                    )
+                    .collect::<BTreeSet<_>>()
+            })
+            .unwrap_or_default();
         candidate.snapshot.audit_events.retain(|event| {
-            (event.event_kind == ManifoldPeerRuntimeAuditKind::BrokerLeaseAdmission
-                && event.applied
-                && admission_ids.contains(&event.source_id))
+            (matches!(
+                event.event_kind,
+                ManifoldPeerRuntimeAuditKind::Enrollment
+                    | ManifoldPeerRuntimeAuditKind::FreshPhasePrepare
+            ) && event.applied
+                && fresh_sources.contains(&event.source_id))
+                || (event.event_kind == ManifoldPeerRuntimeAuditKind::BrokerLeaseAdmission
+                    && event.applied
+                    && admission_ids.contains(&event.source_id))
                 || (event.event_kind == ManifoldPeerRuntimeAuditKind::BrokerLeaseRelease
                     && release_ids.contains(&event.source_id))
                 || (is_pair_media_route_audit_kind(&event.event_kind)
@@ -359,12 +416,21 @@ impl ManifoldPeerRuntimeHost {
             .accepted_peers
             .applied_proposal_ids
             .clear();
-        let enrollment_ids = candidate
+        let mut enrollment_ids = candidate
             .snapshot
             .concurrent_credential_refreshes
             .iter()
             .map(|r| r.request_id.clone())
             .collect::<BTreeSet<_>>();
+        if let Some(fresh) = &candidate.snapshot.fresh_pair_setup {
+            enrollment_ids.extend(fresh.receipts.iter().map(|r| r.local_request_id.clone()));
+            enrollment_ids.extend(
+                fresh
+                    .prime_enrollments
+                    .iter()
+                    .map(|e| e.request.request_id.clone()),
+            );
+        }
         candidate
             .snapshot
             .enrollment

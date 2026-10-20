@@ -292,6 +292,21 @@ pub(super) fn validate_grant_renewal_history(
             c.grants.iter().map(|g| (g.grant_id.clone(), g)).collect()
         });
     for event in &snapshot.audit_events {
+        if let Some(binding) =
+            source_bound_reestablishment::validate_source_bound_root_history_event(event, snapshot)?
+        {
+            let id = &binding.request.prior_grant.grant_id;
+            if latest
+                .get(id)
+                .is_some_and(|old| *old != &binding.request.prior_grant)
+            {
+                return Err(ManifoldAdmissionError::InvalidSnapshot(
+                    "root mixed history preimage",
+                ));
+            }
+            latest.insert(id.clone(), &binding.resulting_grant);
+            continue;
+        }
         match (&event.operation, event.applied, &event.grant_renewal) {
             (ManifoldAdmissionOperation::RenewGrant, true, Some(binding)) => {
                 let request = &binding.request;

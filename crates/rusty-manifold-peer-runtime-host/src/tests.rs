@@ -182,6 +182,9 @@ fn trust_policy() -> ManifoldPeerRuntimeTrustPolicy {
     ManifoldPeerRuntimeTrustPolicy {
         schema_id: schema_id(PEER_RUNTIME_HOST_TRUST_POLICY_SCHEMA),
         policy_id: id("policy.peer-runtime.test"),
+        fresh_setup_policy: None,
+        fresh_setup_local_peer_id: None,
+        fresh_setup_enrollment_selection: None,
         revision: Revision::INITIAL,
         enabled_authority_families: vec![
             ManifoldPeerRuntimeAuthorityFamily::PeerStatus,
@@ -3626,9 +3629,13 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
             expires_at_ms: 2_000_000_000_000,
             derivative_binding: None,
         });
-    let mut host =
+    // Keep this long conformance scenario's many retained Host checkpoints on
+    // the heap. The same actual owner and default test-thread stack are used;
+    // production authority calls and all source/replay assertions stay exact.
+    let mut host = Box::new(
         ManifoldPeerRuntimeHost::from_snapshot(dynamic_snapshot, &policy, &id(PROVIDER_EPOCH_ID))
-            .expect("peer host without ambient media lease");
+            .expect("peer host without ambient media lease"),
+    );
 
     let broker_lease = ManifoldRuntimeLease {
         lease_id: grant.broker_runtime_lease_id.clone(),
@@ -3855,7 +3862,7 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
     let mut expected_migrated = host.clone();
     remove_pair_route_commands(&mut expected_migrated.snapshot.media_command_runtime);
     expected_migrated.snapshot.pair_media_routes = ManifoldPairMediaRouteAuthorityStateV2::empty();
-    assert_eq!(migrated_active_admission, expected_migrated);
+    assert_eq!(migrated_active_admission, *expected_migrated);
     assert!(broker
         .evidence()
         .consumed_bounded_use_ids
@@ -4523,7 +4530,7 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
         )
         .expect("dynamic bridge restart");
     assert!(!migration.migrated);
-    assert_eq!(restarted, host);
+    assert_eq!(restarted, *host);
     let stable = host.clone();
     assert!(matches!(
         host.release_media_runtime_lease_with_live_broker_runtime(
@@ -4608,7 +4615,7 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
             &broker,
         )
         .expect("checkpointed old-epoch joins restore against fresh Broker");
-    assert_eq!(restarted_after_rollover.0, host);
+    assert_eq!(restarted_after_rollover.0, *host);
     assert!(matches!(
         host.converge_live_broker_control_lease_revocation(&broker, &convergence_request),
         Err(ManifoldPeerRuntimeHostError::ReplayedMutation(_))
@@ -5885,3 +5892,6 @@ fn cleanup_peer_rejects_caller_attested_projection_even_with_genuine_signed_pend
         )
         .is_err());
 }
+
+#[path = "fresh_pair_setup_tests.rs"]
+mod fresh_pair_setup_tests;

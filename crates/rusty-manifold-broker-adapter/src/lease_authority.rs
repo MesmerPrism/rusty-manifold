@@ -98,6 +98,10 @@ pub enum ManifoldBrokerControlLeaseTransitionApplication {
     Issue(ManifoldControlLeaseAuthorityApplication),
     /// Generic control-lease renewal review/application.
     Renewal(ManifoldControlLeaseRenewalAuthorityApplication),
+    /// Deliberate selected owner action; ordinary renewal is unchanged.
+    SourceBoundReestablishment(
+        rusty_manifold_model::ManifoldSourceBoundControlLeaseReestablishmentApplication,
+    ),
     /// Generic control-lease holder release review/application.
     Release(ManifoldControlLeaseReleaseAuthorityApplication),
     /// Generic administrative control-lease revocation review/application.
@@ -111,6 +115,7 @@ pub enum ManifoldBrokerControlLeaseTransitionApplication {
 pub(crate) enum ManifoldBrokerControlLeaseTransitionKind {
     Issue,
     Renewal,
+    SourceBoundReestablishment,
     Release,
     Revocation,
     Expiry,
@@ -121,6 +126,9 @@ impl ManifoldBrokerControlLeaseTransitionApplication {
         match self {
             Self::Issue(_) => ManifoldBrokerControlLeaseTransitionKind::Issue,
             Self::Renewal(_) => ManifoldBrokerControlLeaseTransitionKind::Renewal,
+            Self::SourceBoundReestablishment(_) => {
+                ManifoldBrokerControlLeaseTransitionKind::SourceBoundReestablishment
+            }
             Self::Release(_) => ManifoldBrokerControlLeaseTransitionKind::Release,
             Self::Revocation(_) => ManifoldBrokerControlLeaseTransitionKind::Revocation,
             Self::Expiry(_) => ManifoldBrokerControlLeaseTransitionKind::Expiry,
@@ -131,6 +139,7 @@ impl ManifoldBrokerControlLeaseTransitionApplication {
         match self {
             Self::Issue(application) => &application.request_id,
             Self::Renewal(application) => &application.review.audit_event.request.request_id,
+            Self::SourceBoundReestablishment(application) => &application.request.request_id,
             Self::Release(application) => &application.review.audit_event.request.request_id,
             Self::Revocation(application) => &application.review.audit_event.request.request_id,
             Self::Expiry(application) => &application.request_id,
@@ -141,6 +150,7 @@ impl ManifoldBrokerControlLeaseTransitionApplication {
         match self {
             Self::Issue(application) => &application.review.audit_event.recorded_clock,
             Self::Renewal(application) => &application.review.audit_event.recorded_clock,
+            Self::SourceBoundReestablishment(application) => &application.recorded_clock,
             Self::Release(application) => &application.review.audit_event.recorded_clock,
             Self::Revocation(application) => &application.review.audit_event.recorded_clock,
             Self::Expiry(application) => &application.review.audit_event.recorded_clock,
@@ -151,6 +161,7 @@ impl ManifoldBrokerControlLeaseTransitionApplication {
         match self {
             Self::Issue(application) => application.applied_snapshot.as_ref(),
             Self::Renewal(application) => application.applied_snapshot.as_ref(),
+            Self::SourceBoundReestablishment(application) => application.applied_snapshot.as_ref(),
             Self::Release(application) => application.applied_snapshot.as_ref(),
             Self::Revocation(application) => application.applied_snapshot.as_ref(),
             Self::Expiry(application) => application.applied_snapshot.as_ref(),
@@ -179,6 +190,9 @@ impl ManifoldBrokerControlLeaseTransitionApplication {
                 .validate_against_snapshot(snapshot)
                 .map_err(|_| ManifoldBrokerControlLeaseAuthorityError::TransitionLineage),
             Self::Revocation(application) => application
+                .validate_against_snapshot(snapshot)
+                .map_err(|_| ManifoldBrokerControlLeaseAuthorityError::TransitionLineage),
+            Self::SourceBoundReestablishment(application) => application
                 .validate_against_snapshot(snapshot)
                 .map_err(|_| ManifoldBrokerControlLeaseAuthorityError::TransitionLineage),
             Self::Expiry(application) => application
@@ -391,7 +405,16 @@ impl ManifoldBrokerControlLeaseAuthority {
             .collect::<BTreeSet<_>>();
         for (index, transition) in evidence.transitions.iter().enumerate() {
             validate_serialized_size(transition, MAX_BROKER_CONTROL_LEASE_TRANSITION_BYTES)?;
-            if transition.schema_id.as_str() != BROKER_CONTROL_LEASE_TRANSITION_SCHEMA {
+            if transition.schema_id.as_str()
+                != match &transition.application {
+                    ManifoldBrokerControlLeaseTransitionApplication::SourceBoundReestablishment(
+                        _,
+                    ) if evidence.history_checkpoint.is_some() => {
+                        "rusty.manifold.broker.control_lease_transition.v3"
+                    }
+                    _ => BROKER_CONTROL_LEASE_TRANSITION_SCHEMA,
+                }
+            {
                 return Err(ManifoldBrokerControlLeaseAuthorityError::SchemaMismatch);
             }
             if ongoing_history::transition_base(&evidence)
@@ -509,6 +532,7 @@ impl ManifoldBrokerControlLeaseAuthority {
         if self.evidence.transitions.len() >= limit {
             Err(match kind {
                 ManifoldBrokerControlLeaseTransitionKind::Issue
+                | ManifoldBrokerControlLeaseTransitionKind::SourceBoundReestablishment
                 | ManifoldBrokerControlLeaseTransitionKind::Renewal => {
                     ManifoldBrokerControlLeaseAuthorityError::CleanupCapacityReserved
                 }
@@ -521,6 +545,7 @@ impl ManifoldBrokerControlLeaseAuthority {
         } else if matches!(
             kind,
             ManifoldBrokerControlLeaseTransitionKind::Issue
+                | ManifoldBrokerControlLeaseTransitionKind::SourceBoundReestablishment
                 | ManifoldBrokerControlLeaseTransitionKind::Renewal
         ) && validate_v2_evidence_size_with_limit(
             &self.evidence,
@@ -584,6 +609,33 @@ impl ManifoldBrokerControlLeaseAuthority {
         self.apply_transition(
             ManifoldBrokerControlLeaseTransitionApplication::Renewal(application),
             recorded_clock,
+        )
+    }
+
+    pub(crate) fn reestablish_source_bound_control_lease(
+        &mut self,
+        request: rusty_manifold_model::ManifoldSourceBoundControlLeaseReestablishmentRequest,
+        clock: ManifoldClockSnapshot,
+    ) -> Result<ManifoldBrokerControlLeaseTransition, ManifoldBrokerControlLeaseAuthorityError>
+    {
+        if self.evidence.history_checkpoint.is_none() {
+            return Err(ManifoldBrokerControlLeaseAuthorityError::SchemaMismatch);
+        }
+        self.ensure_transition_capacity(
+            ManifoldBrokerControlLeaseTransitionKind::SourceBoundReestablishment,
+        )?;
+        self.ensure_request_not_replayed(&request.request_id)?;
+        self.ensure_product_lease(&request.prior_lease.lease_id)?;
+        validate_clock_advance(self.current_clock(), &clock)?;
+        let application = self
+            .authority_snapshot()
+            .apply_source_bound_control_lease_reestablishment(request, clock.clone())
+            .map_err(|_| ManifoldBrokerControlLeaseAuthorityError::TransitionLineage)?;
+        self.apply_transition(
+            ManifoldBrokerControlLeaseTransitionApplication::SourceBoundReestablishment(
+                application,
+            ),
+            clock,
         )
     }
 
@@ -717,7 +769,16 @@ impl ManifoldBrokerControlLeaseAuthority {
     {
         self.ensure_transition_capacity(application.kind())?;
         let transition = ManifoldBrokerControlLeaseTransition {
-            schema_id: schema_id(BROKER_CONTROL_LEASE_TRANSITION_SCHEMA),
+            schema_id: schema_id(
+                if matches!(
+                    application,
+                    ManifoldBrokerControlLeaseTransitionApplication::SourceBoundReestablishment(_)
+                ) {
+                    "rusty.manifold.broker.control_lease_transition.v3"
+                } else {
+                    BROKER_CONTROL_LEASE_TRANSITION_SCHEMA
+                },
+            ),
             sequence: ongoing_history::transition_base(&self.evidence)
                 .checked_add(self.evidence.transitions.len() as u64)
                 .and_then(|n| n.checked_add(1))
@@ -739,6 +800,7 @@ impl ManifoldBrokerControlLeaseAuthority {
         if matches!(
             transition.application.kind(),
             ManifoldBrokerControlLeaseTransitionKind::Issue
+                | ManifoldBrokerControlLeaseTransitionKind::SourceBoundReestablishment
                 | ManifoldBrokerControlLeaseTransitionKind::Renewal
         ) && validate_v2_evidence_size_with_limit(
             &evidence,
@@ -1069,6 +1131,19 @@ fn apply_transition_to_product_set(
                 issue_sources.remove(lease_id);
             }
         }
+        ManifoldBrokerControlLeaseTransitionApplication::SourceBoundReestablishment(
+            application,
+        ) => {
+            let prior = &application.request.prior_lease;
+            if product_leases.get(&prior.lease_id) != Some(prior) {
+                return Err(ManifoldBrokerControlLeaseAuthorityError::TransitionLineage);
+            }
+            application
+                .validate_against_snapshot(&transition.prior_authority_snapshot)
+                .map_err(|_| ManifoldBrokerControlLeaseAuthorityError::TransitionLineage)?;
+            product_leases.insert(prior.lease_id.clone(), application.renewed_lease.clone());
+            issue_sources.remove(&prior.lease_id);
+        }
         ManifoldBrokerControlLeaseTransitionApplication::Release(application) => {
             let lease_id = &application.lease_id;
             if !product_leases.contains_key(lease_id) {
@@ -1206,6 +1281,7 @@ fn runtime_lease_from_control_lease(lease: &ManifoldControlLease) -> ManifoldRun
 const fn transition_capacity_limit(kind: ManifoldBrokerControlLeaseTransitionKind) -> usize {
     match kind {
         ManifoldBrokerControlLeaseTransitionKind::Issue
+        | ManifoldBrokerControlLeaseTransitionKind::SourceBoundReestablishment
         | ManifoldBrokerControlLeaseTransitionKind::Renewal => MAX_BROKER_CONTROL_LEASE_TRANSITIONS
             .saturating_sub(BROKER_CONTROL_LEASE_CLEANUP_TRANSITION_RESERVE),
         ManifoldBrokerControlLeaseTransitionKind::Release

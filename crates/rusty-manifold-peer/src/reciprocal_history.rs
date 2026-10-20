@@ -2,6 +2,9 @@
 use super::*;
 
 /// Explicit common-LAN ongoing state. Finite mixed v3 remains the default.
+/// Ongoing storage with explicitly retained pair setup floors.
+pub const RECIPROCAL_FRESH_SETUP_HISTORY_STATE_SCHEMA: &str =
+    "rusty.manifold.peer.reciprocal_ed25519_state.v6";
 pub const RECIPROCAL_HISTORY_STATE_SCHEMA: &str = "rusty.manifold.peer.reciprocal_ed25519_state.v4";
 
 /// Completed signed prefix plus the exact receipts still needed by live children.
@@ -27,7 +30,10 @@ pub struct ManifoldReciprocalHistoryCheckpoint {
 /// Deployment still owns exclusive writer custody across processes and storage.
 #[derive(Debug, Eq, PartialEq)]
 pub struct ManifoldReciprocalHistoryOwner {
-    state: ManifoldReciprocalEd25519AuthorityStateV3,
+    pub(super) state: ManifoldReciprocalEd25519AuthorityStateV3,
+    // Proof custody is part of this SAME actual signed mutation owner.
+    pub(crate) source_bound_root_issuer:
+        Option<rusty_manifold_runtime_host::ManifoldSourceBoundRootIssuer>,
 }
 
 /// Read-only transaction plan minted from one exact actual owner. Not transport data.
@@ -98,9 +104,17 @@ pub(super) fn request_matches(
 }
 pub(super) fn valid_checkpoint(state: &ManifoldReciprocalEd25519AuthorityStateV3) -> bool {
     state.history_checkpoint.as_ref().map_or_else(
-        || state.schema_id.as_str() == RECIPROCAL_ED25519_STATE_V3_SCHEMA,
+        || {
+            state.fresh_setup_fences.is_empty()
+                && state.schema_id.as_str() == RECIPROCAL_ED25519_STATE_V3_SCHEMA
+        },
         |c| {
-            state.schema_id.as_str() == RECIPROCAL_HISTORY_STATE_SCHEMA
+            state.schema_id.as_str()
+                == (if state.fresh_setup_fences.is_empty() {
+                    RECIPROCAL_HISTORY_STATE_SCHEMA
+                } else {
+                    RECIPROCAL_FRESH_SETUP_HISTORY_STATE_SCHEMA
+                })
                 && c.schema_id.as_str() == "rusty.manifold.peer.reciprocal_history_checkpoint.v1"
                 && c.request_epoch > 0
                 && c.authority_revision <= state.authority_revision
@@ -159,6 +173,71 @@ pub(super) fn valid_pinned_receipts(state: &ManifoldReciprocalEd25519AuthoritySt
 }
 
 impl ManifoldReciprocalHistoryOwner {
+    /// Stages a monotonic setup floor on this actual owner, without cloning the gate.
+    /// Runtime Host additionally rejoins its whole local preimage and inactive graph.
+    pub fn plan_fresh_pair_setup_fence(
+        &self,
+        request: &crate::ManifoldFreshPairSetupRequest,
+        enrollment: &ManifoldPeerEnrollmentState,
+        local_peer_id: &DottedId,
+        now_ms: u64,
+    ) -> Result<ManifoldReciprocalHistoryPlan, &'static str> {
+        crate::verify_fresh_pair_setup_request(request)?;
+        let c = &request.context;
+        let view = c
+            .views
+            .iter()
+            .find(|v| &v.local_peer_id == local_peer_id)
+            .ok_or("fresh setup local signed view")?;
+        if c.issued_at_ms > now_ms
+            || view.enrollment_authority_revision != enrollment.authority_revision
+            || view.prior_fence.as_ref()
+                != self
+                    .state
+                    .fresh_setup_fences
+                    .iter()
+                    .find(|f| f.peer_ids == c.peer_ids)
+        {
+            return Err("fresh setup owner preimage or future audit time");
+        }
+        for old in &view.prior_credentials {
+            if enrollment
+                .credentials
+                .iter()
+                .find(|k| k.key_id == old.key_id)
+                != Some(old)
+            {
+                return Err("fresh setup actual enrolled key changed");
+            }
+        }
+        let mut state = self.state.clone();
+        crate::advance_fresh_pair_setup_fence(
+            &mut state.fresh_setup_fences,
+            crate::ManifoldPairSetupFence {
+                schema_id: schema("rusty.manifold.peer.pair_setup_fence.v1"),
+                peer_ids: c.peer_ids.clone(),
+                setup_epoch: view
+                    .prior_setup_epoch
+                    .checked_add(1)
+                    .ok_or("fresh setup epoch exhausted")?,
+                minimum_enrollment_authority_revision: enrollment
+                    .authority_revision
+                    .next()
+                    .ok_or("fresh setup revision exhausted")?,
+                setup_request_id: c.request_id.clone(),
+                context_sha256: crate::fresh_pair_setup_digest(
+                    "rusty.manifold.peer.fresh_pair_setup_context.v3",
+                    c,
+                )?,
+            },
+        )?;
+        state.schema_id = schema(RECIPROCAL_FRESH_SETUP_HISTORY_STATE_SCHEMA);
+        Ok(ManifoldReciprocalHistoryPlan {
+            source_state_sha256: hash(&self.state)?,
+            state,
+            receipt: None,
+        })
+    }
     /// Stages signature review without mutating this owner, for enclosing atomic adoption.
     pub fn plan_common_lan(
         &self,
@@ -188,6 +267,7 @@ impl ManifoldReciprocalHistoryOwner {
     ) -> Result<ManifoldReciprocalHistoryPlan, &'static str> {
         let mut staged = Self {
             state: self.state.clone(),
+            source_bound_root_issuer: None,
         };
         staged.checkpoint(retained)?;
         Ok(ManifoldReciprocalHistoryPlan {
@@ -228,7 +308,10 @@ impl ManifoldReciprocalHistoryOwner {
             source_state_sha256,
             prior_checkpoint_sha256: None,
         });
-        Self { state }
+        Self {
+            state,
+            source_bound_root_issuer: None,
+        }
     }
     /// Read-only projection. It cannot be re-admitted through the finite mutation API.
     pub fn state(&self) -> &ManifoldReciprocalEd25519AuthorityStateV3 {

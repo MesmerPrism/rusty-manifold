@@ -1272,6 +1272,9 @@ pub struct ManifoldReciprocalEd25519AuthorityStateV3 {
     /// Explicit live-owner storage policy; omitted for finite mixed v3.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub history_checkpoint: Option<ManifoldReciprocalHistoryCheckpoint>,
+    /// Per-pair setup floors. Missing means the original contract, never a reset.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fresh_setup_fences: Vec<crate::ManifoldPairSetupFence>,
 }
 
 impl ManifoldReciprocalEd25519AuthorityStateV3 {
@@ -1289,6 +1292,7 @@ pub fn migrate_reciprocal_ed25519_state_v2_to_v3(
 ) -> ManifoldReciprocalEd25519AuthorityStateV3 {
     ManifoldReciprocalEd25519AuthorityStateV3 {
         history_checkpoint: None,
+        fresh_setup_fences: Vec::new(),
         schema_id: schema(RECIPROCAL_ED25519_STATE_V3_SCHEMA),
         authority_revision: legacy.authority_revision,
         applied_request_ids: legacy.applied_request_ids,
@@ -2279,6 +2283,19 @@ pub fn validate_current_reciprocal_ed25519_receipt_v3(
     if !accepted || rejection.is_some() || expires <= now_ms || peers != &expected {
         return Err(ManifoldReciprocalEd25519RejectionReason::CrossContext);
     }
+    let enrollment_revision = match receipt {
+        ManifoldReciprocalEd25519ReceiptV3::WifiDirect(value) => {
+            value.enrollment_authority_revision
+        }
+        ManifoldReciprocalEd25519ReceiptV3::CommonLan(value) => value.enrollment_authority_revision,
+    };
+    if !crate::fresh_pair_setup_floor_allows(
+        &state.fresh_setup_fences,
+        &expected,
+        enrollment_revision,
+    ) {
+        return Err(ManifoldReciprocalEd25519RejectionReason::CredentialNotCurrent);
+    }
     let mut current = expected
         .iter()
         .map(|peer| current_credential(enrollment, peer, now_ms).map(|value| value.key_id.clone()))
@@ -2301,7 +2318,8 @@ fn decoded_nonce_sha256(value: &str) -> String {
 pub fn reciprocal_ed25519_state_v3_is_well_formed(
     state: &ManifoldReciprocalEd25519AuthorityStateV3,
 ) -> bool {
-    if !ongoing_history::valid_checkpoint(state)
+    if !crate::fresh_pair_setup_fences_are_well_formed(&state.fresh_setup_fences)
+        || !ongoing_history::valid_checkpoint(state)
         || !unique(&state.applied_request_ids)
         || !unique(&state.consumed_correlation_ids)
         || !unique(&state.consumed_context_sha256)

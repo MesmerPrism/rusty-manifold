@@ -403,6 +403,10 @@ impl ManifoldBrokerRuntime {
             .invalidated_control_lease_lifecycle_use_ids
             .clear();
         candidate.control_lease_lifecycle_receipts.clear();
+        // Same actual checkpoint seals completed root suffix bytes into its
+        // source commitment; current grant/lease baseline remains exact. The
+        // Native Original journal separately retains its completed root outcome.
+        candidate.source_bound_root_reestablishments.clear();
         candidate.control_lease_revocation_use_invalidations.clear();
         candidate.control_lease_revocation_recovery_receipts.clear();
         candidate

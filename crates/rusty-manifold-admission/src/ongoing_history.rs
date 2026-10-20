@@ -117,6 +117,7 @@ pub(super) fn validate_checkpoint(
                 || event.prior_authority_revision.next() != Some(event.resulting_authority_revision)
                 || event.rejection_reason.is_some()
                 || event.grant_renewal.is_some()
+                || event.grant_reestablishment.is_some()
                 || event.use_authorization.as_ref().map_or(true, |binding| {
                     binding.request.request_id != event.request_id
                         || binding.request.expected_authority_revision
@@ -335,7 +336,10 @@ impl ManifoldAdmissionAuthority {
             ));
         }
         validate_snapshot(&snapshot)?;
-        Ok(Self { snapshot })
+        Ok(Self {
+            snapshot,
+            source_bound_root_owner: anchor.owner.source_bound_root_owner.clone(),
+        })
     }
 }
 

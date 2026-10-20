@@ -1,5 +1,7 @@
 //! Revisioned cross-app grants and short-lived opaque token authority.
 
+mod source_bound_reestablishment;
+pub use source_bound_reestablishment::*;
 mod grant_renewal;
 pub use grant_renewal::*;
 mod ongoing_history;
@@ -211,6 +213,8 @@ pub enum ManifoldAdmissionOperation {
     AuthorizeUse,
     /// Scoped current-grant deadline renewal.
     RenewGrant,
+    /// New authority earned from the same registered selected SourceBound owner.
+    ReestablishGrant,
     /// Explicit token revocation.
     RevokeToken,
     /// Authority-owned token revocation.
@@ -319,6 +323,9 @@ pub struct ManifoldAdmissionAuditEvent {
     /// Actual current-grant renewal; absent for all legacy operations.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grant_renewal: Option<ManifoldAdmissionGrantRenewalBinding>,
+    /// Absent for every released/ordinary operation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grant_reestablishment: Option<ManifoldSourceBoundGrantReestablishmentBinding>,
 }
 
 /// Durable accepted admission state.
@@ -461,6 +468,12 @@ struct SchemaProbe {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManifoldAdmissionAuthority {
     snapshot: ManifoldAdmissionSnapshot,
+    // Not snapshot authority. Registered only at selected actual construction.
+    source_bound_root_owner: Option<(
+        rusty_manifold_runtime_host::ManifoldSourceBoundRootVerifier,
+        DottedId,
+        DottedId,
+    )>,
 }
 
 impl ManifoldAdmissionAuthority {
@@ -474,7 +487,10 @@ impl ManifoldAdmissionAuthority {
             ));
         }
         validate_snapshot(&snapshot)?;
-        Ok(Self { snapshot })
+        Ok(Self {
+            snapshot,
+            source_bound_root_owner: None,
+        })
     }
 
     /// Restarts from deterministic JSON.
@@ -989,6 +1005,7 @@ impl ManifoldAdmissionAuthority {
                 rejection_reason: rejection.clone(),
                 use_authorization,
                 grant_renewal: None,
+                grant_reestablishment: None,
             });
         ManifoldAdmissionReceipt {
             schema_id: schema_id(ADMISSION_RECEIPT_SCHEMA),
@@ -1121,6 +1138,7 @@ fn migrate_legacy_admission_snapshot(
                 rejection_reason: event.rejection_reason.clone(),
                 use_authorization: None,
                 grant_renewal: None,
+                grant_reestablishment: None,
             }
         })
         .collect::<Vec<_>>();
@@ -1539,7 +1557,8 @@ fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), Manifol
             event.applied
                 && matches!(
                     event.operation,
-                    ManifoldAdmissionOperation::RenewGrant
+                    ManifoldAdmissionOperation::ReestablishGrant
+                        | ManifoldAdmissionOperation::RenewGrant
                         | ManifoldAdmissionOperation::IssueToken
                         | ManifoldAdmissionOperation::RevokeToken
                         | ManifoldAdmissionOperation::AdministrativeRevokeToken
@@ -1605,7 +1624,8 @@ fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), Manifol
                 "history_audit_sequence_exhausted",
             ))?;
         let operation_valid = match event.operation {
-            ManifoldAdmissionOperation::RenewGrant
+            ManifoldAdmissionOperation::ReestablishGrant
+            | ManifoldAdmissionOperation::RenewGrant
             | ManifoldAdmissionOperation::IssueToken
             | ManifoldAdmissionOperation::RevokeToken
             | ManifoldAdmissionOperation::AdministrativeRevokeToken
