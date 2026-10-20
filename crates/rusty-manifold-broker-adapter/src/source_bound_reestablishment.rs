@@ -104,9 +104,9 @@ impl ManifoldBrokerRuntime {
             || request.lease.authority != *permit.evidence()
             || u64::try_from(clock.wall_unix_ms).ok() != Some(now)
             || request.lease.prior_lease.holder_id != request.grant.prior_grant.identity.client_id
-            || !request
-                .grant
-                .prior_grant
+            || !self
+                .control_lease_authority_snapshot()
+                .host_manifest
                 .capabilities
                 .contains(&request.lease.prior_lease.required_capability)
             || request.lease.prior_lease.scope.as_str() != "lease.media.session"
@@ -307,11 +307,16 @@ pub(super) fn source_bound_root_receipts_close(e: &ManifoldBrokerRuntimeEvidence
             || root.grant.authority != root.lease.authority
             || root.grant.authority.validate_at(now).is_err()
             || root.lease.prior_lease.holder_id != root.grant.prior_grant.identity.client_id
-            || !root
-                .grant
-                .prior_grant
-                .capabilities
-                .contains(&root.lease.prior_lease.required_capability)
+            || lease_at_revision(
+                &e.control_lease_authority,
+                root.lease.expected_authority_revision,
+            )
+            .is_none_or(|snapshot| {
+                !snapshot
+                    .host_manifest
+                    .capabilities
+                    .contains(&root.lease.prior_lease.required_capability)
+            })
             || root.lease.prior_lease.scope.as_str() != "lease.media.session"
             || rusty_manifold_admission::source_bound_grant_at_revision(
                 &e.admission_snapshot,
@@ -472,7 +477,9 @@ mod commit_controls {
         let prior_wall = 1_765_000_000_100u64;
         let mut b = super::super::tests::runtime(
             vec![rusty_manifold_broker_product::ManifoldBrokerFeature::MediaSession],
-            vec![id("capability.broker.runtime.test")],
+            // The client feature ceiling intentionally excludes the issuer's
+            // internal lease-bootstrap capability.
+            vec![id("capability.command.media.session.start")],
             vec![ManifoldRuntimeLease {
                 lease_id: id("lease.root.control"),
                 scope: id("lease.media.session"),
@@ -554,5 +561,94 @@ mod commit_controls {
         permit.commit();
         assert!(result.control_lease_transition.is_some());
         assert!(owner.borrow_current(request.grant.authority, now).is_err());
+    }
+    #[test]
+    fn issuer_only_bootstrap_capability_preserves_client_ceiling_and_historical_restore_join() {
+        let (mut b, mut owner, request, clock, now) = fixture();
+        let client_before = request.grant.prior_grant.clone();
+        let capability = request.lease.prior_lease.required_capability.clone();
+        assert!(!client_before.capabilities.contains(&capability));
+        assert!(b
+            .control_lease_authority_snapshot()
+            .host_manifest
+            .capabilities
+            .contains(&capability));
+        let permit = owner
+            .borrow_current(request.grant.authority.clone(), now)
+            .unwrap();
+        let plan = b
+            .plan_source_bound_root_reestablishment(&permit, &request, clock, now)
+            .unwrap();
+        let receipt = b
+            .verify_source_bound_root_reestablishment(&permit, plan, now)
+            .unwrap()
+            .commit();
+        permit.commit();
+        assert!(
+            receipt.admission.is_none(),
+            "still-current client grant remains exact"
+        );
+        assert_eq!(b.admission_snapshot().grants[0], client_before);
+        let evidence = b.evidence();
+        assert!(source_bound_root_receipts_close(&evidence));
+        let mut damaged = evidence.clone();
+        let historical = &mut damaged
+            .control_lease_authority
+            .baseline
+            .current_authority_snapshot;
+        assert_eq!(
+            historical.authority_revision,
+            request.lease.expected_authority_revision
+        );
+        historical
+            .host_manifest
+            .capabilities
+            .retain(|c| c != &capability);
+        // The latest issuer still has the capability. Closure must consult the
+        // exact prior revision, never replace it with the current observation.
+        assert!(damaged
+            .control_lease_authority
+            .current_authority_snapshot
+            .host_manifest
+            .capabilities
+            .contains(&capability));
+        assert!(!source_bound_root_receipts_close(&damaged));
+        let damaged = serde_json::from_str(&serde_json::to_string(&damaged).unwrap()).unwrap();
+        let adapter = b.adapter.clone();
+        let actual_control_owner = b.control_lease_authority;
+        assert!(
+            ManifoldBrokerRuntime::restore_from_caller_attested_exclusive_evidence(
+                adapter,
+                actual_control_owner,
+                damaged
+            )
+            .is_err()
+        );
+    }
+    #[test]
+    fn client_capability_does_not_substitute_for_absent_actual_issuer_capability() {
+        let (b, mut owner, mut request, clock, now) = fixture();
+        let before = b.evidence();
+        request.lease.prior_lease.required_capability =
+            request.grant.prior_grant.capabilities[0].clone();
+        assert!(!b
+            .control_lease_authority_snapshot()
+            .host_manifest
+            .capabilities
+            .contains(&request.lease.prior_lease.required_capability));
+        let permit = owner
+            .borrow_current(request.grant.authority.clone(), now)
+            .unwrap();
+        let error = match b.plan_source_bound_root_reestablishment(&permit, &request, clock, now) {
+            Err(e) => e,
+            Ok(_) => panic!("absent issuer capability admitted"),
+        };
+        assert!(matches!(
+            error,
+            ManifoldBrokerRuntimeStateError::InvalidEvidence(
+                "root actual source/scope/clock/capacity"
+            )
+        ));
+        assert_eq!(b.evidence(), before);
     }
 }
