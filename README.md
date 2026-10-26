@@ -1,5 +1,8 @@
 # Rusty Manifold
 
+Adapters can use [typed finite snapshot construction](docs/FINITE_SNAPSHOT_CONSTRUCTION.md)
+to preserve initial snapshot and trust-policy fields through source API evolution.
+
 External low-rate stream metadata enters through the
 [`rusty-manifold-stream-observation`](docs/STREAM_OBSERVATION_AUTHORITY.md)
 proposal/review/application authority. Review is non-mutating; application

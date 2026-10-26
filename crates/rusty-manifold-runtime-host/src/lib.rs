@@ -1,5 +1,7 @@
 //! Source-only Manifold Runtime Host with deterministic review and application.
 
+mod finite_construction;
+
 use rusty_manifold_model::{
     DottedId, ManifoldAuthorityExpirySweepAuthorityApplication,
     ManifoldAuthorityExpirySweepAuthorityApplicationOutcome, ManifoldAuthoritySnapshot,
