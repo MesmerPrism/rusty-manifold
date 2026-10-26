@@ -92,6 +92,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 fn initial_snapshot() -> ManifoldAdmissionSnapshot {
     ManifoldAdmissionSnapshot {
+        history_checkpoint: None,
         root_renewal_policies: Vec::new(),
         schema_id: schema(ADMISSION_SNAPSHOT_SCHEMA),
         authority_id: id("authority.admission.quest"),

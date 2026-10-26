@@ -116,3 +116,34 @@ restart/audit state, and adds no platform or payload dependency.
 cargo test -p rusty-manifold-runtime-host
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\check_all.ps1
 ```
+
+
+## Explicit ongoing history storage
+
+`ongoing_history.rs` implements prospective snapshot v5 selected on a fresh
+actual owner. Finite v4 remains the default, with the optional checkpoint
+omitted from its bytes. The checkpoint retains accepted authority revision,
+global audit sequence, request epoch, and source/prior commitments. Current
+commands, leases, derivative bindings and deadlines stay unchanged. Completed
+command/adoption/revocation/sweep replay prefixes become a closed request
+namespace fence plus bounded suffix; old ids with a current revision remain
+rejected. Overflow refuses before accepted mutation.
+
+A detached v5 snapshot cannot construct a host. Same-process validation/restore
+requires the actual independent current owner; hashes alone grant no baseline
+authority. `validate_snapshot_shape` is structural observation and constructs
+no authority. An embedding owner must finish its own pending effect phases
+before adopting a checkpoint; Runtime Host does not claim platform completion.
+The production seam runs 10,000 actual commands beyond both finite replay and
+audit capacities with unchanged current leases and monotonic revision.
+
+An enclosing accepted owner may call `checkpoint_ongoing_history_retaining`
+with a bounded sorted set of existing accepted audit source IDs. It cannot
+supply audit bodies. The checkpoint v2 retains exactly those complete events
+and their replay IDs beside the new contiguous suffix; the global sequence
+and revision baseline remain monotonic. A retained historical application is
+proof of its existing obligation, never permission for another application.
+A subsequent checkpoint drops it only when the enclosing owner no longer
+requires the source. The focused owner test preserves an original accepted
+application through ten checkpoints, refuses foreign pins and replay, then
+removes the pin without reopening its old epoch.

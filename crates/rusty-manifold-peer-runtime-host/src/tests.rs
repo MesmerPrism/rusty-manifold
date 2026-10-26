@@ -182,6 +182,9 @@ fn trust_policy() -> ManifoldPeerRuntimeTrustPolicy {
     ManifoldPeerRuntimeTrustPolicy {
         schema_id: schema_id(PEER_RUNTIME_HOST_TRUST_POLICY_SCHEMA),
         policy_id: id("policy.peer-runtime.test"),
+        fresh_setup_policy: None,
+        fresh_setup_local_peer_id: None,
+        fresh_setup_enrollment_selection: None,
         revision: Revision::INITIAL,
         enabled_authority_families: vec![
             ManifoldPeerRuntimeAuthorityFamily::PeerStatus,
@@ -257,6 +260,7 @@ fn media_command_runtime() -> ManifoldRuntimeHostSnapshot {
     let media_scope = id(MEDIA_RUNTIME_LEASE_SCOPE_ID);
     let direct_scope = id(DIRECT_RUNTIME_LEASE_SCOPE_ID);
     ManifoldRuntimeHostSnapshot {
+        history_checkpoint: None,
         schema_id: schema_id(HOST_SNAPSHOT_SCHEMA),
         host_id: id(MEDIA_RUNTIME_HOST_ID),
         authority_revision: Revision::INITIAL,
@@ -583,6 +587,106 @@ fn enrollment_request(
 
 fn fixture_host() -> ManifoldPeerRuntimeHost {
     fixture_host_with_lifetime(100_000)
+}
+
+#[test]
+fn ongoing_signed_gate_stays_at_actual_owner_and_discarded_candidates_have_no_effect() {
+    let mut owner = fixture_host();
+    owner.enable_owned_signed_history().unwrap();
+    let source = owner.snapshot.clone();
+    assert!(owner.signed_history_owner.is_some());
+    let observer = owner.clone();
+    assert!(observer.signed_history_owner.is_none());
+    assert!(observer
+        .ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::Rendezvous)
+        .is_err());
+    assert!(observer
+        .copy_for_transaction()
+        .ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::Rendezvous)
+        .is_err());
+    let mut discarded = owner.copy_for_transaction();
+    discarded
+        .ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::Rendezvous)
+        .unwrap();
+    assert!(discarded.signed_history_owner.is_none());
+    discarded
+        .record(
+            ManifoldPeerRuntimeAuditKind::ReciprocalEd25519,
+            id("request.discarded"),
+            Revision::INITIAL,
+            Revision::INITIAL,
+            false,
+            Some("modeled refusal".to_owned()),
+        )
+        .unwrap();
+    drop(discarded);
+    assert_eq!(owner.snapshot, source);
+    assert_eq!(
+        owner.signed_history_owner.as_ref().unwrap().state(),
+        &source.reciprocal_ed25519
+    );
+    let mut bad = owner.copy_for_transaction();
+    bad.snapshot.reciprocal_ed25519.authority_revision = Revision::new(2).unwrap();
+    assert!(owner.commit_transaction_candidate(bad).is_err());
+    assert_eq!(owner.snapshot, source);
+    let candidate = owner.copy_for_transaction();
+    owner.commit_transaction_candidate(candidate).unwrap();
+    assert!(owner.signed_history_owner.is_some());
+    assert!(owner.signed_history_candidate.is_none());
+    assert_eq!(owner.snapshot, source);
+    assert!(ManifoldPeerRuntimeHost::from_snapshot(
+        source,
+        &trust_policy(),
+        &id(PROVIDER_EPOCH_ID)
+    )
+    .is_err());
+}
+
+#[test]
+fn ongoing_parent_selection_is_fresh_explicit_and_cannot_restore_or_promote_a_clone() {
+    let mut owner = fixture_host();
+    owner.enable_owned_runtime_history().unwrap();
+    assert_eq!(
+        owner.snapshot.schema_id.as_str(),
+        PEER_ONGOING_HISTORY_SNAPSHOT_SCHEMA
+    );
+    assert_eq!(
+        owner
+            .snapshot
+            .ongoing_media_policy
+            .as_ref()
+            .unwrap()
+            .schema_id
+            .as_str(),
+        "rusty.manifold.peer.ongoing_media_policy.v2"
+    );
+    validate_snapshot(&owner.snapshot).unwrap();
+    owner.validate_signed_history_owner().unwrap();
+    owner.validate_media_runtime_owner().unwrap();
+    let request = owner
+        .current_runtime_history_request_id(&id("request.new"))
+        .unwrap();
+    assert_eq!(request.as_str(), "history.1.request.new");
+    assert!(owner.ensure_history_request(&request).is_ok());
+    assert!(owner.ensure_history_request(&id("request.old")).is_err());
+    assert!(owner.current_runtime_history_request_id(&request).is_err());
+    let mut observer = owner.clone();
+    assert!(observer.validate_signed_history_owner().is_err());
+    assert!(observer.ensure_event_capacity().is_err());
+    assert!(observer.enable_owned_signed_history().is_err());
+    assert!(ManifoldPeerRuntimeHost::from_snapshot(
+        owner.snapshot.clone(),
+        &trust_policy(),
+        &id(PROVIDER_EPOCH_ID)
+    )
+    .is_err());
+    let mut used = fixture_host();
+    used.snapshot.event_sequence = 1;
+    let before = used.snapshot.clone();
+    assert!(used.enable_owned_runtime_history().is_err());
+    assert_eq!(used.snapshot, before);
+    assert!(used.signed_history_owner.is_none());
+    assert!(used.media_runtime_owner.is_none());
 }
 
 fn fixture_host_with_lifetime(expires_at_ms: u64) -> ManifoldPeerRuntimeHost {
@@ -3525,9 +3629,13 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
             expires_at_ms: 2_000_000_000_000,
             derivative_binding: None,
         });
-    let mut host =
+    // Keep this long conformance scenario's many retained Host checkpoints on
+    // the heap. The same actual owner and default test-thread stack are used;
+    // production authority calls and all source/replay assertions stay exact.
+    let mut host = Box::new(
         ManifoldPeerRuntimeHost::from_snapshot(dynamic_snapshot, &policy, &id(PROVIDER_EPOCH_ID))
-            .expect("peer host without ambient media lease");
+            .expect("peer host without ambient media lease"),
+    );
 
     let broker_lease = ManifoldRuntimeLease {
         lease_id: grant.broker_runtime_lease_id.clone(),
@@ -3558,6 +3666,7 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
     );
     assert_eq!(outer_capability, grant.broker_capability_id);
     let admission_snapshot = ManifoldAdmissionSnapshot {
+        history_checkpoint: None,
         root_renewal_policies: Vec::new(),
         schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
         authority_id: id("authority.admission.media-test"),
@@ -3753,7 +3862,7 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
     let mut expected_migrated = host.clone();
     remove_pair_route_commands(&mut expected_migrated.snapshot.media_command_runtime);
     expected_migrated.snapshot.pair_media_routes = ManifoldPairMediaRouteAuthorityStateV2::empty();
-    assert_eq!(migrated_active_admission, expected_migrated);
+    assert_eq!(migrated_active_admission, *expected_migrated);
     assert!(broker
         .evidence()
         .consumed_bounded_use_ids
@@ -4421,7 +4530,7 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
         )
         .expect("dynamic bridge restart");
     assert!(!migration.migrated);
-    assert_eq!(restarted, host);
+    assert_eq!(restarted, *host);
     let stable = host.clone();
     assert!(matches!(
         host.release_media_runtime_lease_with_live_broker_runtime(
@@ -4506,7 +4615,7 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
             &broker,
         )
         .expect("checkpointed old-epoch joins restore against fresh Broker");
-    assert_eq!(restarted_after_rollover.0, host);
+    assert_eq!(restarted_after_rollover.0, *host);
     assert!(matches!(
         host.converge_live_broker_control_lease_revocation(&broker, &convergence_request),
         Err(ManifoldPeerRuntimeHostError::ReplayedMutation(_))
@@ -5266,6 +5375,7 @@ fn cleanup_live_fixture() -> (ManifoldPeerRuntimeHost, ManifoldBrokerRuntime, Do
     );
     assert_eq!(outer_capability, grant.broker_capability_id);
     let admission_snapshot = ManifoldAdmissionSnapshot {
+        history_checkpoint: None,
         root_renewal_policies: Vec::new(),
         schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
         authority_id: id("authority.admission.media-test"),
@@ -5783,6 +5893,8 @@ fn cleanup_peer_rejects_caller_attested_projection_even_with_genuine_signed_pend
         .is_err());
 }
 
+#[path = "fresh_pair_setup_tests.rs"]
+mod fresh_pair_setup_tests;
 #[test]
 fn finite_policy_construction_preserves_every_explicit_choice_and_exact_wire() {
     let expected = trust_policy();

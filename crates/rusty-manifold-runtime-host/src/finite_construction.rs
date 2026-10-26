@@ -15,6 +15,7 @@ impl ManifoldRuntimeHostSnapshot {
             schema_id: SchemaId::new(HOST_SNAPSHOT_SCHEMA).expect("static snapshot schema"),
             host_id,
             authority_revision: Revision::INITIAL,
+            history_checkpoint: None,
             commands,
             leases,
             applied_request_ids: Vec::new(),

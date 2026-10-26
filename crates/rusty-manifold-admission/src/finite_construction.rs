@@ -16,6 +16,7 @@ impl ManifoldAdmissionSnapshot {
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
             authority_id,
             authority_revision: Revision::INITIAL,
+            history_checkpoint: None,
             grants,
             active_tokens: Vec::new(),
             revoked_token_ids: Vec::new(),

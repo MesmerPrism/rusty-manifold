@@ -1,4 +1,15 @@
 //! Stateful product broker runtime binding admission to Runtime Host mutation.
+#[path = "unpublished_construction.rs"]
+mod unpublished_construction;
+pub use unpublished_construction::ManifoldBrokerUnpublishedConstruction;
+
+#[path = "source_bound_reestablishment.rs"]
+mod source_bound_reestablishment;
+pub use source_bound_reestablishment::*;
+
+#[path = "runtime_history.rs"]
+mod ongoing_history;
+pub use ongoing_history::*;
 
 use crate::{
     control_lease_lifecycle_capability, control_lease_lifecycle_request_sha256,
@@ -473,6 +484,9 @@ pub struct ManifoldBrokerRuntimeEvidence {
     pub schema_id: SchemaId,
     /// Explicit live process epoch.
     pub provider_epoch_id: DottedId,
+    /// Explicit live-owner history baseline; omitted for finite v5 evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_checkpoint: Option<ManifoldBrokerHistoryCheckpoint>,
     /// Current Runtime Host state.
     pub host_snapshot: ManifoldRuntimeHostSnapshot,
     /// Synchronized generic control-lease owner state and source lineage.
@@ -521,6 +535,9 @@ pub struct ManifoldBrokerRuntimeEvidence {
     pub consumed_bounded_use_ids: Vec<DottedId>,
     /// Committed lifecycle attempt receipts retained across restart.
     pub control_lease_lifecycle_receipts: Vec<ManifoldBrokerControlLeaseLifecycleReceipt>,
+    /// Actual selected-root suffix; absent in every released/finite evidence.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_bound_root_reestablishments: Vec<ManifoldSourceBoundRootReestablishmentReceipt>,
 }
 
 /// Released v4 runtime evidence accepted only by explicit v4-to-v5 migration.
@@ -875,6 +892,7 @@ struct LegacyBrokerRuntimeEvidenceV2 {
 /// One stateful Rust broker authority for a live standalone or embedded provider.
 #[derive(Debug)]
 pub struct ManifoldBrokerRuntime {
+    history_checkpoint: Option<ManifoldBrokerHistoryCheckpoint>,
     cleanup_registrations: BTreeMap<DottedId, ManifoldBrokerCleanupRegistration>,
     cleanup_clock: Option<ManifoldClockSnapshot>,
     provider_epoch_id: DottedId,
@@ -903,6 +921,7 @@ pub struct ManifoldBrokerRuntime {
     compacted_control_lease_request_ids: BTreeSet<DottedId>,
     consumed_bounded_use_ids: BTreeSet<DottedId>,
     control_lease_lifecycle_receipts: Vec<ManifoldBrokerControlLeaseLifecycleReceipt>,
+    source_bound_root_reestablishments: Vec<ManifoldSourceBoundRootReestablishmentReceipt>,
 }
 
 impl ManifoldBrokerRuntime {
@@ -929,6 +948,17 @@ impl ManifoldBrokerRuntime {
         control_lease_authority: ManifoldBrokerControlLeaseAuthority,
         admission_snapshot: ManifoldAdmissionSnapshot,
     ) -> Result<Self, ManifoldBrokerRuntimeStateError> {
+        if control_lease_authority
+            .evidence()
+            .history_checkpoint
+            .is_some()
+            || adapter.host_snapshot().history_checkpoint.is_some()
+            || admission_snapshot.history_checkpoint.is_some()
+        {
+            return Err(ManifoldBrokerRuntimeStateError::InvalidEvidence(
+                "ongoing_requires_owned_composition_selection",
+            ));
+        }
         control_lease_authority
             .validate_host_snapshot(adapter.host_snapshot())
             .map_err(ManifoldBrokerRuntimeStateError::ControlLeaseAuthority)?;
@@ -938,6 +968,7 @@ impl ManifoldBrokerRuntime {
             .map(|token| (token.token_id.clone(), token.clone()))
             .collect();
         let runtime = Self {
+            history_checkpoint: None,
             cleanup_registrations: BTreeMap::new(),
             cleanup_clock: None,
             provider_epoch_id,
@@ -961,6 +992,7 @@ impl ManifoldBrokerRuntime {
             compacted_control_lease_request_ids: BTreeSet::new(),
             consumed_bounded_use_ids: BTreeSet::new(),
             control_lease_lifecycle_receipts: Vec::new(),
+            source_bound_root_reestablishments: Vec::new(),
         };
         validate_runtime_evidence_size(&runtime.evidence())?;
         Ok(runtime)
@@ -986,8 +1018,35 @@ impl ManifoldBrokerRuntime {
         control_lease_authority: ManifoldBrokerControlLeaseAuthority,
         evidence: ManifoldBrokerRuntimeEvidence,
     ) -> Result<Self, ManifoldBrokerRuntimeStateError> {
+        Self::restore_from_owned_components(adapter, control_lease_authority, evidence, None, None)
+    }
+
+    fn restore_from_owned_components(
+        adapter: ManifoldBrokerAdapter,
+        control_lease_authority: ManifoldBrokerControlLeaseAuthority,
+        evidence: ManifoldBrokerRuntimeEvidence,
+        owned_admission: Option<ManifoldAdmissionAuthority>,
+        owned_checkpoint: Option<&ManifoldBrokerHistoryCheckpoint>,
+    ) -> Result<Self, ManifoldBrokerRuntimeStateError> {
+        adapter.host.validate_owned_history().map_err(|_| {
+            ManifoldBrokerRuntimeStateError::InvalidEvidence("held_runtime_host_invalid")
+        })?;
         validate_runtime_evidence_size(&evidence)?;
-        if evidence.schema_id.as_str() != BROKER_RUNTIME_EVIDENCE_SCHEMA
+        if evidence.schema_id.as_str()
+            != if !evidence.source_bound_root_reestablishments.is_empty() {
+                "rusty.manifold.broker.runtime_evidence.v8"
+            } else if evidence.history_checkpoint.is_some() {
+                ONGOING_BROKER_RUNTIME_EVIDENCE_SCHEMA
+            } else {
+                BROKER_RUNTIME_EVIDENCE_SCHEMA
+            }
+            || (evidence.history_checkpoint.is_some()
+                && (evidence.history_checkpoint.as_ref() != owned_checkpoint
+                    || owned_admission.is_none()
+                    || evidence
+                        .control_lease_authority
+                        .history_checkpoint
+                        .is_none()))
             || adapter.host_snapshot() != &evidence.host_snapshot
             || !control_lease_authority.is_refresh_of(&evidence.control_lease_authority)
             || evidence
@@ -1078,9 +1137,20 @@ impl ManifoldBrokerRuntime {
         control_lease_authority
             .validate_host_snapshot(adapter.host_snapshot())
             .map_err(ManifoldBrokerRuntimeStateError::ControlLeaseAuthority)?;
-        let admission =
-            ManifoldAdmissionAuthority::from_snapshot(evidence.admission_snapshot.clone())
+        let admission = if let Some(admission) = owned_admission {
+            if admission.snapshot() != &evidence.admission_snapshot {
+                return Err(ManifoldBrokerRuntimeStateError::InvalidEvidence(
+                    "held_admission_differs",
+                ));
+            }
+            admission
+                .validate_owned_history()
                 .map_err(ManifoldBrokerRuntimeStateError::Admission)?;
+            admission
+        } else {
+            ManifoldAdmissionAuthority::from_snapshot(evidence.admission_snapshot.clone())
+                .map_err(ManifoldBrokerRuntimeStateError::Admission)?
+        };
         let consumed = evidence
             .consumed_bounded_use_ids
             .iter()
@@ -1484,7 +1554,8 @@ impl ManifoldBrokerRuntime {
                 &evidence.control_lease_revocation_barriers,
                 adapter.product_features(),
             )
-            || !committed_mutation_receipts_close(
+            || !ongoing_history::committed_mutation_suffix_closes(
+                evidence.history_checkpoint.as_ref(),
                 &evidence.committed_mutation_receipts,
                 &evidence.provider_epoch_id,
                 adapter.config(),
@@ -1503,8 +1574,10 @@ impl ManifoldBrokerRuntime {
                 &evidence.admission_snapshot,
                 &admission_token_history,
             )
+            || !source_bound_reestablishment::source_bound_root_receipts_close(&evidence)
             || !lifecycle_receipts_close(
                 &evidence.control_lease_lifecycle_receipts,
+                &evidence.source_bound_root_reestablishments,
                 &evidence.provider_epoch_id,
                 adapter.config(),
                 &consumed,
@@ -1519,6 +1592,7 @@ impl ManifoldBrokerRuntime {
             ));
         }
         Ok(Self {
+            history_checkpoint: evidence.history_checkpoint.clone(),
             cleanup_registrations: BTreeMap::new(),
             cleanup_clock: None,
             provider_epoch_id: evidence.provider_epoch_id,
@@ -1543,6 +1617,7 @@ impl ManifoldBrokerRuntime {
             compacted_control_lease_request_ids,
             consumed_bounded_use_ids: consumed,
             control_lease_lifecycle_receipts: evidence.control_lease_lifecycle_receipts,
+            source_bound_root_reestablishments: evidence.source_bound_root_reestablishments,
         })
     }
 
@@ -1618,6 +1693,7 @@ impl ManifoldBrokerRuntime {
             .map_err(ManifoldBrokerRuntimeStateError::ControlLeaseAuthority)?;
         let authority_evidence = control_lease_authority.evidence();
         let evidence = ManifoldBrokerRuntimeEvidence {
+            history_checkpoint: None,
             schema_id: schema_id(BROKER_RUNTIME_EVIDENCE_SCHEMA),
             provider_epoch_id: legacy.provider_epoch_id.clone(),
             host_snapshot: migrated_host.snapshot().clone(),
@@ -1639,6 +1715,7 @@ impl ManifoldBrokerRuntime {
             compacted_control_lease_request_ids: Vec::new(),
             consumed_bounded_use_ids: legacy.consumed_bounded_use_ids,
             control_lease_lifecycle_receipts: Vec::new(),
+            source_bound_root_reestablishments: Vec::new(),
         };
         validate_runtime_evidence_size(&evidence)?;
         let config = adapter.config().clone();
@@ -1727,6 +1804,7 @@ impl ManifoldBrokerRuntime {
             .map(|use_| use_.admission_use_request_id.clone())
             .collect::<Vec<_>>();
         let evidence = ManifoldBrokerRuntimeEvidence {
+            history_checkpoint: None,
             schema_id: schema_id(BROKER_RUNTIME_EVIDENCE_SCHEMA),
             provider_epoch_id: legacy.provider_epoch_id.clone(),
             host_snapshot: migrated_host.snapshot().clone(),
@@ -1748,6 +1826,7 @@ impl ManifoldBrokerRuntime {
             compacted_control_lease_request_ids: Vec::new(),
             consumed_bounded_use_ids: legacy.consumed_bounded_use_ids.clone(),
             control_lease_lifecycle_receipts: Vec::new(),
+            source_bound_root_reestablishments: Vec::new(),
         };
         let runtime = Self::restore_from_caller_attested_exclusive_evidence(
             adapter,
@@ -1836,6 +1915,7 @@ impl ManifoldBrokerRuntime {
             }
         }
         let evidence = ManifoldBrokerRuntimeEvidence {
+            history_checkpoint: None,
             schema_id: schema_id(BROKER_RUNTIME_EVIDENCE_SCHEMA),
             provider_epoch_id: legacy.provider_epoch_id,
             host_snapshot: migrated_host_snapshot,
@@ -1858,6 +1938,7 @@ impl ManifoldBrokerRuntime {
             compacted_control_lease_request_ids: Vec::new(),
             consumed_bounded_use_ids: legacy.consumed_bounded_use_ids,
             control_lease_lifecycle_receipts: lifecycle_receipts,
+            source_bound_root_reestablishments: Vec::new(),
         };
         let runtime = Self::restore_from_caller_attested_exclusive_evidence(
             adapter,
@@ -1970,6 +2051,7 @@ impl ManifoldBrokerRuntime {
             .collect::<Vec<_>>();
         migrated_pending_bounded_use_ids.sort();
         let evidence = ManifoldBrokerRuntimeEvidence {
+            history_checkpoint: None,
             schema_id: schema_id(BROKER_RUNTIME_EVIDENCE_SCHEMA),
             provider_epoch_id: legacy.provider_epoch_id.clone(),
             host_snapshot: migrated_host.snapshot().clone(),
@@ -1991,6 +2073,7 @@ impl ManifoldBrokerRuntime {
             compacted_control_lease_request_ids: Vec::new(),
             consumed_bounded_use_ids: legacy.consumed_bounded_use_ids.clone(),
             control_lease_lifecycle_receipts: Vec::new(),
+            source_bound_root_reestablishments: Vec::new(),
         };
         let runtime = Self::restore_from_caller_attested_exclusive_evidence(
             adapter,
@@ -2215,6 +2298,8 @@ impl ManifoldBrokerRuntime {
             != BROKER_CONTROL_LEASE_LIFECYCLE_REQUEST_SCHEMA
         {
             Some(ManifoldBrokerControlLeaseLifecycleRejectionReason::SchemaMismatch)
+        } else if !self.control_history_request_matches(lifecycle_request.operation.request_id()) {
+            Some(ManifoldBrokerControlLeaseLifecycleRejectionReason::ReplayedLifecycleRequest)
         } else if lifecycle_request.provider_epoch_id != self.provider_epoch_id {
             Some(ManifoldBrokerControlLeaseLifecycleRejectionReason::ProviderEpochMismatch)
         } else if self.has_pending_revocation_barrier() {
@@ -2684,7 +2769,14 @@ impl ManifoldBrokerRuntime {
     #[must_use]
     pub fn evidence(&self) -> ManifoldBrokerRuntimeEvidence {
         ManifoldBrokerRuntimeEvidence {
-            schema_id: schema_id(BROKER_RUNTIME_EVIDENCE_SCHEMA),
+            schema_id: schema_id(if !self.source_bound_root_reestablishments.is_empty() {
+                "rusty.manifold.broker.runtime_evidence.v8"
+            } else if self.history_checkpoint.is_some() {
+                ONGOING_BROKER_RUNTIME_EVIDENCE_SCHEMA
+            } else {
+                BROKER_RUNTIME_EVIDENCE_SCHEMA
+            }),
+            history_checkpoint: self.history_checkpoint.clone(),
             provider_epoch_id: self.provider_epoch_id.clone(),
             host_snapshot: self.adapter.host_snapshot().clone(),
             control_lease_authority: self.control_lease_authority.evidence(),
@@ -2735,6 +2827,7 @@ impl ManifoldBrokerRuntime {
                 .collect(),
             consumed_bounded_use_ids: self.consumed_bounded_use_ids.iter().cloned().collect(),
             control_lease_lifecycle_receipts: self.control_lease_lifecycle_receipts.clone(),
+            source_bound_root_reestablishments: self.source_bound_root_reestablishments.clone(),
         }
     }
 
@@ -2835,7 +2928,8 @@ impl ManifoldBrokerRuntime {
         resulting_provider_epoch_id: DottedId,
         fresh_admission_snapshot: ManifoldAdmissionSnapshot,
     ) -> Result<ManifoldBrokerRuntimeEpochRolloverReceipt, ManifoldBrokerRuntimeStateError> {
-        if resulting_provider_epoch_id == self.provider_epoch_id
+        if self.history_checkpoint.is_some()
+            || resulting_provider_epoch_id == self.provider_epoch_id
             || !self.cleanup_registrations.is_empty()
             || !self.adapter.host_snapshot().leases.is_empty()
             || !self.control_lease_authority.runtime_leases().is_empty()
@@ -3125,10 +3219,7 @@ impl ManifoldBrokerRuntime {
         }
 
         let adoption_request = control_lease_adoption_request(
-            transition_candidate
-                .adapter
-                .host_snapshot()
-                .authority_revision,
+            transition_candidate.adapter.host_snapshot(),
             &transition,
         );
         let host_adoption = transition_candidate.adapter.apply_control_lease_adoption(
@@ -3353,8 +3444,10 @@ impl ManifoldBrokerRuntime {
             );
             return self.retain_revocation_recovery_receipt(receipt);
         }
-        let adoption_request =
-            control_lease_adoption_request(prior_host_revision, &barrier.authority_transition);
+        let adoption_request = control_lease_adoption_request(
+            candidate.adapter.host_snapshot(),
+            &barrier.authority_transition,
+        );
         let adoption = candidate
             .adapter
             .apply_control_lease_adoption(&adoption_request, &candidate.control_lease_authority);
@@ -3469,6 +3562,8 @@ impl ManifoldBrokerRuntime {
             .get(&request.admission_use_request_id);
         if request.schema_id.as_str() != BROKER_CONTROL_LEASE_LIFECYCLE_REQUEST_SCHEMA {
             Some(ManifoldBrokerControlLeaseLifecycleRejectionReason::SchemaMismatch)
+        } else if !self.control_history_request_matches(request.operation.request_id()) {
+            Some(ManifoldBrokerControlLeaseLifecycleRejectionReason::ReplayedLifecycleRequest)
         } else if request.provider_epoch_id != self.provider_epoch_id {
             Some(ManifoldBrokerControlLeaseLifecycleRejectionReason::ProviderEpochMismatch)
         } else if self.has_pending_revocation_barrier() {
@@ -3590,10 +3685,7 @@ impl ManifoldBrokerRuntime {
             return None;
         }
         let adoption_request = control_lease_adoption_request(
-            transition_candidate
-                .adapter
-                .host_snapshot()
-                .authority_revision,
+            transition_candidate.adapter.host_snapshot(),
             &transition,
         );
         let host_adoption = transition_candidate.adapter.apply_control_lease_adoption(
@@ -3746,10 +3838,8 @@ impl ManifoldBrokerRuntime {
             }
             Err(error) => return Some(control_lease_authority_rejection(&error)),
         };
-        let adoption_request = control_lease_adoption_request(
-            preview.adapter.host_snapshot().authority_revision,
-            &transition,
-        );
+        let adoption_request =
+            control_lease_adoption_request(preview.adapter.host_snapshot(), &transition);
         match preview
             .adapter
             .apply_control_lease_adoption(&adoption_request, &preview.control_lease_authority)
@@ -3986,7 +4076,11 @@ impl ManifoldBrokerRuntime {
 
     fn staged_copy(&self) -> Result<Self, ManifoldBrokerRuntimeStateError> {
         let evidence = self.evidence();
-        let control_lease_authority =
+        let control_lease_authority = if self.history_checkpoint.is_some() {
+            self.control_lease_authority
+                .copy_from_live_owner()
+                .map_err(ManifoldBrokerRuntimeStateError::ControlLeaseAuthority)?
+        } else {
             ManifoldBrokerControlLeaseAuthority::refresh_from_v2_evidence(
                 evidence.control_lease_authority.clone(),
                 evidence
@@ -3995,11 +4089,16 @@ impl ManifoldBrokerRuntime {
                     .clone(),
                 evidence.control_lease_authority.current_clock.clone(),
             )
-            .map_err(ManifoldBrokerRuntimeStateError::ControlLeaseAuthority)?;
-        let mut candidate = Self::restore_from_caller_attested_exclusive_evidence(
+            .map_err(ManifoldBrokerRuntimeStateError::ControlLeaseAuthority)?
+        };
+        let mut candidate = Self::restore_from_owned_components(
             self.adapter.clone(),
             control_lease_authority,
             evidence,
+            self.history_checkpoint
+                .as_ref()
+                .map(|_| self.admission.clone()),
+            self.history_checkpoint.as_ref(),
         )?;
         // This copy comes from the exclusively held live runtime, never a
         // caller's v5 projection. Complete persistence requires v6 restore.
@@ -4208,6 +4307,9 @@ fn control_lease_transition_applied(transition: &ManifoldBrokerControlLeaseTrans
         ManifoldBrokerControlLeaseTransitionApplication::Revocation(application) => {
             application.applied_snapshot.is_some()
         }
+        ManifoldBrokerControlLeaseTransitionApplication::SourceBoundReestablishment(
+            application,
+        ) => application.applied_snapshot.is_some(),
         ManifoldBrokerControlLeaseTransitionApplication::Expiry(application) => {
             application.applied_snapshot.is_some()
         }
@@ -4215,7 +4317,7 @@ fn control_lease_transition_applied(transition: &ManifoldBrokerControlLeaseTrans
 }
 
 fn control_lease_adoption_request(
-    expected_host_authority_revision: Revision,
+    host: &ManifoldRuntimeHostSnapshot,
     transition: &ManifoldBrokerControlLeaseTransition,
 ) -> ManifoldRuntimeControlLeaseAdoptionRequest {
     let application = match &transition.application {
@@ -4231,15 +4333,29 @@ fn control_lease_adoption_request(
         ManifoldBrokerControlLeaseTransitionApplication::Revocation(application) => {
             ManifoldRuntimeControlLeaseAuthorityApplication::Revocation(application.clone())
         }
+        ManifoldBrokerControlLeaseTransitionApplication::SourceBoundReestablishment(
+            application,
+        ) => ManifoldRuntimeControlLeaseAuthorityApplication::SourceBoundReestablishment(
+            application.clone(),
+        ),
         ManifoldBrokerControlLeaseTransitionApplication::Expiry(application) => {
             ManifoldRuntimeControlLeaseAuthorityApplication::Expiry(application.clone())
         }
     };
     ManifoldRuntimeControlLeaseAdoptionRequest {
         schema_id: schema_id(HOST_CONTROL_LEASE_ADOPTION_REQUEST_SCHEMA),
-        adoption_id: DottedId::new(format!("adoption.{}", transition.application.request_id()))
-            .expect("validated lifecycle request id derives a valid adoption id"),
-        expected_host_authority_revision,
+        adoption_id: DottedId::new(host.history_checkpoint.as_ref().map_or_else(
+            || format!("adoption.{}", transition.application.request_id()),
+            |checkpoint| {
+                format!(
+                    "history.{}.adoption.{}",
+                    checkpoint.request_epoch,
+                    transition.application.request_id()
+                )
+            },
+        ))
+        .expect("validated lifecycle request derives bounded owner-qualified adoption id"),
+        expected_host_authority_revision: host.authority_revision,
         prior_authority_snapshot: transition.prior_authority_snapshot.clone(),
         application,
     }
@@ -4439,35 +4555,37 @@ fn bounded_use_admission_revision_closes(
                     .any(|active| active == token)
                     || admission_snapshot
                         .revoked_token_ids
-                        .contains(&token.token_id))
+                        .contains(&token.token_id)
+                    || ongoing_history::baseline_token(admission_snapshot, token))
         });
-    let exact_authorization_audit = admission_snapshot.audit_events.iter().any(|event| {
-        let base_closes = event.operation == ManifoldAdmissionOperation::AuthorizeUse
-            && event.request_id == use_.admission_use_request_id
-            && event.applied
-            && event.rejection_reason.is_none()
-            && event.resulting_authority_revision == use_.admission_authority_revision
-            && event.prior_authority_revision.next() == Some(use_.admission_authority_revision);
-        if !base_closes {
-            return false;
-        }
-        let Some(binding) = event.use_authorization.as_ref() else {
-            return !require_exact_audit_binding;
-        };
-        let Some(history_token) = admission_token_history.get(&use_.token_id) else {
-            return false;
-        };
-        binding.token == *history_token
-            && binding.request.request_id == use_.admission_use_request_id
-            && binding.request.token_id == use_.token_id
-            && binding.request.identity == use_.identity
-            && binding.request.capability_id == use_.capability_id
-            && binding
-                .request
-                .expires_at_ms
-                .min(binding.token.expires_at_ms)
-                == use_.expires_at_ms
-    });
+    let exact_authorization_audit =
+        ongoing_history::admission_audits(admission_snapshot).any(|event| {
+            let base_closes = event.operation == ManifoldAdmissionOperation::AuthorizeUse
+                && event.request_id == use_.admission_use_request_id
+                && event.applied
+                && event.rejection_reason.is_none()
+                && event.resulting_authority_revision == use_.admission_authority_revision
+                && event.prior_authority_revision.next() == Some(use_.admission_authority_revision);
+            if !base_closes {
+                return false;
+            }
+            let Some(binding) = event.use_authorization.as_ref() else {
+                return !require_exact_audit_binding;
+            };
+            let Some(history_token) = admission_token_history.get(&use_.token_id) else {
+                return false;
+            };
+            binding.token == *history_token
+                && binding.request.request_id == use_.admission_use_request_id
+                && binding.request.token_id == use_.token_id
+                && binding.request.identity == use_.identity
+                && binding.request.capability_id == use_.capability_id
+                && binding
+                    .request
+                    .expires_at_ms
+                    .min(binding.token.expires_at_ms)
+                    == use_.expires_at_ms
+        });
     use_.schema_id.as_str() == BROKER_BOUNDED_USE_SCHEMA
         && exact_grant
         && exact_token
@@ -4489,13 +4607,14 @@ fn admission_token_history_entry_closes(
                 .all(|capability| grant.capabilities.contains(capability))
             && token.expires_at_ms <= grant.expires_at_ms
     });
-    let exact_issue_audit = admission_snapshot.audit_events.iter().any(|event| {
-        event.operation == ManifoldAdmissionOperation::IssueToken
-            && event.applied
-            && event.rejection_reason.is_none()
-            && event.resulting_authority_revision == token.issued_authority_revision
-            && event.prior_authority_revision.next() == Some(token.issued_authority_revision)
-    });
+    let exact_issue_audit = ongoing_history::baseline_token(admission_snapshot, token)
+        || admission_snapshot.audit_events.iter().any(|event| {
+            event.operation == ManifoldAdmissionOperation::IssueToken
+                && event.applied
+                && event.rejection_reason.is_none()
+                && event.resulting_authority_revision == token.issued_authority_revision
+                && event.prior_authority_revision.next() == Some(token.issued_authority_revision)
+        });
     token.schema_id.as_str() == rusty_manifold_admission::ADMISSION_TOKEN_SCHEMA
         && exact_grant
         && exact_issue_audit
@@ -4505,7 +4624,8 @@ fn admission_token_history_entry_closes(
             .any(|active| active == token)
             || admission_snapshot
                 .revoked_token_ids
-                .contains(&token.token_id))
+                .contains(&token.token_id)
+            || ongoing_history::baseline_token(admission_snapshot, token))
 }
 
 fn revocation_barriers_close(
@@ -4785,6 +4905,7 @@ fn revocation_barriers_close(
 #[allow(clippy::too_many_lines)]
 fn lifecycle_receipts_close(
     receipts: &[ManifoldBrokerControlLeaseLifecycleReceipt],
+    root_receipts: &[ManifoldSourceBoundRootReestablishmentReceipt],
     provider_epoch_id: &DottedId,
     config: &ManifoldBrokerAdapterConfig,
     consumed_use_ids: &BTreeSet<DottedId>,
@@ -4922,6 +5043,9 @@ fn lifecycle_receipts_close(
                             .as_ref()
                             .is_some_and(|use_| use_.expiry_lease_ids == expired)
                     }
+                    ManifoldBrokerControlLeaseTransitionApplication::SourceBoundReestablishment(
+                        _,
+                    ) => false,
                     ManifoldBrokerControlLeaseTransitionApplication::Issue(_)
                     | ManifoldBrokerControlLeaseTransitionApplication::Renewal(_)
                     | ManifoldBrokerControlLeaseTransitionApplication::Release(_)
@@ -4952,6 +5076,21 @@ fn lifecycle_receipts_close(
     });
     receipts_close
         && authority_evidence.transitions.iter().all(|transition| {
+            if matches!(
+                transition.application,
+                ManifoldBrokerControlLeaseTransitionApplication::SourceBoundReestablishment(_)
+            ) {
+                return root_receipts
+                    .iter()
+                    .filter(|r| {
+                        r.control_lease_transition.as_ref() == Some(transition)
+                            && r.runtime_adoption.as_ref().is_some_and(|a| {
+                                control_lease_host_adoption_closes(a, transition, host_snapshot)
+                            })
+                    })
+                    .count()
+                    == 1;
+            }
             receipts
                 .iter()
                 .filter(|receipt| {
@@ -4972,12 +5111,21 @@ fn lifecycle_receipts_close(
                 )
                 == 1
         })
-        && accepted_adoption_ids.len().saturating_add(
-            recovery_receipts
-                .iter()
-                .filter(|receipt| receipt.applied)
-                .count(),
-        ) == authority_evidence.transitions.len()
+        && accepted_adoption_ids
+            .len()
+            .saturating_add(
+                recovery_receipts
+                    .iter()
+                    .filter(|receipt| receipt.applied)
+                    .count(),
+            )
+            .saturating_add(
+                root_receipts
+                    .iter()
+                    .filter(|r| r.control_lease_transition.is_some())
+                    .count(),
+            )
+            == authority_evidence.transitions.len()
 }
 
 #[allow(clippy::too_many_lines)]
@@ -5076,6 +5224,23 @@ fn control_lease_host_adoption_closes(
                 .map(|lease| lease.lease_id.clone())
                 .collect::<Vec<_>>(),
         ),
+        ManifoldBrokerControlLeaseTransitionApplication::SourceBoundReestablishment(
+            application,
+        ) => (
+            ManifoldRuntimeControlLeaseAdoptionOperation::SourceBoundReestablishment,
+            &application.authority_id,
+            &application.application_id,
+            application.from_authority_revision,
+            application
+                .applied_snapshot
+                .as_ref()
+                .map_or(application.from_authority_revision, |s| {
+                    s.authority_revision
+                }),
+            Vec::new(),
+            vec![application.lease_id.clone()],
+            Vec::new(),
+        ),
         ManifoldBrokerControlLeaseTransitionApplication::Expiry(application) => (
             ManifoldRuntimeControlLeaseAdoptionOperation::Expiry,
             &application.authority_id,
@@ -5097,9 +5262,12 @@ fn control_lease_host_adoption_closes(
                 .collect::<Vec<_>>(),
         ),
     };
-    let expected_adoption_id =
-        DottedId::new(format!("adoption.{}", transition.application.request_id()))
-            .expect("validated lifecycle request id derives a valid adoption id");
+    let adoption_suffix = format!("adoption.{}", transition.application.request_id());
+    let expected_adoption_id = DottedId::new(match &host_snapshot.history_checkpoint {
+        Some(checkpoint) => format!("history.{}.{}", checkpoint.request_epoch, adoption_suffix),
+        None => adoption_suffix,
+    })
+    .expect("validated lifecycle request id derives a valid adoption id");
     let host_revision_closes = adoption
         .prior_host_authority_revision
         .next()
@@ -5117,7 +5285,15 @@ fn control_lease_host_adoption_closes(
         })
         .count();
 
-    adoption.schema_id.as_str() == HOST_CONTROL_LEASE_ADOPTION_RECEIPT_SCHEMA
+    adoption.schema_id.as_str()
+        == if matches!(
+            transition.application,
+            ManifoldBrokerControlLeaseTransitionApplication::SourceBoundReestablishment(_)
+        ) {
+            "rusty.manifold.runtime_host.control_lease_adoption_receipt.v3"
+        } else {
+            HOST_CONTROL_LEASE_ADOPTION_RECEIPT_SCHEMA
+        }
         && adoption.authority_host_id == host_snapshot.host_id
         && adoption.adoption_id == expected_adoption_id
         && adoption.operation == expected_operation
@@ -5288,6 +5464,7 @@ fn normalized_v5_evidence_from_v4(
         }
     }
     ManifoldBrokerRuntimeEvidence {
+        history_checkpoint: None,
         schema_id: schema_id(BROKER_RUNTIME_EVIDENCE_SCHEMA),
         provider_epoch_id: legacy.provider_epoch_id,
         host_snapshot: migrated_host_snapshot,
@@ -5310,6 +5487,7 @@ fn normalized_v5_evidence_from_v4(
         compacted_control_lease_request_ids: Vec::new(),
         consumed_bounded_use_ids: legacy.consumed_bounded_use_ids,
         control_lease_lifecycle_receipts: legacy.control_lease_lifecycle_receipts,
+        source_bound_root_reestablishments: Vec::new(),
     }
 }
 
@@ -5915,6 +6093,7 @@ mod tests {
         let adapter = ManifoldBrokerAdapter::new(config, &packaged_lock, &control_lease_authority)
             .expect("adapter");
         let admission = ManifoldAdmissionSnapshot {
+            history_checkpoint: None,
             root_renewal_policies: Vec::new(),
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
             authority_id: id("authority.admission.runtime.test"),
@@ -5987,6 +6166,7 @@ mod tests {
             .expect("adapter");
         let capability = command_capability(&id(command));
         let admission = ManifoldAdmissionSnapshot {
+            history_checkpoint: None,
             root_renewal_policies: Vec::new(),
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
             authority_id: id("authority.admission.runtime.two_client"),
@@ -8138,6 +8318,7 @@ mod tests {
             .collect::<BTreeSet<_>>();
         assert!(lifecycle_receipts_close(
             &recovered_evidence.control_lease_lifecycle_receipts,
+            &recovered_evidence.source_bound_root_reestablishments,
             &recovered_evidence.provider_epoch_id,
             runtime.adapter.config(),
             &recovered_consumed,

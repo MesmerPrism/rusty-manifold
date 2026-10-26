@@ -1,0 +1,51 @@
+{
+  "schema": "inert.manifold-java.archive-canonical-vectors.v1",
+  "status": "AUTHORED_UNRUN",
+  "actual_runtime_observation": false,
+  "source_domain_utf8": "rusty.manifold.peer.fresh_history_archive_source.v1",
+  "domain_separator_hex": "00",
+  "vectors": [
+    {
+      "label": "scalar-order-utf8",
+      "value": {
+        "z": "a/雪\n",
+        "a": [
+          null,
+          true,
+          -3,
+          9223372036854775807
+        ]
+      },
+      "canonical_utf8": "{\"a\":[null,true,-3,9223372036854775807],\"z\":\"a/雪\\n\"}",
+      "canonical_sha256": "3b11a1634f8734d869262a31be5167623c288a3547ba667fd909256cc7edac0e",
+      "archive_source_sha256": "sha256:a7ff030b5843ccbb1f1d83efbb2126f5e6079b3cbf201c90b24ce18a7f431c6e"
+    },
+    {
+      "label": "source-shape",
+      "value": {
+        "$schema": "test.manifold.archive.source.v1",
+        "event_sequence": 7,
+        "authority_revision": 4,
+        "source": {
+          "peer.a": "sha256:abababababababababababababababababababababababababababababababab",
+          "peer.b": "<x>\\y\t"
+        },
+        "empty": []
+      },
+      "canonical_utf8": "{\"$schema\":\"test.manifold.archive.source.v1\",\"authority_revision\":4,\"empty\":[],\"event_sequence\":7,\"source\":{\"peer.a\":\"sha256:abababababababababababababababababababababababababababababababab\",\"peer.b\":\"<x>\\\\y\\t\"}}",
+      "canonical_sha256": "796732a96ff7920ad143f6fd4e16c4bf5398204cec1f41274d20648f4534fbcb",
+      "archive_source_sha256": "sha256:23f5affb4e8eca29d1c9dcf18d536ebe36c8cc59067592ae82da04726844a513"
+    }
+  ],
+  "refusal_values": [
+    {
+      "a": 1.25
+    },
+    {
+      "雪": 1
+    },
+    {
+      "a": 18446744073709551615
+    }
+  ]
+}

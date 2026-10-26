@@ -609,8 +609,10 @@ name = "rusty-manifold-admission"
 version = "0.1.0"
 dependencies = [
  "rusty-manifold-model",
+ "rusty-manifold-runtime-host",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]
@@ -730,6 +732,7 @@ dependencies = [
  "rusty-manifold-model",
  "serde",
  "serde_json",
+ "sha2",
 ]
 
 [[package]]

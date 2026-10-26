@@ -116,6 +116,11 @@ impl ManifoldAdmissionAuthority {
         now_ms: u64,
         retained_authorization: Option<&ManifoldAdmissionReceipt>,
     ) -> Result<ManifoldAdmissionGrantRenewalReceipt, ManifoldAdmissionError> {
+        if !ongoing_history::request_matches(&self.snapshot, &request.request_id) {
+            return Err(ManifoldAdmissionError::InvalidSnapshot(
+                "grant_renewal_stale_history_epoch",
+            ));
+        }
         if let Some(event) = self.snapshot.audit_events.iter().find(|event| {
             event.operation == ManifoldAdmissionOperation::RenewGrant
                 && event.request_id == request.request_id
@@ -176,7 +181,7 @@ impl ManifoldAdmissionAuthority {
                 .snapshot
                 .consumed_request_ids
                 .contains(&request.request_id)
-            || self.snapshot.audit_events.len().saturating_add(2) > MAX_ADMISSION_AUDIT_EVENTS
+            || ongoing_history::audit_capacity_exhausted(&self.snapshot, 2)
             || self
                 .snapshot
                 .authority_revision
@@ -280,8 +285,28 @@ impl ManifoldAdmissionAuthority {
 pub(super) fn validate_grant_renewal_history(
     snapshot: &ManifoldAdmissionSnapshot,
 ) -> Result<(), ManifoldAdmissionError> {
-    let mut latest = BTreeMap::new();
+    let mut latest = snapshot
+        .history_checkpoint
+        .as_ref()
+        .map_or_else(BTreeMap::new, |c| {
+            c.grants.iter().map(|g| (g.grant_id.clone(), g)).collect()
+        });
     for event in &snapshot.audit_events {
+        if let Some(binding) =
+            source_bound_reestablishment::validate_source_bound_root_history_event(event, snapshot)?
+        {
+            let id = &binding.request.prior_grant.grant_id;
+            if latest
+                .get(id)
+                .is_some_and(|old| *old != &binding.request.prior_grant)
+            {
+                return Err(ManifoldAdmissionError::InvalidSnapshot(
+                    "root mixed history preimage",
+                ));
+            }
+            latest.insert(id.clone(), &binding.resulting_grant);
+            continue;
+        }
         match (&event.operation, event.applied, &event.grant_renewal) {
             (ManifoldAdmissionOperation::RenewGrant, true, Some(binding)) => {
                 let request = &binding.request;
@@ -378,6 +403,7 @@ mod tests {
         };
         let capability = id("capability.manifold.control_lease.renew");
         let mut owner = ManifoldAdmissionAuthority::from_snapshot(ManifoldAdmissionSnapshot {
+            history_checkpoint: None,
             root_renewal_policies: if horizon == 300_000 {
                 Vec::new()
             } else {

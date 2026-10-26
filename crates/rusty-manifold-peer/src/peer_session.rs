@@ -1260,19 +1260,35 @@ fn review_and_apply_common_lan_session(
         }
         _ => None,
     });
-    let renewal_scope_valid = previous.is_some_and(|old| {
-        !old.revoked
-            && old.proposal.expires_at_ms > case.now_ms
-            && proposal.expires_at_ms > old.proposal.expires_at_ms
-            && proposal.subject_peer_id == old.proposal.subject_peer_id
-            && proposal.candidate_peer_id == old.proposal.candidate_peer_id
-            && proposal.initiator_peer_id == old.proposal.initiator_peer_id
-            && proposal.responder_peer_id == old.proposal.responder_peer_id
-            && proposal.transport == old.proposal.transport
-            && proposal.requested_capability_ids == old.proposal.requested_capability_ids
-            && proposal.proposal_id != old.proposal.proposal_id
-            && case.reciprocal_receipt.receipt_id != old.reciprocal_receipt_id
-    });
+    let renewal_scope_valid =
+        previous.is_some_and(|old| {
+            let prior_is_above_floor = case.current_reciprocal_state.accepted_receipts.iter().any(
+                |receipt| match receipt {
+                    ManifoldReciprocalEd25519ReceiptV3::CommonLan(r)
+                        if r.receipt_id == old.reciprocal_receipt_id =>
+                    {
+                        crate::fresh_pair_setup_floor_allows(
+                            &case.current_reciprocal_state.fresh_setup_fences,
+                            &r.peer_ids,
+                            r.enrollment_authority_revision,
+                        )
+                    }
+                    _ => false,
+                },
+            );
+            prior_is_above_floor
+                && !old.revoked
+                && old.proposal.expires_at_ms > case.now_ms
+                && proposal.expires_at_ms > old.proposal.expires_at_ms
+                && proposal.subject_peer_id == old.proposal.subject_peer_id
+                && proposal.candidate_peer_id == old.proposal.candidate_peer_id
+                && proposal.initiator_peer_id == old.proposal.initiator_peer_id
+                && proposal.responder_peer_id == old.proposal.responder_peer_id
+                && proposal.transport == old.proposal.transport
+                && proposal.requested_capability_ids == old.proposal.requested_capability_ids
+                && proposal.proposal_id != old.proposal.proposal_id
+                && case.reciprocal_receipt.receipt_id != old.reciprocal_receipt_id
+        });
     let mut rejection = None;
     let pair = [&proposal.initiator_peer_id, &proposal.responder_peer_id];
     if !peer_session_state_v2_is_well_formed(state)
@@ -2118,6 +2134,8 @@ mod tests {
             expires_at_ms: 50_000,
         };
         let reciprocal = ManifoldReciprocalEd25519AuthorityStateV3 {
+            history_checkpoint: None,
+            fresh_setup_fences: Vec::new(),
             schema_id: schema(crate::RECIPROCAL_ED25519_STATE_V3_SCHEMA),
             authority_revision: Revision::new(2).unwrap(),
             applied_request_ids: vec![request_id],

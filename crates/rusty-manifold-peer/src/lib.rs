@@ -1,5 +1,11 @@
 //! Manifold-owned peer identity and accepted low-rate peer-status authority.
 
+mod fresh_history_archive;
+pub use fresh_history_archive::*;
+mod fresh_phase_prepare;
+pub use fresh_phase_prepare::*;
+mod fresh_pair_setup;
+pub use fresh_pair_setup::*;
 mod direct_lane_lease;
 mod enrollment;
 mod pair_media_route;
@@ -36,7 +42,9 @@ pub const PEER_AUDIT_SCHEMA: &str = "rusty.manifold.peer.audit_event.v1";
 /// Peer application receipt schema.
 pub const PEER_APPLICATION_SCHEMA: &str = "rusty.manifold.peer.application_receipt.v1";
 
-const MAX_STATUS_TTL_MS: u64 = 300_000;
+/// Existing low-rate status validity limit; separate from credential validity.
+pub const MAX_PEER_STATUS_TTL_MS: u64 = 300_000;
+const MAX_STATUS_TTL_MS: u64 = MAX_PEER_STATUS_TTL_MS;
 const MAX_CAPABILITIES: usize = 64;
 
 /// Bounded peer roles that do not grant command authority.
@@ -603,3 +611,6 @@ mod tests {
         );
     }
 }
+
+mod source_bound_roots;
+pub use source_bound_roots::*;

@@ -57,6 +57,9 @@ impl ManifoldPeerRuntimeTrustPolicy {
             media_runtime_host_id: fields.media_runtime_host_id,
             media_runtime_lease_scope_id: fields.media_runtime_lease_scope_id,
             direct_lane_runtime_lease_scope_id: fields.direct_lane_runtime_lease_scope_id,
+            fresh_setup_policy: None,
+            fresh_setup_local_peer_id: None,
+            fresh_setup_enrollment_selection: None,
         }
     }
 }

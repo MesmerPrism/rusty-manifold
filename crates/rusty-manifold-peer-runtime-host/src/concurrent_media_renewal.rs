@@ -55,7 +55,15 @@ impl ManifoldPeerRuntimeHost {
                 "coupled renewal replay changed source receipt",
             ));
         }
+        if self.snapshot.ongoing_media_policy.is_some() {
+            self.cumulative_concurrent_media_renewals()?
+                .checked_add(1)
+                .ok_or_else(|| invalid_snapshot("cumulative renewal count exhausted"))?;
+        }
         if self.snapshot.concurrent_media_renewals.len() >= 32
+            || !self
+                .validate_peer_session_v2(&paired.session_id, now_ms)
+                .current
             || !paired.applied
             || !self.snapshot.concurrent_session_renewals.contains(paired)
             || !self.snapshot.signed_topology_authorizations.contains(
@@ -208,7 +216,7 @@ impl ManifoldPeerRuntimeHost {
             prior_routes: routes,
             renewed_routes: renewed_routes.clone(),
         };
-        let mut candidate = self.clone();
+        let mut candidate = self.copy_for_transaction();
         *candidate
             .snapshot
             .media_command_runtime
@@ -246,8 +254,12 @@ impl ManifoldPeerRuntimeHost {
             true,
             None,
         )?;
+        candidate.project_media_runtime_snapshot(
+            candidate.snapshot.media_command_runtime.clone(),
+            now_ms,
+        )?;
         validate_snapshot(&candidate.snapshot)?;
-        self.snapshot = candidate.snapshot;
+        self.commit_transaction_candidate(candidate)?;
         Ok(receipt)
     }
 }
@@ -378,12 +390,14 @@ pub(super) fn validate_concurrent_media_renewals(
             || latest_lease.get(&lifetime).is_some_and(
                 |previous: &&ManifoldConcurrentMediaAuthorityRenewalReceipt| {
                     previous.renewed_inner_lease != receipt.prior_inner_lease
+                        && !ongoing_media::checkpoint_bridges(snapshot, previous, receipt)
                 },
             )
             || latest_graph.get(&graph).is_some_and(
                 |previous: &&ManifoldConcurrentMediaAuthorityRenewalReceipt| {
-                    previous.renewed_media != receipt.prior_media
-                        || previous.renewed_routes != receipt.prior_routes
+                    (previous.renewed_media != receipt.prior_media
+                        || previous.renewed_routes != receipt.prior_routes)
+                        && !ongoing_media::checkpoint_bridges(snapshot, previous, receipt)
                 },
             )
         {

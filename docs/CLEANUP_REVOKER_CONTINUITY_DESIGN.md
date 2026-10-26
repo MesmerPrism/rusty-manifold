@@ -150,3 +150,52 @@ uncertain effects remain Pending. Route cleanup acceptance still requires the
 actual retained effect evidence, and does not prove app camera, GPU or process
 teardown. Reboot clock continuity and exclusive durable storage remain separate
 requirements from same-process credential renewal.
+
+## Opted-in SourceBound dormant Peer roots
+
+The selected ongoing fresh-setup owner can re-establish an expired retained
+Active grant and outer control lease through a distinct owner transaction. This
+is not the released current-token renewal operation. A verifier is registered
+once with the same pristine Broker and Runtime Host before enrollment; only the
+nonclone signed Peer owner retains its matching issuer. Serialized evidence,
+observer copies and restored bytes cannot create that permit.
+
+The ordering is physical ARM, a genuinely current fresh bilateral pair, explicit
+root re-establishment if a component expired, then ordinary media admission.
+Pair establishment itself does not require the expired Broker root. The root
+transaction derives its pair, enrolled unrevoked keys, selected source and exact
+current setup floor from the actual Peer owner. Native supplies its private
+same-actor/config/ARM NeverStarted or earned FullyStopped witness. Independent
+Own preview may remain live; pending Peer work and unjoined effects refuse.
+
+Grant and lease are independent components. An expired retained Active component
+receives a new exact receipt; a still-current component is retained byte-exact
+and has no fabricated no-op application. At least one component must change.
+Grant identity, client-lock fingerprint and capabilities, and lease identity,
+holder, scope and capability remain unchanged. The staged admission, lease and
+Runtime Host publication commits only after every owning validator closes.
+Actual signed expiry remains strict. Explicit revocation, removal or terminal
+expiry sweep cannot be reversed by this operation. Read-only observations do not
+sweep a dormant retained root.
+
+The retained prior expiry and old Original outcome remain history. The inherited
+235-second pair and 300-second credential/root policy windows have no established
+functional or platform rationale here. Re-establishment does not justify those
+durations, inflate them, or classify an expired witness as current. An entered
+Start that exhausts validity while preparing resources needs its separate owned
+preparation/commit protocol; this pre-Start operation cannot replay or relabel it.
+
+
+## SourceBound resource-phase ordering
+
+The Android owner prepares actual SDK resources under its separate nonclone
+resource custody before the final expiring pair/root/media admission. Signed
+format metadata has no media rights or estimated age deadline. Manifold still
+requires its actual live selected owner, exact signed source, unrevoked keys,
+current setup floor and actual current pair at root/media admission. Dormant
+resources are neither live media authority nor terminal resource absence.
+Native and app journals retain any UNKNOWN resource Original until explicit
+same-owner abort/joins and durable metadata custody. Manifold snapshots, root
+lineage and Original outcomes are never reset to recover resource readiness.
+Ordinary actual signed expiry remains strict; the inherited durations retain
+their separate unresolved policy-rationale limitation.

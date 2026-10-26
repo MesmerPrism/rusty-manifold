@@ -155,6 +155,7 @@ fn export_runtime_evidence(out: &Path) -> Result<(), Box<dyn std::error::Error>>
     let initial_authority = lease_authority()?;
     let adapter = ManifoldBrokerAdapter::new(config.clone(), &packaged_lock, &initial_authority)?;
     let admission = ManifoldAdmissionSnapshot {
+        history_checkpoint: None,
         root_renewal_policies: Vec::new(),
         schema_id: schema(ADMISSION_SNAPSHOT_SCHEMA),
         authority_id: id("authority.admission.broker.fixture"),

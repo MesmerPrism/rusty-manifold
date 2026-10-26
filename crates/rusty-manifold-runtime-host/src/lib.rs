@@ -1,5 +1,9 @@
 //! Source-only Manifold Runtime Host with deterministic review and application.
 
+mod source_bound_root_authority;
+pub use source_bound_root_authority::*;
+mod ongoing_history;
+pub use ongoing_history::*;
 mod finite_construction;
 
 use rusty_manifold_model::{
@@ -169,6 +173,9 @@ pub struct ManifoldRuntimeHostSnapshot {
     pub host_id: DottedId,
     /// Accepted authority revision.
     pub authority_revision: Revision,
+    /// Explicit ongoing baseline; omitted for ordinary finite v4 state.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub history_checkpoint: Option<ManifoldRuntimeHistoryCheckpoint>,
     /// Registered command descriptors.
     pub commands: Vec<ManifoldRuntimeCommandDescriptor>,
     /// Active accepted leases.
@@ -527,6 +534,8 @@ pub enum ManifoldRuntimeControlLeaseAdoptionOperation {
     Issue,
     /// Adopt an accepted control-lease renewal application.
     Renewal,
+    /// Adopt a separately earned source-bound root re-establishment.
+    SourceBoundReestablishment,
     /// Adopt an accepted control-lease release application.
     Release,
     /// Adopt an accepted authority-owned control-lease revocation application.
@@ -543,6 +552,10 @@ pub enum ManifoldRuntimeControlLeaseAuthorityApplication {
     Issue(ManifoldControlLeaseAuthorityApplication),
     /// Control-lease renewal application.
     Renewal(ManifoldControlLeaseRenewalAuthorityApplication),
+    /// Never accepted through the ordinary serialized v1 adoption route.
+    SourceBoundReestablishment(
+        rusty_manifold_model::ManifoldSourceBoundControlLeaseReestablishmentApplication,
+    ),
     /// Control-lease release application.
     Release(ManifoldControlLeaseReleaseAuthorityApplication),
     /// Authority-owned control-lease revocation application.
@@ -556,6 +569,9 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
         match self {
             Self::Issue(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Issue,
             Self::Renewal(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Renewal,
+            Self::SourceBoundReestablishment(_) => {
+                ManifoldRuntimeControlLeaseAdoptionOperation::SourceBoundReestablishment
+            }
             Self::Release(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Release,
             Self::Revocation(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Revocation,
             Self::Expiry(_) => ManifoldRuntimeControlLeaseAdoptionOperation::Expiry,
@@ -566,6 +582,7 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
         match self {
             Self::Issue(application) => &application.authority_id,
             Self::Renewal(application) => &application.authority_id,
+            Self::SourceBoundReestablishment(application) => &application.authority_id,
             Self::Release(application) => &application.authority_id,
             Self::Revocation(application) => &application.authority_id,
             Self::Expiry(application) => &application.authority_id,
@@ -576,6 +593,7 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
         match self {
             Self::Issue(application) => &application.application_id,
             Self::Renewal(application) => &application.application_id,
+            Self::SourceBoundReestablishment(application) => &application.application_id,
             Self::Release(application) => &application.application_id,
             Self::Revocation(application) => &application.application_id,
             Self::Expiry(application) => &application.application_id,
@@ -586,6 +604,7 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
         match self {
             Self::Issue(application) => application.from_authority_revision,
             Self::Renewal(application) => application.from_authority_revision,
+            Self::SourceBoundReestablishment(application) => application.from_authority_revision,
             Self::Release(application) => application.from_authority_revision,
             Self::Revocation(application) => application.from_authority_revision,
             Self::Expiry(application) => application.from_authority_revision,
@@ -617,6 +636,12 @@ impl ManifoldRuntimeControlLeaseAuthorityApplication {
                 .as_ref()
                 .map_or(application.from_authority_revision, |snapshot| {
                     snapshot.authority_revision
+                }),
+            Self::SourceBoundReestablishment(application) => application
+                .applied_snapshot
+                .as_ref()
+                .map_or(application.from_authority_revision, |s| {
+                    s.authority_revision
                 }),
             Self::Expiry(application) => application
                 .applied_snapshot
@@ -898,6 +923,7 @@ struct SchemaProbe {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManifoldRuntimeHost {
     snapshot: ManifoldRuntimeHostSnapshot,
+    source_bound_root_owner: Option<(ManifoldSourceBoundRootVerifier, DottedId)>,
 }
 
 impl ManifoldRuntimeHost {
@@ -905,8 +931,16 @@ impl ManifoldRuntimeHost {
     pub fn from_snapshot(
         snapshot: ManifoldRuntimeHostSnapshot,
     ) -> Result<Self, ManifoldRuntimeHostError> {
+        if snapshot.history_checkpoint.is_some() {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "ongoing_restore_requires_live_owner",
+            ));
+        }
         validate_snapshot(&snapshot)?;
-        Ok(Self { snapshot })
+        Ok(Self {
+            snapshot,
+            source_bound_root_owner: None,
+        })
     }
 
     /// Restarts a host from deterministic JSON snapshot state.
@@ -998,7 +1032,7 @@ impl ManifoldRuntimeHost {
         now_ms: u64,
     ) -> ManifoldRuntimeApplicationReceipt {
         let prior = self.snapshot.authority_revision;
-        if self.snapshot.audit_events.len() >= MAX_RUNTIME_AUDIT_EVENTS {
+        if ongoing_history::audit_capacity_exhausted(&self.snapshot) {
             return application_receipt(
                 request,
                 &self.snapshot.host_id,
@@ -1044,7 +1078,7 @@ impl ManifoldRuntimeHost {
         }
         let resulting = self.snapshot.authority_revision;
         let event = audit_event(
-            (self.snapshot.audit_events.len() as u64) + 1,
+            ongoing_history::next_sequence(&self.snapshot),
             ManifoldRuntimeAuditKind::CommandApplication,
             &request.request_id,
             prior,
@@ -1078,8 +1112,88 @@ impl ManifoldRuntimeHost {
         &mut self,
         request: &ManifoldRuntimeControlLeaseAdoptionRequest,
     ) -> ManifoldRuntimeControlLeaseAdoptionReceipt {
+        self.apply_control_lease_adoption_inner(request, None)
+    }
+    pub fn register_source_bound_root_owner(
+        &mut self,
+        verifier: ManifoldSourceBoundRootVerifier,
+        lease_id: DottedId,
+    ) -> Result<(), ManifoldRuntimeHostError> {
+        if self.source_bound_root_owner.is_some()
+            || self.snapshot.history_checkpoint.is_none()
+            || !self.snapshot.audit_events.is_empty()
+            || !self.snapshot.applied_request_ids.is_empty()
+            || !self.snapshot.reviewed_control_lease_adoption_ids.is_empty()
+            || self.snapshot.authority_revision != Revision::INITIAL
+        {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "root host registration not pristine ongoing",
+            ));
+        }
+        if !self.snapshot.leases.iter().any(|l| l.lease_id == lease_id) {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "root initial Host lease absent",
+            ));
+        }
+        self.source_bound_root_owner = Some((verifier, lease_id));
+        Ok(())
+    }
+    /// Rejoin the actual registered issuer at a final borrowed commit boundary.
+    pub fn validate_source_bound_root_permit(
+        &self,
+        permit: &ManifoldSourceBoundRootPermit<'_>,
+        now: u64,
+    ) -> Result<(), ManifoldRuntimeHostError> {
+        let (verifier, lease) = self.source_bound_root_owner.as_ref().ok_or(
+            ManifoldRuntimeHostError::InvalidSnapshot("root Host unselected"),
+        )?;
+        let evidence = verifier
+            .verify(permit, now)
+            .map_err(ManifoldRuntimeHostError::InvalidSnapshot)?;
+        if lease != &evidence.lease_id {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "root Host registered lease differs",
+            ));
+        }
+        Ok(())
+    }
+    pub fn apply_source_bound_control_lease_adoption(
+        &mut self,
+        permit: &ManifoldSourceBoundRootPermit<'_>,
+        request: &ManifoldRuntimeControlLeaseAdoptionRequest,
+        now: u64,
+    ) -> Result<ManifoldRuntimeControlLeaseAdoptionReceipt, ManifoldRuntimeHostError> {
+        let (verifier, lease_id) = self.source_bound_root_owner.as_ref().ok_or(
+            ManifoldRuntimeHostError::InvalidSnapshot("root host owner unselected"),
+        )?;
+        let evidence = verifier
+            .verify(permit, now)
+            .map_err(ManifoldRuntimeHostError::InvalidSnapshot)?;
+        let ManifoldRuntimeControlLeaseAuthorityApplication::SourceBoundReestablishment(
+            application,
+        ) = &request.application
+        else {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "root host exact operation",
+            ));
+        };
+        if &evidence.lease_id != lease_id
+            || &application.request.authority != evidence
+            || u64::try_from(application.recorded_clock.wall_unix_ms).ok() != Some(now)
+        {
+            return Err(ManifoldRuntimeHostError::InvalidSnapshot(
+                "root host source/time",
+            ));
+        }
+        Ok(self.apply_control_lease_adoption_inner(request, Some(permit)))
+    }
+    fn apply_control_lease_adoption_inner(
+        &mut self,
+        request: &ManifoldRuntimeControlLeaseAdoptionRequest,
+        permit: Option<&ManifoldSourceBoundRootPermit<'_>>,
+    ) -> ManifoldRuntimeControlLeaseAdoptionReceipt {
         let prior = self.snapshot.authority_revision;
-        if self.snapshot.audit_events.len() >= MAX_RUNTIME_AUDIT_EVENTS {
+        if ongoing_history::audit_capacity_exhausted(&self.snapshot) {
             return control_lease_adoption_receipt(
                 &self.snapshot,
                 request,
@@ -1109,9 +1223,21 @@ impl ManifoldRuntimeHost {
             );
         }
 
-        let result = if replayed {
+        let result = if replayed
+            || !ongoing_history::request_matches(&self.snapshot, &request.adoption_id)
+        {
             Err(ManifoldRuntimeRejectionReason::ReplayedControlLeaseAdoption)
-        } else if request.schema_id.as_str() != HOST_CONTROL_LEASE_ADOPTION_REQUEST_SCHEMA {
+        } else if match &request.application {
+            ManifoldRuntimeControlLeaseAuthorityApplication::SourceBoundReestablishment(_) => {
+                permit.is_none()
+                    || request.schema_id.as_str()
+                        != "rusty.manifold.runtime_host.control_lease_adoption_request.v3"
+            }
+            _ => {
+                permit.is_some()
+                    || request.schema_id.as_str() != HOST_CONTROL_LEASE_ADOPTION_REQUEST_SCHEMA
+            }
+        } {
             Err(ManifoldRuntimeRejectionReason::SchemaMismatch)
         } else if request.expected_host_authority_revision != prior {
             Err(ManifoldRuntimeRejectionReason::StaleAuthorityRevision)
@@ -1138,7 +1264,7 @@ impl ManifoldRuntimeHost {
         }
         let resulting = self.snapshot.authority_revision;
         self.snapshot.audit_events.push(audit_event(
-            (self.snapshot.audit_events.len() as u64) + 1,
+            ongoing_history::next_sequence(&self.snapshot),
             ManifoldRuntimeAuditKind::ControlLeaseAdoption,
             &request.adoption_id,
             prior,
@@ -1174,7 +1300,7 @@ impl ManifoldRuntimeHost {
         request: &ManifoldRuntimeDerivativeLeaseRevocationRequest,
     ) -> ManifoldRuntimeDerivativeLeaseRevocationReceipt {
         let prior = self.snapshot.authority_revision;
-        if self.snapshot.audit_events.len() >= MAX_RUNTIME_AUDIT_EVENTS
+        if ongoing_history::audit_capacity_exhausted(&self.snapshot)
             || request.exact_leases.len() > MAX_RUNTIME_DERIVATIVE_LEASE_REVOCATION_LEASES
         {
             return derivative_lease_revocation_receipt(
@@ -1223,7 +1349,9 @@ impl ManifoldRuntimeHost {
             .cloned()
             .collect::<Vec<_>>();
         accepted_derivative_leases.sort_by(|left, right| left.lease_id.cmp(&right.lease_id));
-        let result = if replayed {
+        let result = if replayed
+            || !ongoing_history::request_matches(&self.snapshot, &request.revocation_id)
+        {
             Err(ManifoldRuntimeRejectionReason::ReplayedDerivativeLeaseRevocation)
         } else if request.schema_id.as_str() != HOST_DERIVATIVE_LEASE_REVOCATION_REQUEST_SCHEMA {
             Err(ManifoldRuntimeRejectionReason::SchemaMismatch)
@@ -1275,7 +1403,7 @@ impl ManifoldRuntimeHost {
                 prior.next().expect("authority revision must advance");
         }
         let resulting = self.snapshot.authority_revision;
-        let sequence = (self.snapshot.audit_events.len() as u64) + 1;
+        let sequence = ongoing_history::next_sequence(&self.snapshot);
         let event_id = runtime_audit_id(sequence);
         self.snapshot.audit_events.push(ManifoldRuntimeAuditEvent {
             schema_id: schema_id(HOST_AUDIT_EVENT_SCHEMA),
@@ -1325,7 +1453,7 @@ impl ManifoldRuntimeHost {
         now_ms: u64,
     ) -> ManifoldRuntimeLeaseExpiryReceipt {
         let prior = self.snapshot.authority_revision;
-        if self.snapshot.audit_events.len() >= MAX_RUNTIME_AUDIT_EVENTS {
+        if ongoing_history::audit_capacity_exhausted(&self.snapshot) {
             return ManifoldRuntimeLeaseExpiryReceipt {
                 schema_id: schema_id(HOST_LEASE_EXPIRY_RECEIPT_SCHEMA),
                 sweep_id,
@@ -1351,7 +1479,8 @@ impl ManifoldRuntimeHost {
         }
         let mut removed = Vec::new();
         let replayed = self.snapshot.reviewed_sweep_ids.contains(&sweep_id);
-        let rejection = if replayed {
+        let rejection = if replayed || !ongoing_history::request_matches(&self.snapshot, &sweep_id)
+        {
             Some(ManifoldRuntimeRejectionReason::ReplayedSweep)
         } else if expected_revision != prior {
             Some(ManifoldRuntimeRejectionReason::StaleAuthorityRevision)
@@ -1383,7 +1512,7 @@ impl ManifoldRuntimeHost {
         }
         let resulting = self.snapshot.authority_revision;
         self.snapshot.audit_events.push(audit_event(
-            (self.snapshot.audit_events.len() as u64) + 1,
+            ongoing_history::next_sequence(&self.snapshot),
             ManifoldRuntimeAuditKind::LeaseExpiry,
             &sweep_id,
             prior,
@@ -1523,6 +1652,25 @@ fn derive_control_lease_delta(
             }
             Ok(ControlLeaseDelta::Remove(vec![revoked]))
         }
+        ManifoldRuntimeControlLeaseAuthorityApplication::SourceBoundReestablishment(
+            application,
+        ) => {
+            application
+                .validate_against_snapshot(&request.prior_authority_snapshot)
+                .map_err(|_| invalid.clone())?;
+            let prior = runtime_lease(&application.request.prior_lease);
+            if snapshot
+                .leases
+                .iter()
+                .find(|lease| lease.lease_id == prior.lease_id)
+                != Some(&prior)
+            {
+                return Err(mismatch);
+            }
+            Ok(ControlLeaseDelta::Renewal(runtime_lease(
+                &application.renewed_lease,
+            )))
+        }
         ManifoldRuntimeControlLeaseAuthorityApplication::Expiry(application) => {
             application
                 .validate_against_snapshot(&request.prior_authority_snapshot)
@@ -1595,7 +1743,16 @@ fn control_lease_adoption_receipt(
         ),
     };
     ManifoldRuntimeControlLeaseAdoptionReceipt {
-        schema_id: schema_id(HOST_CONTROL_LEASE_ADOPTION_RECEIPT_SCHEMA),
+        schema_id: schema_id(
+            if matches!(
+                request.application,
+                ManifoldRuntimeControlLeaseAuthorityApplication::SourceBoundReestablishment(_)
+            ) {
+                "rusty.manifold.runtime_host.control_lease_adoption_receipt.v3"
+            } else {
+                HOST_CONTROL_LEASE_ADOPTION_RECEIPT_SCHEMA
+            },
+        ),
         authority_host_id: snapshot.host_id.clone(),
         adoption_id: request.adoption_id.clone(),
         operation: request.application.operation(),
@@ -1789,6 +1946,7 @@ fn migrate_legacy_runtime_host_snapshot_v1(
     let source_schema_id = legacy.schema_id;
     let migrated_audit_event_count = audit_events.len();
     let snapshot = ManifoldRuntimeHostSnapshot {
+        history_checkpoint: None,
         schema_id: schema_id(HOST_SNAPSHOT_SCHEMA),
         host_id: legacy.host_id,
         authority_revision: legacy.authority_revision,
@@ -1826,6 +1984,7 @@ fn migrate_legacy_runtime_host_snapshot_v2(
     let source_schema_id = legacy.schema_id;
     let migrated_audit_event_count = legacy.audit_events.len();
     let snapshot = ManifoldRuntimeHostSnapshot {
+        history_checkpoint: None,
         schema_id: schema_id(HOST_SNAPSHOT_SCHEMA),
         host_id: legacy.host_id,
         authority_revision: legacy.authority_revision,
@@ -1888,6 +2047,7 @@ fn migrate_legacy_runtime_host_snapshot_v3(
     let source_schema_id = legacy.schema_id;
     let migrated_audit_event_count = legacy.audit_events.len();
     let snapshot = ManifoldRuntimeHostSnapshot {
+        history_checkpoint: None,
         schema_id: schema_id(HOST_SNAPSHOT_SCHEMA),
         host_id: legacy.host_id,
         authority_revision: legacy.authority_revision,
@@ -2045,9 +2205,7 @@ fn runtime_host_migration_receipt(
 fn validate_snapshot(
     snapshot: &ManifoldRuntimeHostSnapshot,
 ) -> Result<(), ManifoldRuntimeHostError> {
-    if snapshot.schema_id.as_str() != HOST_SNAPSHOT_SCHEMA {
-        return Err(ManifoldRuntimeHostError::InvalidSnapshot("schema_mismatch"));
-    }
+    ongoing_history::validate_checkpoint(snapshot)?;
     if snapshot.commands.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
         || snapshot.leases.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
         || snapshot.applied_request_ids.len() > MAX_RUNTIME_SNAPSHOT_RECORDS
@@ -2196,13 +2354,29 @@ fn validate_snapshot(
             "audit_replay_set_mismatch",
         ));
     }
-    let mut rolling_revision = Revision::INITIAL;
+    let mut rolling_revision = snapshot
+        .history_checkpoint
+        .as_ref()
+        .map_or(Revision::INITIAL, |c| c.authority_revision);
     let mut seen_applied_commands = BTreeSet::new();
     let mut seen_sweeps = BTreeSet::new();
     let mut seen_adoptions = BTreeSet::new();
     let mut seen_derivative_revocations = BTreeSet::new();
     for (index, event) in snapshot.audit_events.iter().enumerate() {
-        let sequence = (index as u64) + 1;
+        let retained = snapshot
+            .history_checkpoint
+            .as_ref()
+            .is_some_and(|c| c.retained_event_ids.contains(&event.event_id));
+        let sequence = if retained {
+            event.sequence
+        } else {
+            ongoing_history::audit_base(snapshot)
+                .checked_add(index as u64)
+                .and_then(|n| n.checked_add(1))
+                .ok_or(ManifoldRuntimeHostError::InvalidSnapshot(
+                    "history_sequence_exhausted",
+                ))?
+        };
         let semantic_valid = match event.event_kind {
             ManifoldRuntimeAuditKind::CommandApplication if event.applied => {
                 event.rejection_reason.is_none()
@@ -2212,7 +2386,8 @@ fn validate_snapshot(
                 event.rejection_reason.is_some()
                     && (event.rejection_reason
                         != Some(ManifoldRuntimeRejectionReason::ReplayedRequest)
-                        || seen_applied_commands.contains(&event.source_id))
+                        || seen_applied_commands.contains(&event.source_id)
+                        || !ongoing_history::request_matches(snapshot, &event.source_id))
             }
             ManifoldRuntimeAuditKind::LeaseExpiry
                 if seen_sweeps.insert(event.source_id.clone()) =>
@@ -2283,7 +2458,7 @@ fn validate_snapshot(
         if event.schema_id.as_str() != HOST_AUDIT_EVENT_SCHEMA
             || event.sequence != sequence
             || event.event_id != runtime_audit_id(sequence)
-            || event.prior_authority_revision != rolling_revision
+            || (!retained && event.prior_authority_revision != rolling_revision)
             || (event.applied
                 && event.prior_authority_revision.next()
                     != Some(event.resulting_authority_revision))
@@ -2301,11 +2476,16 @@ fn validate_snapshot(
                     .reviewed_derivative_lease_revocation_ids
                     .contains(&event.source_id))
             || !derivative_binding_valid
+            || (event.applied
+                && !retained
+                && !ongoing_history::request_matches(snapshot, &event.source_id))
             || !semantic_valid
         {
             return Err(ManifoldRuntimeHostError::InvalidSnapshot("audit_lineage"));
         }
-        rolling_revision = event.resulting_authority_revision;
+        if !retained {
+            rolling_revision = event.resulting_authority_revision;
+        }
     }
     if rolling_revision != snapshot.authority_revision {
         return Err(ManifoldRuntimeHostError::InvalidSnapshot(
@@ -2337,7 +2517,9 @@ fn validate_request(
     if request.expected_authority_revision != snapshot.authority_revision {
         return Err(ManifoldRuntimeRejectionReason::StaleAuthorityRevision);
     }
-    if snapshot.applied_request_ids.contains(&request.request_id) {
+    if !ongoing_history::request_matches(snapshot, &request.request_id)
+        || snapshot.applied_request_ids.contains(&request.request_id)
+    {
         return Err(ManifoldRuntimeRejectionReason::ReplayedRequest);
     }
     if request.issued_at_ms > now_ms || request.expires_at_ms <= now_ms {
