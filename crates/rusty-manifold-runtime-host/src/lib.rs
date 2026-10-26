@@ -4,6 +4,7 @@ mod source_bound_root_authority;
 pub use source_bound_root_authority::*;
 mod ongoing_history;
 pub use ongoing_history::*;
+mod finite_construction;
 
 use rusty_manifold_model::{
     DottedId, ManifoldAuthorityExpirySweepAuthorityApplication,
