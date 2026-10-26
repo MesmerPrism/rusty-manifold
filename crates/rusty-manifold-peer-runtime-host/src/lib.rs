@@ -5,6 +5,9 @@
 //! audit sequence. It deliberately contains no sockets, platform APIs,
 //! sidecars, codecs, or media payloads.
 
+mod finite_construction;
+pub use finite_construction::ManifoldPeerRuntimeTrustPolicyFieldsV1;
+
 use std::collections::BTreeSet;
 use std::fmt;
 

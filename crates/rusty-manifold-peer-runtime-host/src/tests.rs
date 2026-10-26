@@ -5782,3 +5782,32 @@ fn cleanup_peer_rejects_caller_attested_projection_even_with_genuine_signed_pend
         )
         .is_err());
 }
+
+#[test]
+fn finite_policy_construction_preserves_every_explicit_choice_and_exact_wire() {
+    let expected = trust_policy();
+    let fields = ManifoldPeerRuntimeTrustPolicyFieldsV1 {
+        schema_id: expected.schema_id.clone(),
+        policy_id: expected.policy_id.clone(),
+        revision: expected.revision,
+        enabled_authority_families: expected.enabled_authority_families.clone(),
+        trusted_operator_ids: expected.trusted_operator_ids.clone(),
+        trusted_key_fingerprints: expected.trusted_key_fingerprints.clone(),
+        trusted_adapter_ids: expected.trusted_adapter_ids.clone(),
+        trusted_mesh_proposer_ids: expected.trusted_mesh_proposer_ids.clone(),
+        media_client_grants: expected.media_client_grants.clone(),
+        trusted_media_revoker_ids: expected.trusted_media_revoker_ids.clone(),
+        direct_lane_client_grants: expected.direct_lane_client_grants.clone(),
+        trusted_direct_lane_revoker_ids: expected.trusted_direct_lane_revoker_ids.clone(),
+        media_runtime_host_id: expected.media_runtime_host_id.clone(),
+        media_runtime_lease_scope_id: expected.media_runtime_lease_scope_id.clone(),
+        direct_lane_runtime_lease_scope_id: expected.direct_lane_runtime_lease_scope_id.clone(),
+    };
+    let actual = ManifoldPeerRuntimeTrustPolicy::finite(fields);
+    assert_eq!(actual, expected);
+    assert_eq!(
+        serde_json::to_vec(&actual).unwrap(),
+        serde_json::to_vec(&expected).unwrap()
+    );
+    validate_trust_policy(&actual).unwrap();
+}

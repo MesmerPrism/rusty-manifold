@@ -1,6 +1,8 @@
 //! Revisioned cross-app grants and short-lived opaque token authority.
 
+mod finite_construction;
 mod grant_renewal;
+
 pub use grant_renewal::*;
 
 use rusty_manifold_model::{DottedId, Revision, SchemaId};
