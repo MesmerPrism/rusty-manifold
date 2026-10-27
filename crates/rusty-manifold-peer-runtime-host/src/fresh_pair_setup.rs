@@ -108,6 +108,40 @@ impl ManifoldPeerRuntimeHost {
         provider_epoch_id: DottedId,
         media_command_runtime: ManifoldRuntimeHostSnapshot,
     ) -> Result<Self, ManifoldPeerRuntimeHostError> {
+        Self::new_with_fresh_pair_setup_with_policy_selection(
+            host_id,
+            trust_policy,
+            provider_epoch_id,
+            media_command_runtime,
+            None,
+        )
+    }
+
+    /// Selects the exact independently trusted source lifetime policy.
+    pub fn new_with_fresh_pair_setup_and_lifetime_policy(
+        host_id: DottedId,
+        trust_policy: ManifoldPeerRuntimeTrustPolicy,
+        provider_epoch_id: DottedId,
+        media_command_runtime: ManifoldRuntimeHostSnapshot,
+        policy: &rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy,
+    ) -> Result<Self, ManifoldPeerRuntimeHostError> {
+        Self::new_with_fresh_pair_setup_with_policy_selection(
+            host_id,
+            trust_policy,
+            provider_epoch_id,
+            media_command_runtime,
+            Some(policy),
+        )
+    }
+
+    fn new_with_fresh_pair_setup_with_policy_selection(
+        host_id: DottedId,
+        trust_policy: ManifoldPeerRuntimeTrustPolicy,
+        provider_epoch_id: DottedId,
+        media_command_runtime: ManifoldRuntimeHostSnapshot,
+        policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+    ) -> Result<Self, ManifoldPeerRuntimeHostError> {
+        Self::require_lifetime_policy_selection(&trust_policy, policy)?;
         validate_trust_policy(&trust_policy)?;
         if trust_policy.fresh_setup_policy.is_none()
             || trust_policy.fresh_setup_local_peer_id.is_none()
@@ -120,11 +154,12 @@ impl ManifoldPeerRuntimeHost {
         baseline_policy.fresh_setup_policy = None;
         baseline_policy.fresh_setup_local_peer_id = None;
         baseline_policy.fresh_setup_enrollment_selection = None;
-        let mut actual = Self::new(
+        let mut actual = Self::new_with_policy_selection(
             host_id,
             baseline_policy,
             provider_epoch_id,
             media_command_runtime,
+            policy,
         )?;
         actual.snapshot.trust_policy = trust_policy;
         actual.snapshot.fresh_pair_setup = Some(empty_state());
@@ -278,7 +313,10 @@ impl ManifoldPeerRuntimeHost {
             return Err(invalid_snapshot("fresh transaction may be durably archived; verified history lookup required, no absence grant"));
         }
         if let Some(receipt) = receipt {
-            validate_fresh_pair_setup_receipt(receipt)?;
+            validate_fresh_pair_setup_receipt_with_lifetime_policy(
+                receipt,
+                self.development_lifetime_policy(),
+            )?;
         }
         Ok(receipt.cloned())
     }
@@ -403,7 +441,10 @@ impl ManifoldPeerRuntimeHost {
                 &c.policy,
                 now_ms,
                 credential_expires_at_ms,
-                MAX_PEER_STATUS_TTL_MS,
+                rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+                    self.development_lifetime_policy(),
+                    MAX_PEER_STATUS_TTL_MS,
+                ),
             )
             .map_err(invalid_snapshot)?;
             let status = accepted.status;
@@ -540,7 +581,10 @@ pub(super) fn validate(
         .as_ref()
         .map(|a| a.enrollment_authority_revision);
     for r in &state.receipts {
-        validate_fresh_pair_setup_receipt(r)?;
+        validate_fresh_pair_setup_receipt_with_lifetime_policy(
+            r,
+            trust_lifetime_policy(&snapshot.trust_policy),
+        )?;
         let c = &r.request.context;
         let credential_expires_at_ms = r
             .applied_at_ms
@@ -699,6 +743,15 @@ pub(super) fn validate(
 pub fn validate_fresh_pair_setup_receipt(
     r: &ManifoldFreshPairSetupReceipt,
 ) -> Result<(), ManifoldPeerRuntimeHostError> {
+    validate_fresh_pair_setup_receipt_with_lifetime_policy(r, None)
+}
+
+/// Validates retained evidence under an independently accepted immutable policy.
+/// The receipt itself cannot select longer authority or mint a live capability.
+pub fn validate_fresh_pair_setup_receipt_with_lifetime_policy(
+    r: &ManifoldFreshPairSetupReceipt,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+) -> Result<(), ManifoldPeerRuntimeHostError> {
     verify_fresh_pair_setup_request(&r.request).map_err(invalid_snapshot)?;
     let c = &r.request.context;
     let credential_expires_at_ms = r
@@ -763,7 +816,10 @@ pub fn validate_fresh_pair_setup_receipt(
             &c.policy,
             r.applied_at_ms,
             credential_expires_at_ms,
-            MAX_PEER_STATUS_TTL_MS,
+            rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+                lifetime_policy,
+                MAX_PEER_STATUS_TTL_MS,
+            ),
         )
         .map_err(invalid_snapshot)?;
         let application = &r.status_receipts[index];

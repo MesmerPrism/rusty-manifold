@@ -17,6 +17,12 @@ can be generated later from stable Manifold contracts.
 
 ## Opted-in finite admission root renewal
 
+The source-selected [development lifetime policy](development-lifetime-policy.md)
+uses explicit schema discriminators with unchanged legacy Rust field shapes.
+Default finite readers refuse selected markers; policy-aware construction and
+restore require the exact independently trusted policy. Requests cannot select
+longer authority. Existing finite schema defaults below remain unchanged.
+
 Admission snapshots may explicitly bind `root_renewal_policies` to existing
 grant ids. Each finite horizon is a whole minute from five through sixty
 minutes; omission retains the five-minute renewal policy. This scoped policy

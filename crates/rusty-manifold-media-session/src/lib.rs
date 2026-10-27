@@ -489,7 +489,23 @@ pub fn review_and_apply_media_session_acceptance(
     ManifoldMediaSessionAcceptanceState,
     ManifoldMediaSessionAcceptanceReceipt,
 ) {
-    review_media_acceptance_inner(state, request, runtime, now_ms, None)
+    review_and_apply_media_session_acceptance_with_lifetime_policy(
+        state, request, runtime, now_ms, None,
+    )
+}
+
+/// Uses an independently accepted immutable source lifetime policy.
+pub fn review_and_apply_media_session_acceptance_with_lifetime_policy(
+    state: &ManifoldMediaSessionAcceptanceState,
+    request: &ManifoldMediaSessionAcceptanceRequest,
+    runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
+    now_ms: u64,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+) -> (
+    ManifoldMediaSessionAcceptanceState,
+    ManifoldMediaSessionAcceptanceReceipt,
+) {
+    review_media_acceptance_inner(state, request, runtime, now_ms, None, lifetime_policy)
 }
 
 /// Re-adopts an identical stopped descriptor only after the composing authority
@@ -506,7 +522,36 @@ pub fn review_and_apply_media_session_terminal_readoption(
     ManifoldMediaSessionAcceptanceState,
     ManifoldMediaSessionAcceptanceReceipt,
 ) {
-    review_media_acceptance_inner(state, request, runtime, now_ms, Some(terminal_decision_id))
+    review_and_apply_media_session_terminal_readoption_with_lifetime_policy(
+        state,
+        request,
+        runtime,
+        now_ms,
+        terminal_decision_id,
+        None,
+    )
+}
+
+/// Uses an independently accepted immutable source lifetime policy.
+pub fn review_and_apply_media_session_terminal_readoption_with_lifetime_policy(
+    state: &ManifoldMediaSessionAcceptanceState,
+    request: &ManifoldMediaSessionAcceptanceRequest,
+    runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
+    now_ms: u64,
+    terminal_decision_id: &DottedId,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+) -> (
+    ManifoldMediaSessionAcceptanceState,
+    ManifoldMediaSessionAcceptanceReceipt,
+) {
+    review_media_acceptance_inner(
+        state,
+        request,
+        runtime,
+        now_ms,
+        Some(terminal_decision_id),
+        lifetime_policy,
+    )
 }
 
 fn review_media_acceptance_inner(
@@ -515,20 +560,27 @@ fn review_media_acceptance_inner(
     runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
     now_ms: u64,
     terminal_decision_id: Option<&DottedId>,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
 ) -> (
     ManifoldMediaSessionAcceptanceState,
     ManifoldMediaSessionAcceptanceReceipt,
 ) {
     let prior = state.authority_revision;
-    let rejection =
-        validate_acceptance_request(state, request, runtime, now_ms, terminal_decision_id)
-            .err()
-            .or_else(|| {
-                prior
-                    .next()
-                    .is_none()
-                    .then_some(ManifoldMediaSessionAcceptanceRejectionReason::RevisionExhausted)
-            });
+    let rejection = validate_acceptance_request(
+        state,
+        request,
+        runtime,
+        now_ms,
+        terminal_decision_id,
+        lifetime_policy,
+    )
+    .err()
+    .or_else(|| {
+        prior
+            .next()
+            .is_none()
+            .then_some(ManifoldMediaSessionAcceptanceRejectionReason::RevisionExhausted)
+    });
     if let Some(reason) = rejection {
         return (
             state.clone(),
@@ -881,6 +933,7 @@ fn validate_acceptance_request(
     runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
     now_ms: u64,
     terminal_decision_id: Option<&DottedId>,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
 ) -> Result<(), ManifoldMediaSessionAcceptanceRejectionReason> {
     if state.schema_id.as_str() != MANIFOLD_MEDIA_SESSION_ACCEPTANCE_STATE_SCHEMA
         || request.schema_id.as_str() != MANIFOLD_MEDIA_SESSION_ACCEPTANCE_REQUEST_SCHEMA
@@ -906,7 +959,11 @@ fn validate_acceptance_request(
         return Err(ManifoldMediaSessionAcceptanceRejectionReason::ProviderEpochMismatch);
     }
     if request.expires_at_ms <= now_ms
-        || request.expires_at_ms.saturating_sub(now_ms) > MAX_MEDIA_SESSION_TTL_MS
+        || request.expires_at_ms.saturating_sub(now_ms)
+            > rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+                lifetime_policy,
+                MAX_MEDIA_SESSION_TTL_MS,
+            )
     {
         return Err(ManifoldMediaSessionAcceptanceRejectionReason::InvalidExpiry);
     }
@@ -1399,6 +1456,61 @@ mod tests {
         assert_eq!(
             reordered.validate(),
             Err(ManifoldMediaSessionBindingError::DescriptorNotCanonical)
+        );
+    }
+
+    #[test]
+    fn development_media_uses_selected_owner_and_retains_actual_expiry() {
+        let policy = rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::source_owned_v1();
+        let mut request =
+            acceptance_request("request.media.development", Revision::INITIAL, binding());
+        request.expires_at_ms = 2_000 + policy.delegated_authority_horizon_ms;
+        let proof = acceptance_proof(&request, "client.quest.media-test");
+        let empty = ManifoldMediaSessionAcceptanceState::empty();
+        assert!(
+            !review_and_apply_media_session_acceptance(&empty, &request, proof.context(), 2_000)
+                .1
+                .accepted
+        );
+        let context = proof.context();
+        let (state, receipt) = review_and_apply_media_session_acceptance_with_lifetime_policy(
+            &empty,
+            &request,
+            context,
+            2_000,
+            Some(policy),
+        );
+        assert!(receipt.accepted);
+        let decision = receipt.accepted_session.unwrap().decision_id;
+        assert!(
+            validate_current_media_session(
+                &state,
+                &decision,
+                &proof.provider_epoch_id,
+                request.expires_at_ms - 1
+            )
+            .current
+        );
+        assert!(
+            !validate_current_media_session(
+                &state,
+                &decision,
+                &proof.provider_epoch_id,
+                request.expires_at_ms
+            )
+            .current
+        );
+        request.expires_at_ms += 1;
+        assert!(
+            !review_and_apply_media_session_acceptance_with_lifetime_policy(
+                &empty,
+                &request,
+                context,
+                2_000,
+                Some(policy)
+            )
+            .1
+            .accepted
         );
     }
 

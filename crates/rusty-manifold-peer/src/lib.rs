@@ -313,7 +313,16 @@ pub struct ManifoldPeerApplicationReceipt {
 pub fn review_and_apply_peer_proposal(
     case: &ManifoldPeerReviewCase,
 ) -> (ManifoldPeerDecision, ManifoldPeerApplicationReceipt) {
-    let rejection = validate_case(case).err();
+    review_and_apply_peer_proposal_with_lifetime_policy(case, None)
+}
+
+/// Reviews status using a constructor-selected public lifetime contract.
+#[must_use]
+pub fn review_and_apply_peer_proposal_with_lifetime_policy(
+    case: &ManifoldPeerReviewCase,
+    policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+) -> (ManifoldPeerDecision, ManifoldPeerApplicationReceipt) {
+    let rejection = validate_case(case, policy).err();
     let prior = case.current_state.authority_revision;
     let accepted_state = rejection.is_none().then(|| apply_proposal(case));
     let resulting = accepted_state
@@ -362,7 +371,10 @@ pub fn review_and_apply_peer_proposal(
     (decision, receipt)
 }
 
-fn validate_case(case: &ManifoldPeerReviewCase) -> Result<(), ManifoldPeerRejectionReason> {
+fn validate_case(
+    case: &ManifoldPeerReviewCase,
+    policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+) -> Result<(), ManifoldPeerRejectionReason> {
     if case.schema_id.as_str() != PEER_REVIEW_CASE_SCHEMA
         || case.current_state.schema_id.as_str() != PEER_SNAPSHOT_SCHEMA
         || case.proposal.schema_id.as_str() != PEER_PROPOSAL_SCHEMA
@@ -406,7 +418,10 @@ fn validate_case(case: &ManifoldPeerReviewCase) -> Result<(), ManifoldPeerReject
         .status
         .expires_at_ms
         .saturating_sub(case.proposal.status.observed_at_ms)
-        > MAX_STATUS_TTL_MS
+        > rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+            policy,
+            MAX_STATUS_TTL_MS,
+        )
     {
         return Err(ManifoldPeerRejectionReason::StatusTtlExceeded);
     }
@@ -478,6 +493,26 @@ mod tests {
             .join(path);
         serde_json::from_str(&std::fs::read_to_string(root).expect("fixture must load"))
             .expect("fixture must deserialize")
+    }
+
+    #[test]
+    fn development_status_requires_selected_owner_and_still_expires() {
+        let policy = rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::source_owned_v1();
+        let mut c = case("fixtures/peer-review/synthetic-peer-accepted-review.json");
+        c.proposal.status.expires_at_ms =
+            c.proposal.status.observed_at_ms + policy.delegated_authority_horizon_ms;
+        assert!(!review_and_apply_peer_proposal(&c).1.applied);
+        assert!(
+            review_and_apply_peer_proposal_with_lifetime_policy(&c, Some(policy))
+                .1
+                .applied
+        );
+        c.now_ms = c.proposal.status.expires_at_ms;
+        assert!(
+            !review_and_apply_peer_proposal_with_lifetime_policy(&c, Some(policy))
+                .1
+                .applied
+        );
     }
 
     #[test]

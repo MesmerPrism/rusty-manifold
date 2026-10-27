@@ -5923,3 +5923,52 @@ fn finite_policy_construction_preserves_every_explicit_choice_and_exact_wire() {
     );
     validate_trust_policy(&actual).unwrap();
 }
+
+#[test]
+fn development_selection_requires_trusted_constructor_and_restore() {
+    let selected = rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::source_owned_v1();
+    let mut trust = trust_policy();
+    trust.schema_id = schema_id(DEVELOPMENT_PEER_TRUST_POLICY_SCHEMA);
+    let epoch = id(PROVIDER_EPOCH_ID);
+    assert!(ManifoldPeerRuntimeHost::new(
+        id("host.development.test"),
+        trust.clone(),
+        epoch.clone(),
+        media_command_runtime()
+    )
+    .is_err());
+    let owner = ManifoldPeerRuntimeHost::new_with_lifetime_policy(
+        id("host.development.test"),
+        trust.clone(),
+        epoch.clone(),
+        media_command_runtime(),
+        selected,
+    )
+    .unwrap();
+    assert_eq!(owner.development_lifetime_policy(), Some(selected));
+    let raw = owner.snapshot_json().unwrap();
+    assert!(!raw.contains("\"development_lifetime_policy\""));
+    assert!(ManifoldPeerRuntimeHost::restart_from_json(&raw, &trust, &epoch).is_err());
+    let restored = ManifoldPeerRuntimeHost::restart_from_json_with_lifetime_policy(
+        &raw, &trust, &epoch, selected,
+    )
+    .unwrap();
+    assert_eq!(restored.snapshot_json().unwrap(), raw);
+    let mut changed = selected.clone();
+    changed.delegated_authority_horizon_ms += 1;
+    assert!(
+        ManifoldPeerRuntimeHost::restart_from_json_with_lifetime_policy(
+            &raw, &trust, &epoch, &changed
+        )
+        .is_err()
+    );
+    trust.schema_id = schema_id(PEER_RUNTIME_HOST_TRUST_POLICY_SCHEMA);
+    assert!(ManifoldPeerRuntimeHost::new_with_lifetime_policy(
+        id("host.development.test"),
+        trust,
+        epoch,
+        media_command_runtime(),
+        selected
+    )
+    .is_err());
+}

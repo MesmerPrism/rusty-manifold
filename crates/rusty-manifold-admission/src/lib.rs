@@ -2,7 +2,12 @@
 
 mod source_bound_reestablishment;
 pub use source_bound_reestablishment::*;
+mod development_lifetime;
 mod finite_construction;
+pub use development_lifetime::{
+    ManifoldDevelopmentLifetimePolicy, DEVELOPMENT_ADMISSION_SNAPSHOT_SCHEMA,
+    DEVELOPMENT_ONGOING_ADMISSION_SNAPSHOT_SCHEMA,
+};
 mod grant_renewal;
 
 pub use grant_renewal::*;
@@ -469,6 +474,7 @@ struct SchemaProbe {
 /// Admission authority over one durable snapshot.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ManifoldAdmissionAuthority {
+    development_lifetime_policy: Option<ManifoldDevelopmentLifetimePolicy>,
     snapshot: ManifoldAdmissionSnapshot,
     // Not snapshot authority. Registered only at selected actual construction.
     source_bound_root_owner: Option<(
@@ -483,6 +489,31 @@ impl ManifoldAdmissionAuthority {
     pub fn from_snapshot(
         snapshot: ManifoldAdmissionSnapshot,
     ) -> Result<Self, ManifoldAdmissionError> {
+        Self::from_snapshot_with_policy_selection(snapshot, None)
+    }
+
+    /// Constructs selected authority only from the exact trusted source policy.
+    /// A selected schema is evidence of mode, never permission to choose it.
+    pub fn from_snapshot_with_lifetime_policy(
+        snapshot: ManifoldAdmissionSnapshot,
+        policy: &ManifoldDevelopmentLifetimePolicy,
+    ) -> Result<Self, ManifoldAdmissionError> {
+        Self::from_snapshot_with_policy_selection(snapshot, Some(policy))
+    }
+
+    fn from_snapshot_with_policy_selection(
+        snapshot: ManifoldAdmissionSnapshot,
+        policy: Option<&ManifoldDevelopmentLifetimePolicy>,
+    ) -> Result<Self, ManifoldAdmissionError> {
+        let marked = matches!(
+            snapshot.schema_id.as_str(),
+            DEVELOPMENT_ADMISSION_SNAPSHOT_SCHEMA | DEVELOPMENT_ONGOING_ADMISSION_SNAPSHOT_SCHEMA
+        );
+        if marked != policy.is_some() || policy.is_some_and(|p| !p.is_source_owned_v1()) {
+            return Err(ManifoldAdmissionError::InvalidSnapshot(
+                "trusted_lifetime_policy_selection",
+            ));
+        }
         if snapshot.history_checkpoint.is_some() {
             return Err(ManifoldAdmissionError::InvalidSnapshot(
                 "ongoing_restore_requires_live_owner",
@@ -491,6 +522,7 @@ impl ManifoldAdmissionAuthority {
         validate_snapshot(&snapshot)?;
         Ok(Self {
             snapshot,
+            development_lifetime_policy: policy.cloned(),
             source_bound_root_owner: None,
         })
     }
@@ -504,6 +536,20 @@ impl ManifoldAdmissionAuthority {
         }
         let snapshot = serde_json::from_str(json).map_err(ManifoldAdmissionError::Deserialize)?;
         Self::from_snapshot(snapshot)
+    }
+
+    /// Restores a selected snapshot with independently trusted exact policy.
+    pub fn restart_from_json_with_lifetime_policy(
+        json: &str,
+        policy: &ManifoldDevelopmentLifetimePolicy,
+    ) -> Result<Self, ManifoldAdmissionError> {
+        let snapshot = serde_json::from_str(json).map_err(ManifoldAdmissionError::Deserialize)?;
+        Self::from_snapshot_with_lifetime_policy(snapshot, policy)
+    }
+
+    /// Reads the immutable policy accepted by this owner constructor.
+    pub fn development_lifetime_policy(&self) -> Option<&ManifoldDevelopmentLifetimePolicy> {
+        self.development_lifetime_policy.as_ref()
     }
 
     /// Restarts v2 state or explicitly migrates a v1 snapshot using an exact,
@@ -1461,6 +1507,13 @@ fn validate_token(
 }
 
 fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), ManifoldAdmissionError> {
+    if development_lifetime::snapshot_lifetime_policy(snapshot)
+        .is_some_and(|p| snapshot.max_token_ttl_ms > p.delegated_authority_horizon_ms)
+    {
+        return Err(ManifoldAdmissionError::InvalidSnapshot(
+            "development_lifetime_policy",
+        ));
+    }
     ongoing_history::validate_checkpoint(snapshot)?;
     grant_renewal::validate_root_renewal_policies(snapshot)?;
     validate_grant_renewal_history(snapshot)?;

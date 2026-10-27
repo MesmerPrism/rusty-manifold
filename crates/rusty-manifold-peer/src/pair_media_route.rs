@@ -1169,6 +1169,23 @@ pub fn review_and_apply_pair_media_route_v2(
     ManifoldPairMediaRouteAuthorityStateV2,
     ManifoldPairMediaRouteReceiptV2,
 ) {
+    review_and_apply_pair_media_route_v2_with_lifetime_policy(
+        state, request, runtime, authority, now_ms, None,
+    )
+}
+
+/// Uses an independently accepted immutable source lifetime policy.
+pub fn review_and_apply_pair_media_route_v2_with_lifetime_policy(
+    state: &ManifoldPairMediaRouteAuthorityStateV2,
+    request: &ManifoldPairMediaRouteRequestV2,
+    runtime: ManifoldPairMediaRouteRuntimeContext<'_>,
+    authority: ManifoldPairMediaRouteAuthorityContextV2<'_>,
+    now_ms: u64,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+) -> (
+    ManifoldPairMediaRouteAuthorityStateV2,
+    ManifoldPairMediaRouteReceiptV2,
+) {
     match request {
         ManifoldPairMediaRouteRequestV2::WifiDirect(request) => {
             let preflight_rejection = if !pair_media_route_state_v2_is_well_formed(state) {
@@ -1297,7 +1314,7 @@ pub fn review_and_apply_pair_media_route_v2(
             (next, ManifoldPairMediaRouteReceiptV2::WifiDirect(receipt))
         }
         ManifoldPairMediaRouteRequestV2::CommonLan(common) => {
-            issue_common_lan_route(state, common, runtime, authority, now_ms)
+            issue_common_lan_route(state, common, runtime, authority, now_ms, lifetime_policy)
         }
     }
 }
@@ -1309,6 +1326,7 @@ fn issue_common_lan_route(
     runtime: ManifoldPairMediaRouteRuntimeContext<'_>,
     authority: ManifoldPairMediaRouteAuthorityContextV2<'_>,
     now_ms: u64,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
 ) -> (
     ManifoldPairMediaRouteAuthorityStateV2,
     ManifoldPairMediaRouteReceiptV2,
@@ -1480,7 +1498,10 @@ fn issue_common_lan_route(
     if !route_lifetime_is_bounded(
         request.expires_at_ms,
         now_ms,
-        MAX_COMMON_LAN_PAIR_MEDIA_ROUTE_TTL_MS,
+        rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+            lifetime_policy,
+            MAX_COMMON_LAN_PAIR_MEDIA_ROUTE_TTL_MS,
+        ),
     ) || peer
         .expires_at_ms
         .map_or(true, |expiry| request.expires_at_ms > expiry)

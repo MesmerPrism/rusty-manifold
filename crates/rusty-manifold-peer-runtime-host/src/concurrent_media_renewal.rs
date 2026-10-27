@@ -176,12 +176,22 @@ impl ManifoldPeerRuntimeHost {
         }
         let expiry = outer.expires_at_ms.min(paired.expires_at_ms).min(
             now_ms
-                .checked_add(235000)
+                .checked_add(
+                    rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+                        self.development_lifetime_policy(),
+                        235000,
+                    ),
+                )
                 .ok_or_else(|| invalid_snapshot("coupled renewal expiry overflow"))?,
         );
         let route_expiry = expiry.min(
             now_ms
-                .checked_add(180000)
+                .checked_add(
+                    rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+                        self.development_lifetime_policy(),
+                        180000,
+                    ),
+                )
                 .ok_or_else(|| invalid_snapshot("route renewal expiry overflow"))?,
         );
         if expiry <= lease.expires_at_ms
@@ -409,7 +419,7 @@ pub(super) fn validate_concurrent_media_renewals(
             if old.expires_at_ms <= receipt.observed_at_ms
                 || new.expires_at_ms <= old.expires_at_ms
                 || new.expires_at_ms != receipt.expires_at_ms
-                || new.expires_at_ms > receipt.observed_at_ms.saturating_add(180000)
+                || new.expires_at_ms > receipt.observed_at_ms.saturating_add(rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(trust_lifetime_policy(&snapshot.trust_policy), 180000))
                 || *new
                     != renew_route_deadline(
                         old,

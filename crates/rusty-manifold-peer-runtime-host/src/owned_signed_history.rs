@@ -31,6 +31,7 @@ impl Clone for ManifoldPeerRuntimeHost {
                 })
             });
         Self {
+            development_lifetime_policy: self.development_lifetime_policy.clone(),
             snapshot: self.snapshot.clone(),
             media_runtime_owner: self.media_runtime_owner.clone(),
             signed_history_owner: None,
@@ -168,7 +169,7 @@ impl ManifoldPeerRuntimeHost {
             .as_ref()
             .ok_or_else(|| invalid_snapshot("signed plans require actual owner"))?;
         let plan = owner
-            .plan_common_lan(
+            .plan_common_lan_with_lifetime_policy(
                 request,
                 ManifoldReciprocalEd25519RuntimeContext {
                     runtime_host_id: &self.snapshot.host_id,
@@ -185,6 +186,7 @@ impl ManifoldPeerRuntimeHost {
                         .authority_revision,
                 },
                 now_ms,
+                self.development_lifetime_policy(),
             )
             .map_err(invalid_snapshot)?;
         let receipt = plan.receipt().expect("signed review plan").clone();
