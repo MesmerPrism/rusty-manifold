@@ -245,11 +245,23 @@ impl ManifoldReciprocalHistoryOwner {
         runtime: ManifoldReciprocalEd25519RuntimeContext<'_>,
         now_ms: u64,
     ) -> Result<ManifoldReciprocalHistoryPlan, &'static str> {
+        self.plan_common_lan_with_lifetime_policy(request, runtime, now_ms, None)
+    }
+
+    /// Uses an independently accepted immutable source lifetime policy.
+    pub fn plan_common_lan_with_lifetime_policy(
+        &self,
+        request: &ManifoldCommonLanReciprocalEd25519ReviewRequest,
+        runtime: ManifoldReciprocalEd25519RuntimeContext<'_>,
+        now_ms: u64,
+        lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+    ) -> Result<ManifoldReciprocalHistoryPlan, &'static str> {
         let (state, receipt) = review_and_apply_reciprocal_ed25519_owned(
             &self.state,
             &ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(request.clone()),
             runtime,
             now_ms,
+            lifetime_policy,
         );
         let ManifoldReciprocalEd25519ReceiptV3::CommonLan(receipt) = receipt else {
             unreachable!()
@@ -348,6 +360,7 @@ impl ManifoldReciprocalHistoryOwner {
             &ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(request.clone()),
             runtime,
             now_ms,
+            None,
         );
         let ManifoldReciprocalEd25519ReceiptV3::CommonLan(receipt) = receipt else {
             unreachable!()

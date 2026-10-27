@@ -83,7 +83,10 @@ pub(super) fn validate_checkpoint(
     snapshot: &ManifoldAdmissionSnapshot,
 ) -> Result<(), ManifoldAdmissionError> {
     let Some(c) = &snapshot.history_checkpoint else {
-        return if snapshot.schema_id.as_str() == ADMISSION_SNAPSHOT_SCHEMA {
+        return if matches!(
+            snapshot.schema_id.as_str(),
+            ADMISSION_SNAPSHOT_SCHEMA | DEVELOPMENT_ADMISSION_SNAPSHOT_SCHEMA
+        ) {
             Ok(())
         } else {
             Err(ManifoldAdmissionError::InvalidSnapshot(
@@ -91,8 +94,10 @@ pub(super) fn validate_checkpoint(
             ))
         };
     };
-    if snapshot.schema_id.as_str() != ONGOING_ADMISSION_SNAPSHOT_SCHEMA
-        || c.schema_id.as_str() != "rusty.manifold.admission.history_checkpoint.v1"
+    if !matches!(
+        snapshot.schema_id.as_str(),
+        ONGOING_ADMISSION_SNAPSHOT_SCHEMA | DEVELOPMENT_ONGOING_ADMISSION_SNAPSHOT_SCHEMA
+    ) || c.schema_id.as_str() != "rusty.manifold.admission.history_checkpoint.v1"
         || c.request_epoch == 0
         || c.audit_sequence < c.request_epoch.saturating_sub(1)
         || (c.request_epoch > 1) != c.prior_checkpoint_sha256.is_some()
@@ -179,7 +184,11 @@ impl ManifoldAdmissionAuthority {
             prior_checkpoint_sha256: None,
             source_snapshot_sha256,
         });
-        candidate.snapshot.schema_id = schema_id(ONGOING_ADMISSION_SNAPSHOT_SCHEMA);
+        candidate.snapshot.schema_id = schema_id(if self.development_lifetime_policy().is_some() {
+            DEVELOPMENT_ONGOING_ADMISSION_SNAPSHOT_SCHEMA
+        } else {
+            ONGOING_ADMISSION_SNAPSHOT_SCHEMA
+        });
         validate_snapshot(&candidate.snapshot)?;
         *self = candidate;
         Ok(())
@@ -338,6 +347,7 @@ impl ManifoldAdmissionAuthority {
         validate_snapshot(&snapshot)?;
         Ok(Self {
             snapshot,
+            development_lifetime_policy: anchor.owner.development_lifetime_policy.clone(),
             source_bound_root_owner: anchor.owner.source_bound_root_owner.clone(),
         })
     }
@@ -351,7 +361,6 @@ mod tests {
     }
     fn owner() -> ManifoldAdmissionAuthority {
         let mut owner = ManifoldAdmissionAuthority::from_snapshot(ManifoldAdmissionSnapshot {
-            development_lifetime_policy: None,
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
             history_checkpoint: None,
             authority_id: id("authority.ongoing"),

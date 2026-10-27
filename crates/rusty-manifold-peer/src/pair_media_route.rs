@@ -891,9 +891,6 @@ impl ManifoldPairMediaRouteState {
 /// Borrowed host-owned Runtime Host evidence for one route mutation.
 #[derive(Clone, Copy, Debug)]
 pub struct ManifoldPairMediaRouteRuntimeContext<'a> {
-    /// Immutable lifetime selection supplied by the composing authority.
-    pub development_lifetime_policy:
-        Option<&'a rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
     /// Manifold Runtime Host authority identity.
     pub authority_host_id: &'a DottedId,
     /// Current host-owned provider epoch.
@@ -1172,6 +1169,23 @@ pub fn review_and_apply_pair_media_route_v2(
     ManifoldPairMediaRouteAuthorityStateV2,
     ManifoldPairMediaRouteReceiptV2,
 ) {
+    review_and_apply_pair_media_route_v2_with_lifetime_policy(
+        state, request, runtime, authority, now_ms, None,
+    )
+}
+
+/// Uses an independently accepted immutable source lifetime policy.
+pub fn review_and_apply_pair_media_route_v2_with_lifetime_policy(
+    state: &ManifoldPairMediaRouteAuthorityStateV2,
+    request: &ManifoldPairMediaRouteRequestV2,
+    runtime: ManifoldPairMediaRouteRuntimeContext<'_>,
+    authority: ManifoldPairMediaRouteAuthorityContextV2<'_>,
+    now_ms: u64,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+) -> (
+    ManifoldPairMediaRouteAuthorityStateV2,
+    ManifoldPairMediaRouteReceiptV2,
+) {
     match request {
         ManifoldPairMediaRouteRequestV2::WifiDirect(request) => {
             let preflight_rejection = if !pair_media_route_state_v2_is_well_formed(state) {
@@ -1300,7 +1314,7 @@ pub fn review_and_apply_pair_media_route_v2(
             (next, ManifoldPairMediaRouteReceiptV2::WifiDirect(receipt))
         }
         ManifoldPairMediaRouteRequestV2::CommonLan(common) => {
-            issue_common_lan_route(state, common, runtime, authority, now_ms)
+            issue_common_lan_route(state, common, runtime, authority, now_ms, lifetime_policy)
         }
     }
 }
@@ -1312,6 +1326,7 @@ fn issue_common_lan_route(
     runtime: ManifoldPairMediaRouteRuntimeContext<'_>,
     authority: ManifoldPairMediaRouteAuthorityContextV2<'_>,
     now_ms: u64,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
 ) -> (
     ManifoldPairMediaRouteAuthorityStateV2,
     ManifoldPairMediaRouteReceiptV2,
@@ -1484,7 +1499,7 @@ fn issue_common_lan_route(
         request.expires_at_ms,
         now_ms,
         rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
-            runtime.development_lifetime_policy,
+            lifetime_policy,
             MAX_COMMON_LAN_PAIR_MEDIA_ROUTE_TTL_MS,
         ),
     ) || peer
@@ -4082,7 +4097,6 @@ mod tests {
             rejection_reason: None,
         };
         let context = |runtime_lease| ManifoldPairMediaRouteRuntimeContext {
-            development_lifetime_policy: None,
             authority_host_id: &host_id,
             live_authority_provider_epoch_id: &epoch_id,
             media_client_grants: &[],

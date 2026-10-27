@@ -42,7 +42,6 @@ impl ManifoldPeerRuntimeTrustPolicy {
     /// The ordinary Peer Runtime Host constructor still validates this data.
     pub fn finite(fields: ManifoldPeerRuntimeTrustPolicyFieldsV1) -> Self {
         Self {
-            development_lifetime_policy: None,
             schema_id: fields.schema_id,
             policy_id: fields.policy_id,
             revision: fields.revision,

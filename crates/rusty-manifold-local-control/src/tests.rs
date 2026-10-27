@@ -95,7 +95,6 @@ fn policy(max_commands_per_window: u16) -> ManifoldLocalControlPolicy {
 
 fn admission(policy: &ManifoldLocalControlPolicy) -> ManifoldAdmissionAuthority {
     ManifoldAdmissionAuthority::from_snapshot(ManifoldAdmissionSnapshot {
-        development_lifetime_policy: None,
         history_checkpoint: None,
         root_renewal_policies: Vec::new(),
         schema_id: schema(ADMISSION_SNAPSHOT_SCHEMA),

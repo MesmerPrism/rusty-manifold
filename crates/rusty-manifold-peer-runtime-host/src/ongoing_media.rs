@@ -529,6 +529,7 @@ impl ManifoldPeerRuntimeHost {
         validate_live_broker_restoration(&snapshot, &broker.evidence())?;
         Ok(Self {
             snapshot,
+            development_lifetime_policy: anchor.owner.development_lifetime_policy.clone(),
             media_runtime_owner: anchor.owner.media_runtime_owner.clone(),
             signed_history_owner: None,
             signed_history_candidate: None,
@@ -585,7 +586,7 @@ fn checked_total(base: u64, suffix: usize) -> Result<u64, ManifoldPeerRuntimeHos
         .ok_or_else(|| invalid_snapshot("cumulative renewal count exhausted"))
 }
 
-// Called only after the complete actual source validates the old→new adoption
+// Called only after the complete actual source validates the oldâ†’new adoption
 // chain. Terminal records disappear only with their accepted Stop, derivative
 // release and completed route cleanup, all committed by the source digest.
 pub(super) fn prune_completed_media_lifetimes(

@@ -49,3 +49,20 @@ impl ManifoldDevelopmentLifetimePolicy {
             .map_or(finite_ms, |value| value.delegated_authority_horizon_ms)
     }
 }
+
+/// Selected non-ongoing snapshot; its shape remains the legacy public Rust shape.
+pub const DEVELOPMENT_ADMISSION_SNAPSHOT_SCHEMA: &str =
+    "rusty.manifold.admission.development_snapshot.v1";
+/// Selected ongoing snapshot; actual live-owner restoration remains mandatory.
+pub const DEVELOPMENT_ONGOING_ADMISSION_SNAPSHOT_SCHEMA: &str =
+    "rusty.manifold.admission.development_snapshot.v2";
+
+pub(super) fn snapshot_lifetime_policy(
+    snapshot: &crate::ManifoldAdmissionSnapshot,
+) -> Option<&'static ManifoldDevelopmentLifetimePolicy> {
+    matches!(
+        snapshot.schema_id.as_str(),
+        DEVELOPMENT_ADMISSION_SNAPSHOT_SCHEMA | DEVELOPMENT_ONGOING_ADMISSION_SNAPSHOT_SCHEMA
+    )
+    .then(ManifoldDevelopmentLifetimePolicy::source_owned_v1)
+}

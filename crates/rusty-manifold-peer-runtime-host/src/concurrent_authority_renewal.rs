@@ -90,10 +90,7 @@ impl ManifoldPeerRuntimeHost {
         let expiry = now_ms
             .checked_add(
                 rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
-                    self.snapshot
-                        .trust_policy
-                        .development_lifetime_policy
-                        .as_ref(),
+                    self.development_lifetime_policy(),
                     300_000,
                 ),
             )
@@ -388,7 +385,7 @@ pub(super) fn validate_concurrent_pair_renewals(
             || receipt.prior_authority_revision.next() != Some(receipt.resulting_authority_revision)
             || receipt.observed_at_ms.checked_add(
                 rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
-                    snapshot.trust_policy.development_lifetime_policy.as_ref(),
+                    trust_lifetime_policy(&snapshot.trust_policy),
                     300_000,
                 ),
             ) != Some(receipt.expires_at_ms)

@@ -925,6 +925,13 @@ pub struct ManifoldBrokerRuntime {
 }
 
 impl ManifoldBrokerRuntime {
+    /// Immutable lifetime selection held by the actual admission owner.
+    pub fn development_lifetime_policy(
+        &self,
+    ) -> Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy> {
+        self.admission.development_lifetime_policy()
+    }
+
     /// Returns the immutable live adapter/product provenance binding.
     #[must_use]
     pub const fn adapter_config(&self) -> &ManifoldBrokerAdapterConfig {
@@ -947,6 +954,39 @@ impl ManifoldBrokerRuntime {
         adapter: ManifoldBrokerAdapter,
         control_lease_authority: ManifoldBrokerControlLeaseAuthority,
         admission_snapshot: ManifoldAdmissionSnapshot,
+    ) -> Result<Self, ManifoldBrokerRuntimeStateError> {
+        Self::new_with_policy_selection(
+            provider_epoch_id,
+            adapter,
+            control_lease_authority,
+            admission_snapshot,
+            None,
+        )
+    }
+
+    /// Selects exact trusted policy without changing the legacy input shapes.
+    pub fn new_with_lifetime_policy(
+        provider_epoch_id: DottedId,
+        adapter: ManifoldBrokerAdapter,
+        control_lease_authority: ManifoldBrokerControlLeaseAuthority,
+        admission_snapshot: ManifoldAdmissionSnapshot,
+        policy: &rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy,
+    ) -> Result<Self, ManifoldBrokerRuntimeStateError> {
+        Self::new_with_policy_selection(
+            provider_epoch_id,
+            adapter,
+            control_lease_authority,
+            admission_snapshot,
+            Some(policy),
+        )
+    }
+
+    fn new_with_policy_selection(
+        provider_epoch_id: DottedId,
+        adapter: ManifoldBrokerAdapter,
+        control_lease_authority: ManifoldBrokerControlLeaseAuthority,
+        admission_snapshot: ManifoldAdmissionSnapshot,
+        policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
     ) -> Result<Self, ManifoldBrokerRuntimeStateError> {
         if control_lease_authority
             .evidence()
@@ -974,8 +1014,14 @@ impl ManifoldBrokerRuntime {
             provider_epoch_id,
             adapter,
             control_lease_authority,
-            admission: ManifoldAdmissionAuthority::from_snapshot(admission_snapshot)
-                .map_err(ManifoldBrokerRuntimeStateError::Admission)?,
+            admission: match policy {
+                Some(selected) => ManifoldAdmissionAuthority::from_snapshot_with_lifetime_policy(
+                    admission_snapshot,
+                    selected,
+                ),
+                None => ManifoldAdmissionAuthority::from_snapshot(admission_snapshot),
+            }
+            .map_err(ManifoldBrokerRuntimeStateError::Admission)?,
             pending_bounded_uses: BTreeMap::new(),
             authorized_bounded_uses: BTreeMap::new(),
             admission_token_history,
@@ -1019,6 +1065,27 @@ impl ManifoldBrokerRuntime {
         evidence: ManifoldBrokerRuntimeEvidence,
     ) -> Result<Self, ManifoldBrokerRuntimeStateError> {
         Self::restore_from_owned_components(adapter, control_lease_authority, evidence, None, None)
+    }
+
+    /// Selected evidence also requires exact trusted source policy; ongoing owner guards remain.
+    pub fn restore_from_caller_attested_exclusive_evidence_with_lifetime_policy(
+        adapter: ManifoldBrokerAdapter,
+        control_lease_authority: ManifoldBrokerControlLeaseAuthority,
+        evidence: ManifoldBrokerRuntimeEvidence,
+        policy: &rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy,
+    ) -> Result<Self, ManifoldBrokerRuntimeStateError> {
+        let admission = ManifoldAdmissionAuthority::from_snapshot_with_lifetime_policy(
+            evidence.admission_snapshot.clone(),
+            policy,
+        )
+        .map_err(ManifoldBrokerRuntimeStateError::Admission)?;
+        Self::restore_from_owned_components(
+            adapter,
+            control_lease_authority,
+            evidence,
+            Some(admission),
+            None,
+        )
     }
 
     fn restore_from_owned_components(
@@ -3000,11 +3067,12 @@ impl ManifoldBrokerRuntime {
                 "epoch_rollover_replay_capacity",
             ));
         }
-        let mut candidate = Self::new(
+        let mut candidate = Self::new_with_policy_selection(
             resulting_provider_epoch_id.clone(),
             self.adapter.clone(),
             compact_owner,
             fresh_admission_snapshot,
+            self.admission.development_lifetime_policy(),
         )?;
         candidate.compacted_control_lease_request_ids = compacted_control_lease_request_ids;
         let resulting_evidence = candidate.evidence();
@@ -4095,9 +4163,9 @@ impl ManifoldBrokerRuntime {
             self.adapter.clone(),
             control_lease_authority,
             evidence,
-            self.history_checkpoint
-                .as_ref()
-                .map(|_| self.admission.clone()),
+            (self.history_checkpoint.is_some()
+                || self.admission.development_lifetime_policy().is_some())
+            .then(|| self.admission.clone()),
             self.history_checkpoint.as_ref(),
         )?;
         // This copy comes from the exclusively held live runtime, never a
@@ -6093,7 +6161,6 @@ mod tests {
         let adapter = ManifoldBrokerAdapter::new(config, &packaged_lock, &control_lease_authority)
             .expect("adapter");
         let admission = ManifoldAdmissionSnapshot {
-            development_lifetime_policy: None,
             history_checkpoint: None,
             root_renewal_policies: Vec::new(),
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
@@ -6167,7 +6234,6 @@ mod tests {
             .expect("adapter");
         let capability = command_capability(&id(command));
         let admission = ManifoldAdmissionSnapshot {
-            development_lifetime_policy: None,
             history_checkpoint: None,
             root_renewal_policies: Vec::new(),
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
@@ -6412,6 +6478,86 @@ mod tests {
             expected_admission_authority_revision: Revision::new(3).expect("revision"),
             command,
         }
+    }
+
+    #[test]
+    fn development_construction_retains_selected_owner_through_actual_ongoing_join() {
+        let lease = ManifoldRuntimeLease {
+            lease_id: id("lease.media.session.runtime.test"),
+            scope: id("lease.media.session"),
+            holder_id: id("client.runtime.test"),
+            expires_at_ms: 60_000,
+            derivative_binding: None,
+        };
+        let old = runtime(
+            vec![ManifoldBrokerFeature::MediaSession],
+            vec![command_capability(&id("command.media.session.start"))],
+            vec![lease],
+            "epoch.development.test",
+        );
+        let mut snapshot = old.admission.snapshot().clone();
+        snapshot.schema_id =
+            schema_id(rusty_manifold_admission::DEVELOPMENT_ADMISSION_SNAPSHOT_SCHEMA);
+        let selected =
+            rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::source_owned_v1();
+        // Move the real finite components into the prospective constructor;
+        // no parallel provider or remote-effect claim is manufactured.
+        let mut held = ManifoldBrokerUnpublishedConstruction::new_with_lifetime_policy(
+            old.provider_epoch_id,
+            old.adapter,
+            old.control_lease_authority,
+            snapshot,
+            selected,
+        );
+        held.try_construct().unwrap();
+        let current = held.runtime_mut().unwrap();
+        assert_eq!(current.development_lifetime_policy(), Some(selected));
+        assert_eq!(
+            current.staged_copy().unwrap().development_lifetime_policy(),
+            Some(selected)
+        );
+        current.enable_ongoing_history().unwrap();
+        assert_eq!(current.development_lifetime_policy(), Some(selected));
+        assert_eq!(
+            current.admission_snapshot().schema_id.as_str(),
+            rusty_manifold_admission::DEVELOPMENT_ONGOING_ADMISSION_SNAPSHOT_SCHEMA
+        );
+        assert_eq!(
+            current.staged_copy().unwrap().development_lifetime_policy(),
+            Some(selected)
+        );
+    }
+
+    #[test]
+    fn development_drained_rollover_preserves_policy_and_rejects_finite_substitution() {
+        let old = runtime(
+            vec![ManifoldBrokerFeature::MediaSession],
+            vec![command_capability(&id("command.media.session.start"))],
+            Vec::new(),
+            "epoch.development.rollover",
+        );
+        let mut snapshot = old.admission_snapshot().clone();
+        snapshot.schema_id =
+            schema_id(rusty_manifold_admission::DEVELOPMENT_ADMISSION_SNAPSHOT_SCHEMA);
+        let selected =
+            rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::source_owned_v1();
+        let mut current = ManifoldBrokerRuntime::new_with_lifetime_policy(
+            old.provider_epoch_id,
+            old.adapter,
+            old.control_lease_authority,
+            snapshot.clone(),
+            selected,
+        )
+        .unwrap();
+        let mut finite = snapshot.clone();
+        finite.schema_id = schema_id(ADMISSION_SNAPSHOT_SCHEMA);
+        assert!(current
+            .rollover_drained_provider_epoch(id("epoch.development.next"), finite)
+            .is_err());
+        current
+            .rollover_drained_provider_epoch(id("epoch.development.next"), snapshot)
+            .unwrap();
+        assert_eq!(current.development_lifetime_policy(), Some(selected));
     }
 
     #[test]

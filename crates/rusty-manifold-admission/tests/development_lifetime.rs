@@ -1,5 +1,5 @@
 //! Actual selected admission construction and finite/altered negative controls.
-use rusty_manifold_admission::ManifoldAdmissionAuthority;
+use rusty_manifold_admission::{ManifoldAdmissionAuthority, ManifoldDevelopmentLifetimePolicy};
 use serde_json::{json, Value};
 
 fn snapshot() -> Value {
@@ -20,20 +20,23 @@ fn snapshot() -> Value {
 
 fn selected() -> Value {
     let mut value = snapshot();
-    value["development_lifetime_policy"] = json!({
-        "$schema":"rusty.manifold.development.lifetime_policy.v1",
-        "policy_id":"policy.manifold.development-lifetime.v1",
-        "delegated_authority_horizon_ms":2_592_000_000u64
-    });
+    value["$schema"] = json!(rusty_manifold_admission::DEVELOPMENT_ADMISSION_SNAPSHOT_SCHEMA);
     value
 }
 
 #[test]
 fn selected_development_policy_accepts_real_long_root_and_survives_restart() {
-    let owner = ManifoldAdmissionAuthority::restart_from_json(&selected().to_string())
-        .expect("source-selected development lifetime must survive the actual admission validator");
+    let owner = ManifoldAdmissionAuthority::restart_from_json_with_lifetime_policy(
+        &selected().to_string(),
+        ManifoldDevelopmentLifetimePolicy::source_owned_v1(),
+    )
+    .expect("source-selected development lifetime must survive the actual admission validator");
     let stored = owner.snapshot_json().unwrap();
-    let restarted = ManifoldAdmissionAuthority::restart_from_json(&stored).unwrap();
+    let restarted = ManifoldAdmissionAuthority::restart_from_json_with_lifetime_policy(
+        &stored,
+        ManifoldDevelopmentLifetimePolicy::source_owned_v1(),
+    )
+    .unwrap();
     assert_eq!(stored, restarted.snapshot_json().unwrap());
 }
 
@@ -44,11 +47,30 @@ fn finite_omission_does_not_gain_development_horizon() {
 
 #[test]
 fn altered_policy_or_longer_child_does_not_gain_authority() {
-    let mut changed = selected();
-    changed["development_lifetime_policy"]["delegated_authority_horizon_ms"] =
-        json!(2_592_000_001u64);
-    assert!(ManifoldAdmissionAuthority::restart_from_json(&changed.to_string()).is_err());
+    let mut policy = ManifoldDevelopmentLifetimePolicy::source_owned_v1().clone();
+    policy.delegated_authority_horizon_ms += 1;
+    assert!(
+        ManifoldAdmissionAuthority::restart_from_json_with_lifetime_policy(
+            &selected().to_string(),
+            &policy
+        )
+        .is_err()
+    );
+    assert!(ManifoldAdmissionAuthority::restart_from_json(&selected().to_string()).is_err());
+    assert!(
+        ManifoldAdmissionAuthority::restart_from_json_with_lifetime_policy(
+            &snapshot().to_string(),
+            ManifoldDevelopmentLifetimePolicy::source_owned_v1()
+        )
+        .is_err()
+    );
     let mut changed = selected();
     changed["root_renewal_policies"][0]["horizon_ms"] = json!(2_592_060_000u64);
-    assert!(ManifoldAdmissionAuthority::restart_from_json(&changed.to_string()).is_err());
+    assert!(
+        ManifoldAdmissionAuthority::restart_from_json_with_lifetime_policy(
+            &changed.to_string(),
+            ManifoldDevelopmentLifetimePolicy::source_owned_v1()
+        )
+        .is_err()
+    );
 }

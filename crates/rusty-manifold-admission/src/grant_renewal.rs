@@ -27,7 +27,7 @@ impl ManifoldAdmissionSnapshot {
             .map_or_else(
                 || {
                     ManifoldDevelopmentLifetimePolicy::selected_horizon(
-                        self.development_lifetime_policy.as_ref(),
+                        crate::development_lifetime::snapshot_lifetime_policy(self),
                         300_000,
                     )
                 },
@@ -47,7 +47,7 @@ pub(super) fn validate_root_renewal_policies(
         || snapshot.root_renewal_policies.iter().any(|p| {
             !(300_000
                 ..=ManifoldDevelopmentLifetimePolicy::selected_horizon(
-                    snapshot.development_lifetime_policy.as_ref(),
+                    crate::development_lifetime::snapshot_lifetime_policy(snapshot),
                     3_600_000,
                 ))
                 .contains(&p.horizon_ms)
@@ -416,15 +416,28 @@ mod tests {
         );
     }
     fn run_scoped_renewals(horizon: u64) {
+        let construct = |snapshot: ManifoldAdmissionSnapshot| {
+            if horizon > 3_600_000 {
+                ManifoldAdmissionAuthority::from_snapshot_with_lifetime_policy(
+                    snapshot,
+                    ManifoldDevelopmentLifetimePolicy::source_owned_v1(),
+                )
+            } else {
+                ManifoldAdmissionAuthority::from_snapshot(snapshot)
+            }
+        };
+        let restart = |raw: &str| {
+            let snapshot =
+                serde_json::from_str(raw).map_err(ManifoldAdmissionError::Deserialize)?;
+            construct(snapshot)
+        };
         let identity = ManifoldClientIdentity {
             client_id: id("client.renewal"),
             platform_subject: "test.actual.authority".to_owned(),
             signing_fingerprint: format!("sha256:{}", "a".repeat(64)),
         };
         let capability = id("capability.manifold.control_lease.renew");
-        let mut owner = ManifoldAdmissionAuthority::from_snapshot(ManifoldAdmissionSnapshot {
-            development_lifetime_policy: (horizon > 3_600_000)
-                .then(|| crate::ManifoldDevelopmentLifetimePolicy::source_owned_v1().clone()),
+        let snapshot = ManifoldAdmissionSnapshot {
             history_checkpoint: None,
             root_renewal_policies: if horizon == 300_000 {
                 Vec::new()
@@ -457,7 +470,17 @@ mod tests {
             reviewed_sweep_ids: Vec::new(),
             audit_events: Vec::new(),
             max_token_ttl_ms: 5000,
-        })
+        };
+        let mut owner = if horizon > 3_600_000 {
+            let mut selected = snapshot;
+            selected.schema_id = schema_id(DEVELOPMENT_ADMISSION_SNAPSHOT_SCHEMA);
+            ManifoldAdmissionAuthority::from_snapshot_with_lifetime_policy(
+                selected,
+                ManifoldDevelopmentLifetimePolicy::source_owned_v1(),
+            )
+        } else {
+            ManifoldAdmissionAuthority::from_snapshot(snapshot)
+        }
         .unwrap();
         for invalid in [0, 299_999, 300_001, 3_600_001, u64::MAX] {
             let mut bad = owner.snapshot().clone();
@@ -465,7 +488,7 @@ mod tests {
                 grant_id: id("grant.renewal"),
                 horizon_ms: invalid,
             }];
-            assert!(ManifoldAdmissionAuthority::from_snapshot(bad).is_err());
+            assert!(construct(bad).is_err());
         }
         let mut duplicate = owner.snapshot().clone();
         duplicate.root_renewal_policies = vec![
@@ -475,11 +498,11 @@ mod tests {
             };
             2
         ];
-        assert!(ManifoldAdmissionAuthority::from_snapshot(duplicate).is_err());
+        assert!(construct(duplicate).is_err());
         let mut malformed = serde_json::to_value(owner.snapshot()).unwrap();
         malformed["root_renewal_policies"] =
             serde_json::json!([{"grant_id":"grant.renewal","horizon_ms":"1800000"}]);
-        assert!(ManifoldAdmissionAuthority::restart_from_json(&malformed.to_string()).is_err());
+        assert!(restart(&malformed.to_string()).is_err());
         for cycle in 0..22u64 {
             let now = 2000 + ((cycle / 2) * 120000) + (cycle % 2);
             let issued = owner.issue_token(
@@ -532,28 +555,28 @@ mod tests {
             assert!(receipt.application.applied);
             assert_eq!(owner.renew_current_grant(&request, now).unwrap(), receipt);
             let json = owner.snapshot_json().unwrap();
-            assert!(ManifoldAdmissionAuthority::restart_from_json(&json).is_ok());
+            assert!(restart(&json).is_ok());
             let mut malformed_policy = owner.snapshot().clone();
             malformed_policy.root_renewal_policies = vec![ManifoldAdmissionRootRenewalPolicy {
                 grant_id: id("grant.unknown"),
                 horizon_ms: horizon,
             }];
-            assert!(ManifoldAdmissionAuthority::from_snapshot(malformed_policy).is_err());
+            assert!(construct(malformed_policy).is_err());
             let mut malformed_policy = owner.snapshot().clone();
             malformed_policy.root_renewal_policies = vec![ManifoldAdmissionRootRenewalPolicy {
                 grant_id: id("grant.renewal"),
                 horizon_ms: 4_000_000,
             }];
-            assert!(ManifoldAdmissionAuthority::from_snapshot(malformed_policy).is_err());
+            assert!(construct(malformed_policy).is_err());
             let mut drifted_policy = owner.snapshot().clone();
             drifted_policy.root_renewal_policies = vec![ManifoldAdmissionRootRenewalPolicy {
                 grant_id: id("grant.renewal"),
                 horizon_ms: 3_600_000,
             }];
-            assert!(ManifoldAdmissionAuthority::from_snapshot(drifted_policy).is_err());
+            assert!(construct(drifted_policy).is_err());
             let mut malformed = owner.snapshot().clone();
             malformed.grants[0].expires_at_ms += 1;
-            assert!(ManifoldAdmissionAuthority::from_snapshot(malformed).is_err());
+            assert!(construct(malformed).is_err());
         }
         assert_eq!(
             owner

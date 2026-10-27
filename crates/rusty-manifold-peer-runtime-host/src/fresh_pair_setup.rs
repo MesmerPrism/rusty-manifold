@@ -108,6 +108,40 @@ impl ManifoldPeerRuntimeHost {
         provider_epoch_id: DottedId,
         media_command_runtime: ManifoldRuntimeHostSnapshot,
     ) -> Result<Self, ManifoldPeerRuntimeHostError> {
+        Self::new_with_fresh_pair_setup_with_policy_selection(
+            host_id,
+            trust_policy,
+            provider_epoch_id,
+            media_command_runtime,
+            None,
+        )
+    }
+
+    /// Selects the exact independently trusted source lifetime policy.
+    pub fn new_with_fresh_pair_setup_and_lifetime_policy(
+        host_id: DottedId,
+        trust_policy: ManifoldPeerRuntimeTrustPolicy,
+        provider_epoch_id: DottedId,
+        media_command_runtime: ManifoldRuntimeHostSnapshot,
+        policy: &rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy,
+    ) -> Result<Self, ManifoldPeerRuntimeHostError> {
+        Self::new_with_fresh_pair_setup_with_policy_selection(
+            host_id,
+            trust_policy,
+            provider_epoch_id,
+            media_command_runtime,
+            Some(policy),
+        )
+    }
+
+    fn new_with_fresh_pair_setup_with_policy_selection(
+        host_id: DottedId,
+        trust_policy: ManifoldPeerRuntimeTrustPolicy,
+        provider_epoch_id: DottedId,
+        media_command_runtime: ManifoldRuntimeHostSnapshot,
+        policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+    ) -> Result<Self, ManifoldPeerRuntimeHostError> {
+        Self::require_lifetime_policy_selection(&trust_policy, policy)?;
         validate_trust_policy(&trust_policy)?;
         if trust_policy.fresh_setup_policy.is_none()
             || trust_policy.fresh_setup_local_peer_id.is_none()
@@ -120,11 +154,12 @@ impl ManifoldPeerRuntimeHost {
         baseline_policy.fresh_setup_policy = None;
         baseline_policy.fresh_setup_local_peer_id = None;
         baseline_policy.fresh_setup_enrollment_selection = None;
-        let mut actual = Self::new(
+        let mut actual = Self::new_with_policy_selection(
             host_id,
             baseline_policy,
             provider_epoch_id,
             media_command_runtime,
+            policy,
         )?;
         actual.snapshot.trust_policy = trust_policy;
         actual.snapshot.fresh_pair_setup = Some(empty_state());
@@ -280,10 +315,7 @@ impl ManifoldPeerRuntimeHost {
         if let Some(receipt) = receipt {
             validate_fresh_pair_setup_receipt_with_lifetime_policy(
                 receipt,
-                self.snapshot
-                    .trust_policy
-                    .development_lifetime_policy
-                    .as_ref(),
+                self.development_lifetime_policy(),
             )?;
         }
         Ok(receipt.cloned())
@@ -410,10 +442,7 @@ impl ManifoldPeerRuntimeHost {
                 now_ms,
                 credential_expires_at_ms,
                 rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
-                    self.snapshot
-                        .trust_policy
-                        .development_lifetime_policy
-                        .as_ref(),
+                    self.development_lifetime_policy(),
                     MAX_PEER_STATUS_TTL_MS,
                 ),
             )
@@ -554,7 +583,7 @@ pub(super) fn validate(
     for r in &state.receipts {
         validate_fresh_pair_setup_receipt_with_lifetime_policy(
             r,
-            snapshot.trust_policy.development_lifetime_policy.as_ref(),
+            trust_lifetime_policy(&snapshot.trust_policy),
         )?;
         let c = &r.request.context;
         let credential_expires_at_ms = r

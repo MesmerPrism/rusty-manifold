@@ -427,14 +427,18 @@ mod mixed_authority_tests {
         let empty = ManifoldReciprocalEd25519AuthorityStateV3::empty();
         let request = signed_common_with_expiry(&enrollment, &alpha, &beta, 1_000 + horizon);
         let wire = ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(request.clone());
-        let mut runtime = super::tests::runtime(&host, &trust, &enrollment);
+        let runtime = super::tests::runtime(&host, &trust, &enrollment);
         assert!(
             matches!(review_and_apply_reciprocal_ed25519_v3(&empty, &wire, runtime, 2_000).1,
             ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref r) if !r.accepted)
         );
-        runtime.development_lifetime_policy = Some(policy);
-        let (state, receipt) =
-            review_and_apply_reciprocal_ed25519_v3(&empty, &wire, runtime, 2_000);
+        let (state, receipt) = review_and_apply_reciprocal_ed25519_v3_with_lifetime_policy(
+            &empty,
+            &wire,
+            runtime,
+            2_000,
+            Some(policy),
+        );
         assert!(
             matches!(receipt, ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref r) if r.accepted)
         );
@@ -459,18 +463,22 @@ mod mixed_authority_tests {
         )
         .is_err());
         assert!(
-            matches!(review_and_apply_reciprocal_ed25519_v3(&state, &wire, runtime, 2_001).1,
+            matches!(review_and_apply_reciprocal_ed25519_v3_with_lifetime_policy(&state, &wire, runtime, 2_001, Some(policy)).1,
             ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref r) if !r.accepted)
         );
         let mut tampered = request;
         tampered.context.expires_at_ms -= 1;
-        assert!(matches!(review_and_apply_reciprocal_ed25519_v3(&empty,
-            &ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(tampered), runtime, 2_000).1,
-            ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref r) if !r.accepted));
+        assert!(
+            matches!(review_and_apply_reciprocal_ed25519_v3_with_lifetime_policy(&empty,
+            &ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(tampered), runtime, 2_000, Some(policy)).1,
+            ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref r) if !r.accepted)
+        );
         let overlong = signed_common_with_expiry(&enrollment, &alpha, &beta, 1_001 + horizon);
-        assert!(matches!(review_and_apply_reciprocal_ed25519_v3(&empty,
-            &ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(overlong), runtime, 2_000).1,
-            ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref r) if !r.accepted));
+        assert!(
+            matches!(review_and_apply_reciprocal_ed25519_v3_with_lifetime_policy(&empty,
+            &ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(overlong), runtime, 2_000, Some(policy)).1,
+            ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref r) if !r.accepted)
+        );
     }
 
     #[test]
@@ -1371,9 +1379,6 @@ pub fn migrate_reciprocal_ed25519_state_v2_to_v3(
 /// Exact Runtime Host context that must match the signed revision closure.
 #[derive(Clone, Copy, Debug)]
 pub struct ManifoldReciprocalEd25519RuntimeContext<'a> {
-    /// Immutable lifetime selection supplied by the composing authority.
-    pub development_lifetime_policy:
-        Option<&'a rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
     /// Stable Runtime Host identity.
     pub runtime_host_id: &'a DottedId,
     /// Immutable Runtime Host trust-policy identity.
@@ -1982,15 +1987,36 @@ pub fn review_and_apply_reciprocal_ed25519_v3(
     ManifoldReciprocalEd25519AuthorityStateV3,
     ManifoldReciprocalEd25519ReceiptV3,
 ) {
+    review_and_apply_reciprocal_ed25519_v3_with_lifetime_policy(
+        state, request, runtime, now_ms, None,
+    )
+}
+
+/// Uses an independently accepted immutable source lifetime policy.
+pub fn review_and_apply_reciprocal_ed25519_v3_with_lifetime_policy(
+    state: &ManifoldReciprocalEd25519AuthorityStateV3,
+    request: &ManifoldReciprocalEd25519ReviewRequestV3,
+    runtime: ManifoldReciprocalEd25519RuntimeContext<'_>,
+    now_ms: u64,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+) -> (
+    ManifoldReciprocalEd25519AuthorityStateV3,
+    ManifoldReciprocalEd25519ReceiptV3,
+) {
     if state.history_checkpoint.is_some() {
         // A detached v4 projection is evidence, never an ongoing mutation gate.
         let mut invalid = state.clone();
         invalid.history_checkpoint = None;
-        let (_, receipt) =
-            review_and_apply_reciprocal_ed25519_owned(&invalid, request, runtime, now_ms);
+        let (_, receipt) = review_and_apply_reciprocal_ed25519_owned(
+            &invalid,
+            request,
+            runtime,
+            now_ms,
+            lifetime_policy,
+        );
         return (state.clone(), receipt);
     }
-    review_and_apply_reciprocal_ed25519_owned(state, request, runtime, now_ms)
+    review_and_apply_reciprocal_ed25519_owned(state, request, runtime, now_ms, lifetime_policy)
 }
 
 fn review_and_apply_reciprocal_ed25519_owned(
@@ -1998,6 +2024,7 @@ fn review_and_apply_reciprocal_ed25519_owned(
     request: &ManifoldReciprocalEd25519ReviewRequestV3,
     runtime: ManifoldReciprocalEd25519RuntimeContext<'_>,
     now_ms: u64,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
 ) -> (
     ManifoldReciprocalEd25519AuthorityStateV3,
     ManifoldReciprocalEd25519ReceiptV3,
@@ -2063,7 +2090,7 @@ fn review_and_apply_reciprocal_ed25519_owned(
             )
         }
         ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(request) => {
-            review_and_apply_common_lan_reciprocal(state, request, runtime, now_ms)
+            review_and_apply_common_lan_reciprocal(state, request, runtime, now_ms, lifetime_policy)
         }
     }
 }
@@ -2073,6 +2100,7 @@ fn review_and_apply_common_lan_reciprocal(
     request: &ManifoldCommonLanReciprocalEd25519ReviewRequest,
     runtime: ManifoldReciprocalEd25519RuntimeContext<'_>,
     now_ms: u64,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
 ) -> (
     ManifoldReciprocalEd25519AuthorityStateV3,
     ManifoldReciprocalEd25519ReceiptV3,
@@ -2083,8 +2111,16 @@ fn review_and_apply_common_lan_reciprocal(
         decoded_nonce_sha256(&request.context.responder.device_nonce_hex),
     ];
     nonce_hashes.sort();
-    let rejection =
-        validate_common_lan_review(state, request, runtime, now_ms, &hash, &nonce_hashes).err();
+    let rejection = validate_common_lan_review(
+        state,
+        request,
+        runtime,
+        now_ms,
+        &hash,
+        &nonce_hashes,
+        lifetime_policy,
+    )
+    .err();
     let prior = state.authority_revision;
     let resulting = rejection
         .is_none()
@@ -2168,6 +2204,7 @@ fn validate_common_lan_review(
     now_ms: u64,
     hash: &str,
     nonce_hashes: &[String; 2],
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
 ) -> Result<(), ManifoldReciprocalEd25519RejectionReason> {
     if !reciprocal_ed25519_state_v3_is_well_formed(state) {
         return Err(ManifoldReciprocalEd25519RejectionReason::InvalidAuthorityState);
@@ -2252,7 +2289,7 @@ fn validate_common_lan_review(
         || context.expires_at_ms <= now_ms
         || context.expires_at_ms.saturating_sub(context.issued_at_ms)
             > rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
-                runtime.development_lifetime_policy,
+                lifetime_policy,
                 MAX_COMMON_LAN_CONTEXT_TTL_MS,
             )
     {
@@ -2774,7 +2811,6 @@ mod tests {
         enrollment: &'a ManifoldPeerEnrollmentState,
     ) -> ManifoldReciprocalEd25519RuntimeContext<'a> {
         ManifoldReciprocalEd25519RuntimeContext {
-            development_lifetime_policy: None,
             runtime_host_id: host_id,
             trust_policy_id,
             trust_policy_revision: Revision::INITIAL,
@@ -2811,7 +2847,6 @@ mod tests {
             &state,
             &replay,
             ManifoldReciprocalEd25519RuntimeContext {
-                development_lifetime_policy: None,
                 rendezvous_authority_revision: revision(2),
                 ..runtime(&host_id, &trust_policy_id, &enrollment)
             },

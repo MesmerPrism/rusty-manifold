@@ -329,9 +329,6 @@ impl ManifoldMediaSessionAcceptanceState {
 /// Runtime Host proof constructed by the composing authority after application.
 #[derive(Clone, Copy, Debug)]
 pub struct ManifoldMediaSessionRuntimeCommandContext<'a> {
-    /// Immutable lifetime selection supplied by the composing authority.
-    pub development_lifetime_policy:
-        Option<&'a rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
     /// Runtime Host identity that owns the accepted command state.
     pub runtime_host_id: &'a DottedId,
     /// Host-owned live provider epoch.
@@ -492,7 +489,23 @@ pub fn review_and_apply_media_session_acceptance(
     ManifoldMediaSessionAcceptanceState,
     ManifoldMediaSessionAcceptanceReceipt,
 ) {
-    review_media_acceptance_inner(state, request, runtime, now_ms, None)
+    review_and_apply_media_session_acceptance_with_lifetime_policy(
+        state, request, runtime, now_ms, None,
+    )
+}
+
+/// Uses an independently accepted immutable source lifetime policy.
+pub fn review_and_apply_media_session_acceptance_with_lifetime_policy(
+    state: &ManifoldMediaSessionAcceptanceState,
+    request: &ManifoldMediaSessionAcceptanceRequest,
+    runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
+    now_ms: u64,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+) -> (
+    ManifoldMediaSessionAcceptanceState,
+    ManifoldMediaSessionAcceptanceReceipt,
+) {
+    review_media_acceptance_inner(state, request, runtime, now_ms, None, lifetime_policy)
 }
 
 /// Re-adopts an identical stopped descriptor only after the composing authority
@@ -509,7 +522,36 @@ pub fn review_and_apply_media_session_terminal_readoption(
     ManifoldMediaSessionAcceptanceState,
     ManifoldMediaSessionAcceptanceReceipt,
 ) {
-    review_media_acceptance_inner(state, request, runtime, now_ms, Some(terminal_decision_id))
+    review_and_apply_media_session_terminal_readoption_with_lifetime_policy(
+        state,
+        request,
+        runtime,
+        now_ms,
+        terminal_decision_id,
+        None,
+    )
+}
+
+/// Uses an independently accepted immutable source lifetime policy.
+pub fn review_and_apply_media_session_terminal_readoption_with_lifetime_policy(
+    state: &ManifoldMediaSessionAcceptanceState,
+    request: &ManifoldMediaSessionAcceptanceRequest,
+    runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
+    now_ms: u64,
+    terminal_decision_id: &DottedId,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+) -> (
+    ManifoldMediaSessionAcceptanceState,
+    ManifoldMediaSessionAcceptanceReceipt,
+) {
+    review_media_acceptance_inner(
+        state,
+        request,
+        runtime,
+        now_ms,
+        Some(terminal_decision_id),
+        lifetime_policy,
+    )
 }
 
 fn review_media_acceptance_inner(
@@ -518,20 +560,27 @@ fn review_media_acceptance_inner(
     runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
     now_ms: u64,
     terminal_decision_id: Option<&DottedId>,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
 ) -> (
     ManifoldMediaSessionAcceptanceState,
     ManifoldMediaSessionAcceptanceReceipt,
 ) {
     let prior = state.authority_revision;
-    let rejection =
-        validate_acceptance_request(state, request, runtime, now_ms, terminal_decision_id)
-            .err()
-            .or_else(|| {
-                prior
-                    .next()
-                    .is_none()
-                    .then_some(ManifoldMediaSessionAcceptanceRejectionReason::RevisionExhausted)
-            });
+    let rejection = validate_acceptance_request(
+        state,
+        request,
+        runtime,
+        now_ms,
+        terminal_decision_id,
+        lifetime_policy,
+    )
+    .err()
+    .or_else(|| {
+        prior
+            .next()
+            .is_none()
+            .then_some(ManifoldMediaSessionAcceptanceRejectionReason::RevisionExhausted)
+    });
     if let Some(reason) = rejection {
         return (
             state.clone(),
@@ -884,6 +933,7 @@ fn validate_acceptance_request(
     runtime: ManifoldMediaSessionRuntimeCommandContext<'_>,
     now_ms: u64,
     terminal_decision_id: Option<&DottedId>,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
 ) -> Result<(), ManifoldMediaSessionAcceptanceRejectionReason> {
     if state.schema_id.as_str() != MANIFOLD_MEDIA_SESSION_ACCEPTANCE_STATE_SCHEMA
         || request.schema_id.as_str() != MANIFOLD_MEDIA_SESSION_ACCEPTANCE_REQUEST_SCHEMA
@@ -911,7 +961,7 @@ fn validate_acceptance_request(
     if request.expires_at_ms <= now_ms
         || request.expires_at_ms.saturating_sub(now_ms)
             > rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
-                runtime.development_lifetime_policy,
+                lifetime_policy,
                 MAX_MEDIA_SESSION_TTL_MS,
             )
     {
@@ -1270,7 +1320,6 @@ mod tests {
     impl RuntimeProof {
         fn context(&self) -> ManifoldMediaSessionRuntimeCommandContext<'_> {
             ManifoldMediaSessionRuntimeCommandContext {
-                development_lifetime_policy: None,
                 runtime_host_id: &self.runtime_host_id,
                 live_provider_epoch_id: &self.provider_epoch_id,
                 client_grants: &self.grants,
@@ -1423,10 +1472,14 @@ mod tests {
                 .1
                 .accepted
         );
-        let mut context = proof.context();
-        context.development_lifetime_policy = Some(policy);
-        let (state, receipt) =
-            review_and_apply_media_session_acceptance(&empty, &request, context, 2_000);
+        let context = proof.context();
+        let (state, receipt) = review_and_apply_media_session_acceptance_with_lifetime_policy(
+            &empty,
+            &request,
+            context,
+            2_000,
+            Some(policy),
+        );
         assert!(receipt.accepted);
         let decision = receipt.accepted_session.unwrap().decision_id;
         assert!(
@@ -1449,9 +1502,15 @@ mod tests {
         );
         request.expires_at_ms += 1;
         assert!(
-            !review_and_apply_media_session_acceptance(&empty, &request, context, 2_000)
-                .1
-                .accepted
+            !review_and_apply_media_session_acceptance_with_lifetime_policy(
+                &empty,
+                &request,
+                context,
+                2_000,
+                Some(policy)
+            )
+            .1
+            .accepted
         );
     }
 

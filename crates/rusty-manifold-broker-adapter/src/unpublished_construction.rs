@@ -3,6 +3,8 @@
 use super::*;
 
 struct Parts {
+    development_lifetime_policy:
+        Option<rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
     provider_epoch_id: DottedId,
     adapter: ManifoldBrokerAdapter,
     control_lease_authority: ManifoldBrokerControlLeaseAuthority,
@@ -24,8 +26,42 @@ impl ManifoldBrokerUnpublishedConstruction {
         control_lease_authority: ManifoldBrokerControlLeaseAuthority,
         admission_snapshot: ManifoldAdmissionSnapshot,
     ) -> Self {
+        Self::new_with_policy_selection(
+            provider_epoch_id,
+            adapter,
+            control_lease_authority,
+            admission_snapshot,
+            None,
+        )
+    }
+
+    /// Selects the exact trusted source policy without changing legacy input shapes.
+    pub fn new_with_lifetime_policy(
+        provider_epoch_id: DottedId,
+        adapter: ManifoldBrokerAdapter,
+        control_lease_authority: ManifoldBrokerControlLeaseAuthority,
+        admission_snapshot: ManifoldAdmissionSnapshot,
+        policy: &rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy,
+    ) -> Self {
+        Self::new_with_policy_selection(
+            provider_epoch_id,
+            adapter,
+            control_lease_authority,
+            admission_snapshot,
+            Some(policy),
+        )
+    }
+
+    fn new_with_policy_selection(
+        provider_epoch_id: DottedId,
+        adapter: ManifoldBrokerAdapter,
+        control_lease_authority: ManifoldBrokerControlLeaseAuthority,
+        admission_snapshot: ManifoldAdmissionSnapshot,
+        policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+    ) -> Self {
         Self {
             parts: Some(Parts {
+                development_lifetime_policy: policy.cloned(),
                 provider_epoch_id,
                 adapter,
                 control_lease_authority,
@@ -75,8 +111,14 @@ impl ManifoldBrokerUnpublishedConstruction {
             .collect();
         // Cloning input DATA does not clone any live authority. The actual new
         // admission owner is immediately installed in the retained candidate.
-        let admission = ManifoldAdmissionAuthority::from_snapshot(parts.admission_snapshot.clone())
-            .map_err(ManifoldBrokerRuntimeStateError::Admission)?;
+        let admission = match &parts.development_lifetime_policy {
+            Some(policy) => ManifoldAdmissionAuthority::from_snapshot_with_lifetime_policy(
+                parts.admission_snapshot.clone(),
+                policy,
+            ),
+            None => ManifoldAdmissionAuthority::from_snapshot(parts.admission_snapshot.clone()),
+        }
+        .map_err(ManifoldBrokerRuntimeStateError::Admission)?;
         let parts = self.parts.take().expect("retained real constructor parts");
         self.runtime = Some(ManifoldBrokerRuntime {
             history_checkpoint: None,
