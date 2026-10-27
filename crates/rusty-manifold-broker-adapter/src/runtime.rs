@@ -6093,6 +6093,7 @@ mod tests {
         let adapter = ManifoldBrokerAdapter::new(config, &packaged_lock, &control_lease_authority)
             .expect("adapter");
         let admission = ManifoldAdmissionSnapshot {
+            development_lifetime_policy: None,
             history_checkpoint: None,
             root_renewal_policies: Vec::new(),
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
@@ -6166,6 +6167,7 @@ mod tests {
             .expect("adapter");
         let capability = command_capability(&id(command));
         let admission = ManifoldAdmissionSnapshot {
+            development_lifetime_policy: None,
             history_checkpoint: None,
             root_renewal_policies: Vec::new(),
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),

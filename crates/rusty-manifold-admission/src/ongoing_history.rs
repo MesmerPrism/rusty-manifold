@@ -351,6 +351,7 @@ mod tests {
     }
     fn owner() -> ManifoldAdmissionAuthority {
         let mut owner = ManifoldAdmissionAuthority::from_snapshot(ManifoldAdmissionSnapshot {
+            development_lifetime_policy: None,
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
             history_checkpoint: None,
             authority_id: id("authority.ongoing"),

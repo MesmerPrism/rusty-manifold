@@ -171,6 +171,11 @@ impl ManifoldPeerRuntimeHost {
             .plan_common_lan(
                 request,
                 ManifoldReciprocalEd25519RuntimeContext {
+                    development_lifetime_policy: self
+                        .snapshot
+                        .trust_policy
+                        .development_lifetime_policy
+                        .as_ref(),
                     runtime_host_id: &self.snapshot.host_id,
                     trust_policy_id: &self.snapshot.trust_policy.policy_id,
                     trust_policy_revision: self.snapshot.trust_policy.revision,

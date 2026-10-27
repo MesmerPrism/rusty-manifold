@@ -27,8 +27,25 @@ fn setup_host_with_status_prefix(
     ongoing: bool,
     status_count: usize,
 ) -> ManifoldPeerRuntimeHost {
+    setup_host_with_lifetime_policy(local, ongoing, status_count, None)
+}
+
+fn setup_host_with_lifetime_policy(
+    local: &str,
+    ongoing: bool,
+    status_count: usize,
+    lifetime: Option<rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+) -> ManifoldPeerRuntimeHost {
     let mut policy = trust_policy();
     policy.fresh_setup_policy = Some(setup_policy());
+    if let Some(selected) = &lifetime {
+        policy
+            .fresh_setup_policy
+            .as_mut()
+            .unwrap()
+            .credential_validity_ms = selected.delegated_authority_horizon_ms;
+    }
+    policy.development_lifetime_policy = lifetime;
     policy.fresh_setup_local_peer_id = Some(id(local));
     let selection = setup_enrollment_selection();
     policy
@@ -188,6 +205,41 @@ fn common_after(
     request.initiator_signature.signature_hex = encode_lower_hex(&key(7).sign(&bytes).to_bytes());
     request.responder_signature.signature_hex = encode_lower_hex(&key(11).sign(&bytes).to_bytes());
     request
+}
+
+#[test]
+fn development_fresh_setup_retains_long_status_parent_and_restore_validation() {
+    let policy =
+        rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::source_owned_v1().clone();
+    let mut alpha = setup_host_with_lifetime_policy("peer.alpha", true, 2, Some(policy.clone()));
+    let mut beta = setup_host_with_lifetime_policy("peer.beta", true, 2, Some(policy.clone()));
+    let mut request = setup_request(&alpha, &beta, 110_000, "ceremony.duplex.development");
+    request.context.policy = alpha
+        .snapshot
+        .trust_policy
+        .fresh_setup_policy
+        .clone()
+        .unwrap();
+    resign(&mut request);
+    for host in [&mut alpha, &mut beta] {
+        let receipt = host.apply_fresh_pair_setup(&request, 110_000).unwrap();
+        assert!(validate_fresh_pair_setup_receipt(&receipt).is_err());
+        validate_fresh_pair_setup_receipt_with_lifetime_policy(&receipt, Some(&policy)).unwrap();
+        let expiry = 110_000 + policy.delegated_authority_horizon_ms;
+        assert!(host
+            .snapshot
+            .enrollment
+            .credentials
+            .iter()
+            .all(|c| c.expires_at_ms == expiry));
+        assert!(host
+            .snapshot
+            .accepted_peers
+            .peers
+            .iter()
+            .all(|p| p.status.expires_at_ms == expiry));
+        validate_snapshot(&host.snapshot).unwrap();
+    }
 }
 
 #[test]
@@ -1866,13 +1918,13 @@ fn archive_parent_checkpoint_does_not_fake_media_adoption_or_reset_phase_sequenc
 }
 #[test]
 fn archive_canonical_vectors_match_fixed_java_rules_and_refuse_noninteger_or_nonascii_keys() {
-    let value = serde_json::json!({"z":"a/雪\n","a":[null,true,-3,9223372036854775807i64]});
+    let value = serde_json::json!({"z":"a/é›ª\n","a":[null,true,-3,9223372036854775807i64]});
     assert_eq!(
         String::from_utf8(fresh_history_canonical(&value).unwrap()).unwrap(),
-        "{\"a\":[null,true,-3,9223372036854775807],\"z\":\"a/雪\\n\"}"
+        "{\"a\":[null,true,-3,9223372036854775807],\"z\":\"a/é›ª\\n\"}"
     );
     assert!(fresh_history_canonical(&serde_json::json!({"a":1.25})).is_err());
-    assert!(fresh_history_canonical(&serde_json::json!({"雪":1})).is_err());
+    assert!(fresh_history_canonical(&serde_json::json!({"é›ª":1})).is_err());
     assert!(fresh_history_canonical(&serde_json::json!({"a":18446744073709551615u64})).is_err());
     let vectors: serde_json::Value = serde_json::from_str(include_str!(
         "../../rusty-manifold-peer/src/fresh_history_canonical_vectors.json"

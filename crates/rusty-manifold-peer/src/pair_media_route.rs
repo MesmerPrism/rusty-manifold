@@ -891,6 +891,9 @@ impl ManifoldPairMediaRouteState {
 /// Borrowed host-owned Runtime Host evidence for one route mutation.
 #[derive(Clone, Copy, Debug)]
 pub struct ManifoldPairMediaRouteRuntimeContext<'a> {
+    /// Immutable lifetime selection supplied by the composing authority.
+    pub development_lifetime_policy:
+        Option<&'a rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
     /// Manifold Runtime Host authority identity.
     pub authority_host_id: &'a DottedId,
     /// Current host-owned provider epoch.
@@ -1480,7 +1483,10 @@ fn issue_common_lan_route(
     if !route_lifetime_is_bounded(
         request.expires_at_ms,
         now_ms,
-        MAX_COMMON_LAN_PAIR_MEDIA_ROUTE_TTL_MS,
+        rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+            runtime.development_lifetime_policy,
+            MAX_COMMON_LAN_PAIR_MEDIA_ROUTE_TTL_MS,
+        ),
     ) || peer
         .expires_at_ms
         .map_or(true, |expiry| request.expires_at_ms > expiry)
@@ -4076,6 +4082,7 @@ mod tests {
             rejection_reason: None,
         };
         let context = |runtime_lease| ManifoldPairMediaRouteRuntimeContext {
+            development_lifetime_policy: None,
             authority_host_id: &host_id,
             live_authority_provider_epoch_id: &epoch_id,
             media_client_grants: &[],

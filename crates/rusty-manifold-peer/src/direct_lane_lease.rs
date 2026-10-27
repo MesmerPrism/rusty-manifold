@@ -2022,6 +2022,7 @@ mod tests {
             &ManifoldMediaSessionAcceptanceState::empty(),
             &media_request,
             ManifoldMediaSessionRuntimeCommandContext {
+                development_lifetime_policy: None,
                 runtime_host_id: &runtime_host_id,
                 live_provider_epoch_id: &provider_epoch_id,
                 client_grants: &client_grants,

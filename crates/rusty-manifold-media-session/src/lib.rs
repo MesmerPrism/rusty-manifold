@@ -329,6 +329,9 @@ impl ManifoldMediaSessionAcceptanceState {
 /// Runtime Host proof constructed by the composing authority after application.
 #[derive(Clone, Copy, Debug)]
 pub struct ManifoldMediaSessionRuntimeCommandContext<'a> {
+    /// Immutable lifetime selection supplied by the composing authority.
+    pub development_lifetime_policy:
+        Option<&'a rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
     /// Runtime Host identity that owns the accepted command state.
     pub runtime_host_id: &'a DottedId,
     /// Host-owned live provider epoch.
@@ -906,7 +909,11 @@ fn validate_acceptance_request(
         return Err(ManifoldMediaSessionAcceptanceRejectionReason::ProviderEpochMismatch);
     }
     if request.expires_at_ms <= now_ms
-        || request.expires_at_ms.saturating_sub(now_ms) > MAX_MEDIA_SESSION_TTL_MS
+        || request.expires_at_ms.saturating_sub(now_ms)
+            > rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+                runtime.development_lifetime_policy,
+                MAX_MEDIA_SESSION_TTL_MS,
+            )
     {
         return Err(ManifoldMediaSessionAcceptanceRejectionReason::InvalidExpiry);
     }
@@ -1263,6 +1270,7 @@ mod tests {
     impl RuntimeProof {
         fn context(&self) -> ManifoldMediaSessionRuntimeCommandContext<'_> {
             ManifoldMediaSessionRuntimeCommandContext {
+                development_lifetime_policy: None,
                 runtime_host_id: &self.runtime_host_id,
                 live_provider_epoch_id: &self.provider_epoch_id,
                 client_grants: &self.grants,
@@ -1399,6 +1407,51 @@ mod tests {
         assert_eq!(
             reordered.validate(),
             Err(ManifoldMediaSessionBindingError::DescriptorNotCanonical)
+        );
+    }
+
+    #[test]
+    fn development_media_uses_selected_owner_and_retains_actual_expiry() {
+        let policy = rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::source_owned_v1();
+        let mut request =
+            acceptance_request("request.media.development", Revision::INITIAL, binding());
+        request.expires_at_ms = 2_000 + policy.delegated_authority_horizon_ms;
+        let proof = acceptance_proof(&request, "client.quest.media-test");
+        let empty = ManifoldMediaSessionAcceptanceState::empty();
+        assert!(
+            !review_and_apply_media_session_acceptance(&empty, &request, proof.context(), 2_000)
+                .1
+                .accepted
+        );
+        let mut context = proof.context();
+        context.development_lifetime_policy = Some(policy);
+        let (state, receipt) =
+            review_and_apply_media_session_acceptance(&empty, &request, context, 2_000);
+        assert!(receipt.accepted);
+        let decision = receipt.accepted_session.unwrap().decision_id;
+        assert!(
+            validate_current_media_session(
+                &state,
+                &decision,
+                &proof.provider_epoch_id,
+                request.expires_at_ms - 1
+            )
+            .current
+        );
+        assert!(
+            !validate_current_media_session(
+                &state,
+                &decision,
+                &proof.provider_epoch_id,
+                request.expires_at_ms
+            )
+            .current
+        );
+        request.expires_at_ms += 1;
+        assert!(
+            !review_and_apply_media_session_acceptance(&empty, &request, context, 2_000)
+                .1
+                .accepted
         );
     }
 

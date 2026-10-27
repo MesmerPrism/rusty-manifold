@@ -88,7 +88,15 @@ impl ManifoldPeerRuntimeHost {
         )
         .map_err(|_| invalid_snapshot("credential refresh requires current accepted signatures"))?;
         let expiry = now_ms
-            .checked_add(300_000)
+            .checked_add(
+                rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+                    self.snapshot
+                        .trust_policy
+                        .development_lifetime_policy
+                        .as_ref(),
+                    300_000,
+                ),
+            )
             .ok_or_else(|| invalid_snapshot("credential refresh expiry overflow"))?;
         let prior = self.snapshot.enrollment.authority_revision;
         let next_revision = prior
@@ -378,7 +386,12 @@ pub(super) fn validate_concurrent_pair_renewals(
             || receipt.status_receipts.len() != 2
             || receipt.status_receipts.iter().any(|entry| !entry.applied)
             || receipt.prior_authority_revision.next() != Some(receipt.resulting_authority_revision)
-            || receipt.observed_at_ms.checked_add(300_000) != Some(receipt.expires_at_ms)
+            || receipt.observed_at_ms.checked_add(
+                rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+                    snapshot.trust_policy.development_lifetime_policy.as_ref(),
+                    300_000,
+                ),
+            ) != Some(receipt.expires_at_ms)
             || !snapshot
                 .enrollment
                 .applied_request_ids

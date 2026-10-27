@@ -413,6 +413,67 @@ mod mixed_authority_tests {
     }
 
     #[test]
+    fn development_common_lan_preserves_signature_replay_and_real_expiry() {
+        let policy = rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::source_owned_v1();
+        let horizon = policy.delegated_authority_horizon_ms;
+        let alpha = SigningKey::from_bytes(&[7; 32]);
+        let beta = SigningKey::from_bytes(&[11; 32]);
+        let mut enrollment = super::tests::enrollment(&alpha, &beta);
+        for credential in &mut enrollment.credentials {
+            credential.expires_at_ms = horizon + 10_000;
+        }
+        let host = id("host.peer.test");
+        let trust = id("policy.peer.test");
+        let empty = ManifoldReciprocalEd25519AuthorityStateV3::empty();
+        let request = signed_common_with_expiry(&enrollment, &alpha, &beta, 1_000 + horizon);
+        let wire = ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(request.clone());
+        let mut runtime = super::tests::runtime(&host, &trust, &enrollment);
+        assert!(
+            matches!(review_and_apply_reciprocal_ed25519_v3(&empty, &wire, runtime, 2_000).1,
+            ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref r) if !r.accepted)
+        );
+        runtime.development_lifetime_policy = Some(policy);
+        let (state, receipt) =
+            review_and_apply_reciprocal_ed25519_v3(&empty, &wire, runtime, 2_000);
+        assert!(
+            matches!(receipt, ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref r) if r.accepted)
+        );
+        for now in [1_000 + 235_000, 1_000 + 3_600_000, 1_000 + horizon - 1] {
+            assert!(validate_current_reciprocal_ed25519_receipt_v3(
+                &state,
+                &enrollment,
+                &receipt,
+                &id("peer.alpha"),
+                &id("peer.beta"),
+                now
+            )
+            .is_ok());
+        }
+        assert!(validate_current_reciprocal_ed25519_receipt_v3(
+            &state,
+            &enrollment,
+            &receipt,
+            &id("peer.alpha"),
+            &id("peer.beta"),
+            1_000 + horizon
+        )
+        .is_err());
+        assert!(
+            matches!(review_and_apply_reciprocal_ed25519_v3(&state, &wire, runtime, 2_001).1,
+            ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref r) if !r.accepted)
+        );
+        let mut tampered = request;
+        tampered.context.expires_at_ms -= 1;
+        assert!(matches!(review_and_apply_reciprocal_ed25519_v3(&empty,
+            &ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(tampered), runtime, 2_000).1,
+            ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref r) if !r.accepted));
+        let overlong = signed_common_with_expiry(&enrollment, &alpha, &beta, 1_001 + horizon);
+        assert!(matches!(review_and_apply_reciprocal_ed25519_v3(&empty,
+            &ManifoldReciprocalEd25519ReviewRequestV3::CommonLan(overlong), runtime, 2_000).1,
+            ManifoldReciprocalEd25519ReceiptV3::CommonLan(ref r) if !r.accepted));
+    }
+
+    #[test]
     fn common_lan_duration_is_bounded_and_wifi_duration_is_unchanged() {
         let alpha = SigningKey::from_bytes(&[7; 32]);
         let beta = SigningKey::from_bytes(&[11; 32]);
@@ -1310,6 +1371,9 @@ pub fn migrate_reciprocal_ed25519_state_v2_to_v3(
 /// Exact Runtime Host context that must match the signed revision closure.
 #[derive(Clone, Copy, Debug)]
 pub struct ManifoldReciprocalEd25519RuntimeContext<'a> {
+    /// Immutable lifetime selection supplied by the composing authority.
+    pub development_lifetime_policy:
+        Option<&'a rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
     /// Stable Runtime Host identity.
     pub runtime_host_id: &'a DottedId,
     /// Immutable Runtime Host trust-policy identity.
@@ -2187,7 +2251,10 @@ fn validate_common_lan_review(
     if context.issued_at_ms > now_ms
         || context.expires_at_ms <= now_ms
         || context.expires_at_ms.saturating_sub(context.issued_at_ms)
-            > MAX_COMMON_LAN_CONTEXT_TTL_MS
+            > rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+                runtime.development_lifetime_policy,
+                MAX_COMMON_LAN_CONTEXT_TTL_MS,
+            )
     {
         return Err(ManifoldReciprocalEd25519RejectionReason::InvalidLifetime);
     }
@@ -2707,6 +2774,7 @@ mod tests {
         enrollment: &'a ManifoldPeerEnrollmentState,
     ) -> ManifoldReciprocalEd25519RuntimeContext<'a> {
         ManifoldReciprocalEd25519RuntimeContext {
+            development_lifetime_policy: None,
             runtime_host_id: host_id,
             trust_policy_id,
             trust_policy_revision: Revision::INITIAL,
@@ -2743,6 +2811,7 @@ mod tests {
             &state,
             &replay,
             ManifoldReciprocalEd25519RuntimeContext {
+                development_lifetime_policy: None,
                 rendezvous_authority_revision: revision(2),
                 ..runtime(&host_id, &trust_policy_id, &enrollment)
             },

@@ -2,7 +2,9 @@
 
 mod source_bound_reestablishment;
 pub use source_bound_reestablishment::*;
+mod development_lifetime;
 mod finite_construction;
+pub use development_lifetime::ManifoldDevelopmentLifetimePolicy;
 mod grant_renewal;
 
 pub use grant_renewal::*;
@@ -334,6 +336,9 @@ pub struct ManifoldAdmissionAuditEvent {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ManifoldAdmissionSnapshot {
+    /// Explicit trusted construction policy; omission preserves finite behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub development_lifetime_policy: Option<ManifoldDevelopmentLifetimePolicy>,
     /// Schema identifier.
     #[serde(rename = "$schema")]
     pub schema_id: SchemaId,
@@ -1156,6 +1161,7 @@ fn migrate_legacy_admission_snapshot(
         .collect::<Vec<_>>();
     migrated_token_ids.sort();
     let snapshot = ManifoldAdmissionSnapshot {
+        development_lifetime_policy: None,
         history_checkpoint: None,
         root_renewal_policies: Vec::new(),
         schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
@@ -1461,6 +1467,18 @@ fn validate_token(
 }
 
 fn validate_snapshot(snapshot: &ManifoldAdmissionSnapshot) -> Result<(), ManifoldAdmissionError> {
+    if snapshot
+        .development_lifetime_policy
+        .as_ref()
+        .is_some_and(|policy| {
+            !policy.is_source_owned_v1()
+                || snapshot.max_token_ttl_ms > policy.delegated_authority_horizon_ms
+        })
+    {
+        return Err(ManifoldAdmissionError::InvalidSnapshot(
+            "development_lifetime_policy",
+        ));
+    }
     ongoing_history::validate_checkpoint(snapshot)?;
     grant_renewal::validate_root_renewal_policies(snapshot)?;
     validate_grant_renewal_history(snapshot)?;
@@ -1819,6 +1837,7 @@ mod tests {
 
     fn authority() -> ManifoldAdmissionAuthority {
         ManifoldAdmissionAuthority::from_snapshot(ManifoldAdmissionSnapshot {
+            development_lifetime_policy: None,
             history_checkpoint: None,
             root_renewal_policies: Vec::new(),
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),

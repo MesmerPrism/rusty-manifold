@@ -180,6 +180,7 @@ fn media_resource_ids() -> Vec<DottedId> {
 
 fn trust_policy() -> ManifoldPeerRuntimeTrustPolicy {
     ManifoldPeerRuntimeTrustPolicy {
+        development_lifetime_policy: None,
         schema_id: schema_id(PEER_RUNTIME_HOST_TRUST_POLICY_SCHEMA),
         policy_id: id("policy.peer-runtime.test"),
         fresh_setup_policy: None,
@@ -3666,6 +3667,7 @@ fn live_broker_mutation_consumes_once_mints_releases_and_restores_media_lease() 
     );
     assert_eq!(outer_capability, grant.broker_capability_id);
     let admission_snapshot = ManifoldAdmissionSnapshot {
+        development_lifetime_policy: None,
         history_checkpoint: None,
         root_renewal_policies: Vec::new(),
         schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
@@ -5375,6 +5377,7 @@ fn cleanup_live_fixture() -> (ManifoldPeerRuntimeHost, ManifoldBrokerRuntime, Do
     );
     assert_eq!(outer_capability, grant.broker_capability_id);
     let admission_snapshot = ManifoldAdmissionSnapshot {
+        development_lifetime_policy: None,
         history_checkpoint: None,
         root_renewal_policies: Vec::new(),
         schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),

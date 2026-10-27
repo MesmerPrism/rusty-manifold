@@ -17,6 +17,10 @@ can be generated later from stable Manifold contracts.
 
 ## Opted-in finite admission root renewal
 
+The optional source-selected [development lifetime policy](development-lifetime-policy.md)
+is an explicit compatible-reader selection. Its omission keeps the finite
+defaults below; requests cannot opt themselves into longer authority.
+
 Admission snapshots may explicitly bind `root_renewal_policies` to existing
 grant ids. Each finite horizon is a whole minute from five through sixty
 minutes; omission retains the five-minute renewal policy. This scoped policy

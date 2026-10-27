@@ -77,11 +77,10 @@ use rusty_manifold_peer::{
     reciprocal_ed25519_state_v3_is_well_formed, review_and_apply_direct_lane_lease,
     review_and_apply_pair_media_route_termination_v1_on_v2,
     review_and_apply_pair_media_route_termination_v2, review_and_apply_pair_media_route_v2,
-    review_and_apply_peer_enrollment, review_and_apply_peer_mesh, review_and_apply_peer_proposal,
-    review_and_apply_reciprocal_ed25519_v3, review_and_apply_signed_peer_session_v2,
-    review_and_apply_signed_rendezvous, revoke_direct_lane_lease,
-    revoke_pair_media_routes_for_media_sessions_v2, revoke_peer_mesh_member,
-    revoke_peer_session_v2, validate_current_direct_lane_lease,
+    review_and_apply_peer_mesh, review_and_apply_reciprocal_ed25519_v3,
+    review_and_apply_signed_peer_session_v2, review_and_apply_signed_rendezvous,
+    revoke_direct_lane_lease, revoke_pair_media_routes_for_media_sessions_v2,
+    revoke_peer_mesh_member, revoke_peer_session_v2, validate_current_direct_lane_lease,
     validate_current_pair_media_route_v2, validate_current_peer_session,
     validate_current_peer_session_v2, validate_current_rendezvous_receipt,
     ManifoldAcceptedPairMediaRouteV2, ManifoldAcceptedPeerSessionV2, ManifoldAcceptedPeerState,
@@ -241,6 +240,10 @@ pub enum ManifoldPeerRuntimeAuthorityFamily {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ManifoldPeerRuntimeTrustPolicy {
+    /// Constructor-selected development authority policy; absent keeps finite defaults.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub development_lifetime_policy:
+        Option<rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
     /// Schema identifier.
     #[serde(rename = "$schema")]
     pub schema_id: SchemaId,
@@ -1377,7 +1380,14 @@ impl ManifoldPeerRuntimeHost {
             now_ms,
             expected_outcome: ManifoldPeerDecisionOutcome::Accepted,
         };
-        let (decision, receipt) = review_and_apply_peer_proposal(&case);
+        let (decision, receipt) =
+            rusty_manifold_peer::review_and_apply_peer_proposal_with_lifetime_policy(
+                &case,
+                self.snapshot
+                    .trust_policy
+                    .development_lifetime_policy
+                    .as_ref(),
+            );
         if let Some(state) = decision.accepted_state.clone() {
             self.snapshot.accepted_peers = state;
         }
@@ -1414,12 +1424,17 @@ impl ManifoldPeerRuntimeHost {
         self.ensure_family_enabled(ManifoldPeerRuntimeAuthorityFamily::Enrollment)?;
         self.ensure_history_request(&request.request_id)?;
         self.ensure_event_capacity()?;
-        let (next, receipt) = review_and_apply_peer_enrollment(
-            &self.snapshot.enrollment,
-            request,
-            &self.snapshot.trust_policy.trusted_operator_ids,
-            now_ms,
-        );
+        let (next, receipt) =
+            rusty_manifold_peer::review_and_apply_peer_enrollment_with_lifetime_policy(
+                &self.snapshot.enrollment,
+                request,
+                &self.snapshot.trust_policy.trusted_operator_ids,
+                now_ms,
+                self.snapshot
+                    .trust_policy
+                    .development_lifetime_policy
+                    .as_ref(),
+            );
         self.snapshot.enrollment = next;
         self.record(
             ManifoldPeerRuntimeAuditKind::Enrollment,
@@ -1503,6 +1518,11 @@ impl ManifoldPeerRuntimeHost {
             return self.review_owned_signed_history(request, now_ms);
         }
         let runtime = ManifoldReciprocalEd25519RuntimeContext {
+            development_lifetime_policy: self
+                .snapshot
+                .trust_policy
+                .development_lifetime_policy
+                .as_ref(),
             runtime_host_id: &self.snapshot.host_id,
             trust_policy_id: &self.snapshot.trust_policy.policy_id,
             trust_policy_revision: self.snapshot.trust_policy.revision,
@@ -1912,6 +1932,11 @@ impl ManifoldPeerRuntimeHost {
         let application = runtime.apply_dispatch(command_request, &dispatch, now_ms);
         self.retain_media_runtime(runtime);
         let context = ManifoldMediaSessionRuntimeCommandContext {
+            development_lifetime_policy: self
+                .snapshot
+                .trust_policy
+                .development_lifetime_policy
+                .as_ref(),
             runtime_host_id: &self.snapshot.media_command_runtime.host_id,
             live_provider_epoch_id: &self.snapshot.provider_epoch_id,
             client_grants: &self.snapshot.trust_policy.media_client_grants,
@@ -3229,6 +3254,11 @@ impl ManifoldPeerRuntimeHost {
         let application = runtime.apply_dispatch(command_request, &dispatch, now_ms);
         self.retain_media_runtime(runtime);
         let context = ManifoldMediaSessionRuntimeCommandContext {
+            development_lifetime_policy: self
+                .snapshot
+                .trust_policy
+                .development_lifetime_policy
+                .as_ref(),
             runtime_host_id: &self.snapshot.media_command_runtime.host_id,
             live_provider_epoch_id: &self.snapshot.provider_epoch_id,
             client_grants: &self.snapshot.trust_policy.media_client_grants,
@@ -3445,6 +3475,11 @@ impl ManifoldPeerRuntimeHost {
         let application = runtime.apply_dispatch(command_request, &dispatch, now_ms);
         let runtime_snapshot = runtime.snapshot().clone();
         let runtime_context = ManifoldPairMediaRouteRuntimeContext {
+            development_lifetime_policy: self
+                .snapshot
+                .trust_policy
+                .development_lifetime_policy
+                .as_ref(),
             authority_host_id: &runtime_snapshot.host_id,
             live_authority_provider_epoch_id: &self.snapshot.provider_epoch_id,
             media_client_grants: &self.snapshot.trust_policy.media_client_grants,
@@ -3636,6 +3671,11 @@ impl ManifoldPeerRuntimeHost {
             &self.snapshot.pair_media_routes,
             request,
             ManifoldPairMediaRouteRuntimeContext {
+                development_lifetime_policy: self
+                    .snapshot
+                    .trust_policy
+                    .development_lifetime_policy
+                    .as_ref(),
                 authority_host_id: &runtime_snapshot.host_id,
                 live_authority_provider_epoch_id: &self.snapshot.provider_epoch_id,
                 media_client_grants: &self.snapshot.trust_policy.media_client_grants,
@@ -3729,6 +3769,11 @@ impl ManifoldPeerRuntimeHost {
             &self.snapshot.pair_media_routes,
             request,
             ManifoldPairMediaRouteRuntimeContext {
+                development_lifetime_policy: self
+                    .snapshot
+                    .trust_policy
+                    .development_lifetime_policy
+                    .as_ref(),
                 authority_host_id: &runtime_snapshot.host_id,
                 live_authority_provider_epoch_id: &self.snapshot.provider_epoch_id,
                 media_client_grants: &self.snapshot.trust_policy.media_client_grants,
@@ -3840,6 +3885,11 @@ impl ManifoldPeerRuntimeHost {
             &self.snapshot.pair_media_routes,
             request,
             ManifoldPairMediaRouteRuntimeContext {
+                development_lifetime_policy: self
+                    .snapshot
+                    .trust_policy
+                    .development_lifetime_policy
+                    .as_ref(),
                 authority_host_id: &runtime_snapshot.host_id,
                 live_authority_provider_epoch_id: &self.snapshot.provider_epoch_id,
                 media_client_grants: &self.snapshot.trust_policy.media_client_grants,
@@ -3957,6 +4007,11 @@ impl ManifoldPeerRuntimeHost {
             &self.snapshot.pair_media_routes,
             request,
             ManifoldPairMediaRouteRuntimeContext {
+                development_lifetime_policy: self
+                    .snapshot
+                    .trust_policy
+                    .development_lifetime_policy
+                    .as_ref(),
                 authority_host_id: &runtime_snapshot.host_id,
                 live_authority_provider_epoch_id: &self.snapshot.provider_epoch_id,
                 media_client_grants: &self.snapshot.trust_policy.media_client_grants,
@@ -7167,7 +7222,16 @@ fn validate_pair_media_route_audit_closure(
 fn validate_trust_policy(
     policy: &ManifoldPeerRuntimeTrustPolicy,
 ) -> Result<(), ManifoldPeerRuntimeHostError> {
-    if !fresh_phase_prepare::selection_valid(policy)
+    if policy
+        .development_lifetime_policy
+        .as_ref()
+        .is_some_and(|p| {
+            !p.is_source_owned_v1()
+                || policy.fresh_setup_policy.as_ref().is_some_and(|fresh| {
+                    fresh.credential_validity_ms > p.delegated_authority_horizon_ms
+                })
+        })
+        || !fresh_phase_prepare::selection_valid(policy)
         || policy.fresh_setup_policy.is_some() != policy.fresh_setup_local_peer_id.is_some()
         || policy
             .fresh_setup_policy

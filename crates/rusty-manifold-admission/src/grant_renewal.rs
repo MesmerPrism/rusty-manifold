@@ -5,9 +5,9 @@ use super::*;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ManifoldAdmissionRootRenewalPolicy {
-    /// Existing authenticated grant receiving the finite renewal horizon.
+    /// Existing authenticated grant receiving the selected renewal horizon.
     pub grant_id: DottedId,
-    /// Whole-minute horizon from five through sixty minutes.
+    /// Whole-minute horizon; finite defaults or the accepted development ceiling.
     pub horizon_ms: u64,
 }
 
@@ -19,12 +19,20 @@ fn is_default_root_renewal_horizon_ms(value: &u64) -> bool {
 }
 
 impl ManifoldAdmissionSnapshot {
-    /// Returns the configured grant horizon, retaining five minutes by default.
+    /// Returns the configured horizon; omission follows the accepted owner policy.
     pub fn root_renewal_horizon_ms(&self, grant_id: &DottedId) -> u64 {
         self.root_renewal_policies
             .iter()
             .find(|p| &p.grant_id == grant_id)
-            .map_or(300_000, |p| p.horizon_ms)
+            .map_or_else(
+                || {
+                    ManifoldDevelopmentLifetimePolicy::selected_horizon(
+                        self.development_lifetime_policy.as_ref(),
+                        300_000,
+                    )
+                },
+                |p| p.horizon_ms,
+            )
     }
 }
 
@@ -37,7 +45,12 @@ pub(super) fn validate_root_renewal_policies(
             .windows(2)
             .any(|p| p[0].grant_id >= p[1].grant_id)
         || snapshot.root_renewal_policies.iter().any(|p| {
-            !(300_000..=3_600_000).contains(&p.horizon_ms)
+            !(300_000
+                ..=ManifoldDevelopmentLifetimePolicy::selected_horizon(
+                    snapshot.development_lifetime_policy.as_ref(),
+                    3_600_000,
+                ))
+                .contains(&p.horizon_ms)
                 || p.horizon_ms % 60_000 != 0
                 || !snapshot.grants.iter().any(|g| g.grant_id == p.grant_id)
         })
@@ -395,6 +408,13 @@ mod tests {
     fn finite_thirty_minute_root_policy_preserves_real_renewals_and_durable_scope() {
         run_scoped_renewals(1_800_000);
     }
+    #[test]
+    fn development_root_policy_preserves_actual_scoped_renewals_and_tamper_refusal() {
+        run_scoped_renewals(
+            crate::ManifoldDevelopmentLifetimePolicy::source_owned_v1()
+                .delegated_authority_horizon_ms,
+        );
+    }
     fn run_scoped_renewals(horizon: u64) {
         let identity = ManifoldClientIdentity {
             client_id: id("client.renewal"),
@@ -403,6 +423,8 @@ mod tests {
         };
         let capability = id("capability.manifold.control_lease.renew");
         let mut owner = ManifoldAdmissionAuthority::from_snapshot(ManifoldAdmissionSnapshot {
+            development_lifetime_policy: (horizon > 3_600_000)
+                .then(|| crate::ManifoldDevelopmentLifetimePolicy::source_owned_v1().clone()),
             history_checkpoint: None,
             root_renewal_policies: if horizon == 300_000 {
                 Vec::new()

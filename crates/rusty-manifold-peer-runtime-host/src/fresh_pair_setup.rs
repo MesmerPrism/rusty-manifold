@@ -278,7 +278,13 @@ impl ManifoldPeerRuntimeHost {
             return Err(invalid_snapshot("fresh transaction may be durably archived; verified history lookup required, no absence grant"));
         }
         if let Some(receipt) = receipt {
-            validate_fresh_pair_setup_receipt(receipt)?;
+            validate_fresh_pair_setup_receipt_with_lifetime_policy(
+                receipt,
+                self.snapshot
+                    .trust_policy
+                    .development_lifetime_policy
+                    .as_ref(),
+            )?;
         }
         Ok(receipt.cloned())
     }
@@ -403,7 +409,13 @@ impl ManifoldPeerRuntimeHost {
                 &c.policy,
                 now_ms,
                 credential_expires_at_ms,
-                MAX_PEER_STATUS_TTL_MS,
+                rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+                    self.snapshot
+                        .trust_policy
+                        .development_lifetime_policy
+                        .as_ref(),
+                    MAX_PEER_STATUS_TTL_MS,
+                ),
             )
             .map_err(invalid_snapshot)?;
             let status = accepted.status;
@@ -540,7 +552,10 @@ pub(super) fn validate(
         .as_ref()
         .map(|a| a.enrollment_authority_revision);
     for r in &state.receipts {
-        validate_fresh_pair_setup_receipt(r)?;
+        validate_fresh_pair_setup_receipt_with_lifetime_policy(
+            r,
+            snapshot.trust_policy.development_lifetime_policy.as_ref(),
+        )?;
         let c = &r.request.context;
         let credential_expires_at_ms = r
             .applied_at_ms
@@ -699,6 +714,15 @@ pub(super) fn validate(
 pub fn validate_fresh_pair_setup_receipt(
     r: &ManifoldFreshPairSetupReceipt,
 ) -> Result<(), ManifoldPeerRuntimeHostError> {
+    validate_fresh_pair_setup_receipt_with_lifetime_policy(r, None)
+}
+
+/// Validates retained evidence under an independently accepted immutable policy.
+/// The receipt itself cannot select longer authority or mint a live capability.
+pub fn validate_fresh_pair_setup_receipt_with_lifetime_policy(
+    r: &ManifoldFreshPairSetupReceipt,
+    lifetime_policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+) -> Result<(), ManifoldPeerRuntimeHostError> {
     verify_fresh_pair_setup_request(&r.request).map_err(invalid_snapshot)?;
     let c = &r.request.context;
     let credential_expires_at_ms = r
@@ -763,7 +787,10 @@ pub fn validate_fresh_pair_setup_receipt(
             &c.policy,
             r.applied_at_ms,
             credential_expires_at_ms,
-            MAX_PEER_STATUS_TTL_MS,
+            rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+                lifetime_policy,
+                MAX_PEER_STATUS_TTL_MS,
+            ),
         )
         .map_err(invalid_snapshot)?;
         let application = &r.status_receipts[index];

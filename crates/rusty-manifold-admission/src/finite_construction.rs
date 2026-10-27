@@ -13,6 +13,7 @@ impl ManifoldAdmissionSnapshot {
         max_token_ttl_ms: u64,
     ) -> Self {
         Self {
+            development_lifetime_policy: None,
             schema_id: schema_id(ADMISSION_SNAPSHOT_SCHEMA),
             authority_id,
             authority_revision: Revision::INITIAL,

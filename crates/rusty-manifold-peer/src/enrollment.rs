@@ -326,16 +326,35 @@ pub fn review_and_apply_peer_enrollment(
     trusted_operator_ids: &[DottedId],
     now_ms: u64,
 ) -> (ManifoldPeerEnrollmentState, ManifoldPeerEnrollmentReceipt) {
+    review_and_apply_peer_enrollment_with_lifetime_policy(
+        state,
+        request,
+        trusted_operator_ids,
+        now_ms,
+        None,
+    )
+}
+
+/// Applies enrollment with an immutable constructor-selected lifetime policy.
+#[must_use]
+pub fn review_and_apply_peer_enrollment_with_lifetime_policy(
+    state: &ManifoldPeerEnrollmentState,
+    request: &ManifoldPeerEnrollmentRequest,
+    trusted_operator_ids: &[DottedId],
+    now_ms: u64,
+    policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
+) -> (ManifoldPeerEnrollmentState, ManifoldPeerEnrollmentReceipt) {
     let prior = state.authority_revision;
     let identity = enrollment_action_identity(&request.action, state);
-    let rejection = validate_enrollment_request(state, request, trusted_operator_ids, now_ms)
-        .err()
-        .or_else(|| {
-            prior
-                .next()
-                .is_none()
-                .then_some(ManifoldPeerEnrollmentRejectionReason::RevisionExhausted)
-        });
+    let rejection =
+        validate_enrollment_request(state, request, trusted_operator_ids, now_ms, policy)
+            .err()
+            .or_else(|| {
+                prior
+                    .next()
+                    .is_none()
+                    .then_some(ManifoldPeerEnrollmentRejectionReason::RevisionExhausted)
+            });
     if let Some(reason) = rejection {
         return (
             state.clone(),
@@ -415,6 +434,7 @@ fn validate_enrollment_request(
     request: &ManifoldPeerEnrollmentRequest,
     trusted_operator_ids: &[DottedId],
     now_ms: u64,
+    policy: Option<&rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy>,
 ) -> Result<(), ManifoldPeerEnrollmentRejectionReason> {
     if state.schema_id.as_str() != PEER_ENROLLMENT_STATE_SCHEMA
         || request.schema_id.as_str() != PEER_ENROLLMENT_REQUEST_SCHEMA
@@ -434,7 +454,11 @@ fn validate_enrollment_request(
         return Err(ManifoldPeerEnrollmentRejectionReason::UntrustedOperator);
     }
     if request.issued_at_ms > now_ms
-        || now_ms.saturating_sub(request.issued_at_ms) > MAX_ENROLLMENT_REQUEST_AGE_MS
+        || now_ms.saturating_sub(request.issued_at_ms)
+            > rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+                policy,
+                MAX_ENROLLMENT_REQUEST_AGE_MS,
+            )
     {
         return Err(ManifoldPeerEnrollmentRejectionReason::StaleRequest);
     }
