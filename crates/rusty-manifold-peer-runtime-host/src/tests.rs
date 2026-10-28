@@ -81,6 +81,9 @@ use sha2::{Digest, Sha256};
 
 use super::*;
 
+#[path = "development_media_lease_tests.rs"]
+mod development_media_lease_tests;
+
 const OPERATOR_ID: &str = "operator.peer.enrollment";
 const TRUSTED_ADAPTER_ID: &str = "adapter.quest.ble-rendezvous";
 const TRUSTED_MESH_PROPOSER_ID: &str = "adapter.quest.peer-mesh";

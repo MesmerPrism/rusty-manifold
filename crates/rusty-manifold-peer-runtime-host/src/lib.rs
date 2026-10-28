@@ -2324,9 +2324,11 @@ impl ManifoldPeerRuntimeHost {
                 .media_runtime_lease_scope_id
                 .clone(),
             holder_id: grant.client_id.clone(),
-            expires_at_ms: bounded_use
-                .expires_at_ms
-                .min(now_ms.saturating_add(120_000)),
+            expires_at_ms: broker_media_runtime_lease_expiry(
+                &self.snapshot.trust_policy,
+                bounded_use.expires_at_ms,
+                now_ms,
+            ),
             derivative_binding: Some(broker_runtime_derivative_binding(
                 broker_runtime.provider_epoch_id(),
                 request
@@ -2498,9 +2500,11 @@ impl ManifoldPeerRuntimeHost {
                 .media_runtime_lease_scope_id
                 .clone(),
             holder_id: grant.client_id.clone(),
-            expires_at_ms: bounded_use
-                .expires_at_ms
-                .min(now_ms.saturating_add(120_000)),
+            expires_at_ms: broker_media_runtime_lease_expiry(
+                &self.snapshot.trust_policy,
+                bounded_use.expires_at_ms,
+                now_ms,
+            ),
             derivative_binding: Some(broker_runtime_derivative_binding(
                 &receipt.provider_epoch_id,
                 request
@@ -7709,6 +7713,21 @@ fn validate_media_command_runtime(
     Ok(())
 }
 
+// Both preflight and commit derive new authority from the same selected owner
+// policy. The Broker's actual bounded use remains the upstream limit.
+fn broker_media_runtime_lease_expiry(
+    trust: &ManifoldPeerRuntimeTrustPolicy,
+    bounded_use_expires_at_ms: u64,
+    admitted_at_ms: u64,
+) -> u64 {
+    bounded_use_expires_at_ms.min(admitted_at_ms.saturating_add(
+        rusty_manifold_admission::ManifoldDevelopmentLifetimePolicy::selected_horizon(
+            trust_lifetime_policy(trust),
+            120_000,
+        ),
+    ))
+}
+
 fn broker_lease_admission_is_well_formed(
     snapshot: &ManifoldPeerRuntimeHostSnapshot,
     admission: &ManifoldPeerRuntimeBrokerLeaseAdmission,
@@ -7807,10 +7826,19 @@ fn broker_lease_admission_is_well_formed(
         && admission.runtime_lease.scope == snapshot.trust_policy.media_runtime_lease_scope_id
         && admission.runtime_lease.holder_id == grant.client_id
         && derivative_binding_valid
-        && admission.runtime_lease.expires_at_ms
-            == bounded_use
-                .expires_at_ms
-                .min(admission.admitted_at_ms.saturating_add(120_000))
+        && (admission.runtime_lease.expires_at_ms
+            == broker_media_runtime_lease_expiry(
+                &snapshot.trust_policy,
+                bounded_use.expires_at_ms,
+                admission.admitted_at_ms,
+            )
+            // Pre-fix development admissions used the finite derivation. Keep
+            // their exact stored expiry; validation never renews that authority.
+            || (trust_lifetime_policy(&snapshot.trust_policy).is_some()
+                && admission.runtime_lease.expires_at_ms
+                    == bounded_use
+                        .expires_at_ms
+                        .min(admission.admitted_at_ms.saturating_add(120_000))))
         && release_tuple_valid
 }
 
