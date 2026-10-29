@@ -63,10 +63,19 @@ reimplement enrollment, signature, session, mesh, route, or lease decisions.
   continuity before exposing state.
 - Media start is a two-state atomic transaction: the host clone-invokes the
   owning live BrokerRuntime mutation, revalidates complete adapter/dispatch/
-  application/current-use evidence, mints a short-lived inner lease, and
+  application/current-use evidence, mints a policy-bounded inner lease, and
   commits both states only on success. Stop/revoke precedes replay-guarded
   release. A fresh bounded use may start the same immutable grant again after
   release while older generations remain audit history.
+- Broker-derived media leases use the constructor-selected development
+  lifetime when that existing source-owned policy is installed. Both preflight
+  and admission bound the derived expiry by the actual Broker bounded use;
+  omission retains the finite 120-second cap. Media and route authority remain
+  bounded by their parent authorities. Snapshot validation also accepts the
+  exact older 120-second derivation under development selection, retaining its
+  original expiry unchanged. Restore does not renew an expired lease. Explicit
+  revocation, Stop, identity, revision, replay and live-Broker checks remain in
+  force; observation estimates do not select authority lifetime.
 - Pair-route issue and current readback join the exact live Broker provider
   epoch, client, control lease, media-session decision, current mixed peer
   session/topology, platform runtime specification, and retained resource leg.
